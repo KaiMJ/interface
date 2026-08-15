@@ -1,97 +1,96 @@
-Problem:
+# Computer-Use Automation
 
-1) Take a goal in natural language
-2) Use LLM to accomplish that goal
-    Goal-driven agent loop
+An LLM discovers how to complete a goal in a legacy application by driving its UI the way a
+human operator would, then records what it learned as a typed, versioned **capability artifact**
+that replays deterministically — no model in the decision loop.
 
-    Input: goal + target app/URL/entry point
-    observe --> decide --> act against live surface until goal met or (max steps, timeout, dead-end)    
+> The model discovers. The artifact becomes a reusable capability. Deterministic replay is how
+> the AI agent invokes it in production.
 
+Working design notes: [`PLAN.md`](PLAN.md)
 
-3) record the successful run as structured, reusable artifact
-    - typed, versioned description of the flow
-    - steps take, how each target element / control is identified, any data to extract
-    - use stable element/control targeting
-    - report success/failure
+---
 
+## Status
 
-4) Replay that artifact determinisitically
-    - re-run without LLM
-    Output
+🚧 In design. See [`PLAN.md`](PLAN.md) for decisions made and still open.
 
-    distinguish:
-     - expected business outcomes ("no such member")
-     - recoverable conditions ("dismiss known interstitial, wait/retry)
-     - hard failures
+---
 
-    - success (with outputs)
-    - a known business outcome
-    - failure with enough detail to debug
+## Setup
 
-5) Escalate to human when stuck
-    - when system can't safely proceed, route to human operator
+<!-- TODO: fill in once the stack is picked (PLAN.md decision 5) -->
 
-    Detect and route
-        Intervention request / carry context, current state, why it stopped
-    Take control of live session
-        - same live session, then hand control back, preserve context
-    Pause / cede control / resume33
+**Prerequisites**
 
-6) Stay within safety guardrails
-    - avoid leaking / persisting sensitive data
-    - allowlist (permitted domains/routes, which action types allowed)
-    - safe/reversible actions, risky/irreversible ones (block / require confirmation / flag)
+```
+TODO
+```
 
+**Configuration**
 
-Design for heterogenity & scale
-- Surface abstraction: url vs legacy web app vs desktop app?
-- multi-tenant reuse across multiple users?
+```bash
+cp .env.example .env
+# ANTHROPIC_API_KEY=...   # required for discovery runs only; replay never calls the LLM
+```
 
-/evidence/
-mock UI: for customized 
+**Install / run**
 
+```
+TODO
+```
 
-Example Tasks:
-    - "look up member 12345 and read their current savings balance"
-    - "open a new sub-account for this member and reach the confirmation screen"
-    - "add a specific item to the cart and reach the checkout review page"
+---
 
-Some examples I have:
-    Read Tasks:
-        - Get current balance of account X
-        - get last N transactions of account X
-        - find transaction matching amount Y or from Z merchant in account X
-    Write tasks:
-        - Transfer funds from X to Y.
-        - Pay a bill
-        - Request a loan
+## Demo path
 
-From the assignment
-    - "record not found"
-    - permission denials
-    - unexpected confirmation dialogs
-    - session/timeout expiry
-    - transient slowness
-    - outright app errors
+<!-- TODO: fill in as each piece becomes real. These are the four things the brief asks a
+     reviewer to be able to run (§6.1, §6.3). -->
 
-Some examples I have:
-    - account not logged in / timed out
-    - need to press confirm / go
-    - need to scroll
-    - correct MM-DD-YYYY date
-    - missing transactions / wrong date
-    - account info not found for X or Y
-    - network / server error
-    - need to check transaction happened, and correct amount
+**1. Discovery** — LLM-driven run against a live surface, emits an artifact
 
+```
+TODO
+```
 
-Key decisions for this project
+**2. Replay** — deterministic re-run with input parameters, returns typed outputs
 
-1) Computer Use Mechanism
- - Perception: computer vision / Vision LLM
-    - since DOMs might not work for desktop / legacy websites
-    - pure vision maybe more reliable and robust
- - OS: dockerized computer with x11vnc
-    - since desktop apps need to be handled and human operator may need to take over securely
-    - playwright service inside if it's a demo app
+```
+TODO
+```
+
+**3. Replay hitting a business outcome** — e.g. an ID that doesn't exist; returns a typed
+outcome rather than failing
+
+```
+TODO
+```
+
+**4. Escalation** — how to trigger a handoff, take control of the live session, and resume
+
+```
+TODO
+```
+
+---
+
+## Running without live services
+
+<!-- TODO: replay-from-fixtures / mock mode so a reviewer can exercise the system with no
+     API key and no network. -->
+
+```
+TODO
+```
+
+---
+
+## Layout
+
+```
+artifacts/    saved capability artifacts (typed, versioned)
+evidence/     per-run logs, screenshots, artifacts, replay results
+PLAN.md       working design notes
+ASSIGNMENT.md the brief
+```
 
