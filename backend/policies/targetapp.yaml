@@ -1,0 +1,62 @@
+# Guardrails for the mock back-office target app.
+#
+# Loaded by cua.policy.Policy and enforced identically on the discovery and replay
+# paths. Per-application, not per-capability: recoverable conditions like a session
+# interstitial can interrupt any flow on this app, and duplicating them into every
+# artifact would guarantee they drift apart.
+
+app: targetapp
+
+# --- Allowlist -------------------------------------------------------------
+# The agent may not act outside these. Note what is absent: the control plane
+# itself (:8000), the console (:3000), and the noVNC endpoint (:6080). The agent
+# runs on the same machine as its own operator surface, so "localhost" would be a
+# hole, not a convenience.
+allowed_url_patterns:
+  - "^http://targetapp:8080(/.*)?$"
+
+# Primitives the agent may use at all. `navigate` is allowed but the URL is still
+# checked against the patterns above.
+allowed_actions: [navigate, click, type, key, scroll, extract, wait, assert]
+
+# --- Risk ------------------------------------------------------------------
+# What to do when a step declares risk: risky.
+#   allow   | confirm (escalate to a human first) | block
+# `confirm` for the demo: it exercises the escalation path on the write capability
+# rather than requiring a contrived failure to trigger it.
+risky_disposition: confirm
+
+# Intent phrases that force a step to be treated as risky regardless of what the
+# recording declared. A backstop against a mislabelled artifact — cheap, and the
+# failure mode it prevents (a submit recorded as `safe`) is the expensive one.
+risky_intent_patterns:
+  - "(?i)\\b(submit|confirm|transfer|send|delete|remove|close|authorize|approve)\\b"
+
+# --- Recoverable conditions ------------------------------------------------
+# Detector + ordered recovery + a cap. The cap is the important field: dismissing
+# the same modal eleven times means the dismissal is not working, and that is a
+# hard failure rather than eleven successful recoveries.
+recoveries:
+  - name: maintenance_notice
+    detector: { kind: text_present, value: "scheduled maintenance" }
+    actions:
+      - { action: click, anchor_text: "Dismiss" }
+    max_per_run: 2
+
+  - name: transient_slow_load
+    detector: { kind: text_present, value: "Loading" }
+    actions:
+      - { action: wait, value: "2000" }
+    max_per_run: 3
+
+# Session expiry is deliberately NOT here. Re-authenticating mid-flow would mean
+# the automation holds credentials and can silently resume a run whose context may
+# no longer be valid. It escalates instead.
+
+# --- Redaction -------------------------------------------------------------
+# Seam only in v1 — see cua.policy.redact. Patterns are declared now so the
+# implementation has something to consume.
+redact_patterns:
+  - "\\b\\d{3}-\\d{2}-\\d{4}\\b"            # SSN
+  - "\\b(?:\\d[ -]*?){13,16}\\b"            # PAN
+  - "(?i)password[^\\n]*"

@@ -5,8 +5,8 @@ Working design doc. Organized under the seven headings the brief mandates for `/
 
 At submission: this content becomes `REPORT.md`; `README.md` stays setup + demo path only (§6.1).
 
-Each item is tagged **[DECIDED]** or **[OPEN]**. Open items are collected at the top in
-blocking order — nothing below can be made concrete until the ones above it are settled.
+Each item is tagged **[DECIDED]** or **[OPEN]**. The table below tracks the decisions that were
+blocking; all but one are now settled and the reasoning is recorded in place.
 
 ---
 
@@ -14,13 +14,16 @@ blocking order — nothing below can be made concrete until the ones above it ar
 
 | # | Decision | Blocks | Status |
 |---|---|---|---|
-| 1 | **Target application** — public demo site vs. local mock vs. deliberately hostile local app | Everything concrete: which goals, which error states can actually be triggered, whether failures can be injected for §6.3 evidence | OPEN |
-| 2 | **Run → artifact synthesis** — what turns a messy discovery transcript into N clean parameterized steps, and where typed inputs come from (who decides `12345` was a parameter?) | Artifact schema, discovery loop design | OPEN |
-| 3 | **Checkpoint + extraction mechanism** — OCR engine, region scoping, match tolerance; who authors the checkpoint at record time | Determinism story, replay result contract | OPEN |
-| 4 | **Handoff mechanics** — headful Playwright vs. VNC; how human actions get recorded; how resume is signalled | §3.6, and possibly the container design | OPEN |
-| 5 | **Stack** — language, runtime, LLM provider/model | Nothing structural, but pick it before writing code | OPEN |
-| 6 | **"Agent Discovery"** — original note was an empty heading; ambiguous whether it meant the discovery loop or the stretch-goal capability catalog | Scope | OPEN |
-| 7 | **Redaction boundary** — redact screenshots before evidence write only, or before the LLM sees them too | §3.4, honest-limits section | OPEN |
+| 1 | **Target application** | which goals, which error states can be triggered, whether failures can be injected for §6.3 | **DECIDED** — purpose-built local app (`targetapp/`), Next.js. A public sandbox cannot be made to emit "session expired" on demand, and §6.3 wants evidence of exactly that. Faults are injected at `/dev`; business outcomes are ordinary behaviour, kept deliberately separate. |
+| 2 | **Run → artifact synthesis** — who decides `12345` was a parameter? | Artifact schema, discovery loop | **DECIDED** — three stages, deterministic first (`discovery/synthesize.py`). Prune → parameterize by exact match against the *declared run inputs* → model-assisted declaration of outputs/checkpoint/outcomes, every proposal validated against recorded frames. Nobody guesses which numbers look like ids; the caller declared them when they started the run. Stage 3 output is `draft` and needs human approval. |
+| 3 | **Checkpoint + extraction mechanism** | Determinism story, replay result contract | **DECIDED** — PaddleOCR behind a `TextReader` protocol; scope regions located by anchor text, not fixed boxes; tolerance via the artifact's own recorded `Normalizer` list, so replay compares strings the way the recording did. Checkpoints authored at synthesis time and validated against the final frame. Known weakest link, stated as such. |
+| 4 | **Handoff mechanics** | §3.6, container design | **DECIDED** — Xvfb + x11vnc + noVNC in the automation container; console embeds the noVNC *library* and toggles `viewOnly`. Playwright cannot see a manual click, so human actions are captured at the X layer instead (`escalation/watch.py`) — same code path for a future desktop surface, and no hole in the audit trail where a person touched regulated data. |
+| 5 | **Stack** | — | **DECIDED** — Python 3.11+/uv backend, Next.js/pnpm for both frontends. Model via **LiteLLM**, so the provider is one env var and not an architectural commitment. Default `xai/grok-4`. |
+| 6 | **"Agent Discovery"** | Scope | **RESOLVED** — it meant the discovery loop. The capability catalog stays a stretch goal, but `catalog/store.py::tool_manifest()` makes it nearly free: `list()` + `InputSpec`/`OutputSpec` is already a function-calling surface. |
+| 7 | **Redaction boundary** | §3.4, honest-limits | **DECIDED (as a cut)** — seam built and wired at both call sites, implementation is a no-op. The tension is real and specific to a vision design: the screenshot is simultaneously the evidence and the model input, and a bank screen is PII by construction. Masking before the model would break the very tasks it is asked to do; real deployments rely on a zero-retention/BAA agreement instead. Documented in REPORT §7 rather than left as an implied capability. |
+
+**Still open.** Cross-tenant override representation (§4 below) — the thinnest section, and the
+only remaining decision that touches the schema.
 
 ---
 
@@ -44,7 +47,7 @@ The fallback direction is *toward* structure, never dependent on it.
 **[DECIDED] Runtime shape:** headful browser, fixed viewport, so a human can take over the same
 live session. Built to be wrappable in a container with x11vnc later for desktop surfaces.
 
-**[OPEN] Stack** (see decision 5). **[OPEN] Target application** (see decision 1).
+**[DECIDED] Stack** (decision 5) and **target application** (decision 1) — see the table above.
 
 ---
 
@@ -110,7 +113,7 @@ Give the discovery agent `find_and_click(predicate, scope)` as a callable action
 hand-scrolls. Then recordings are replayable *by construction*, instead of requiring fragile
 post-hoc inference of intent from a transcript of scrolls.
 
-**[OPEN] Synthesis: how the run becomes the artifact** (decision 2). Candidate approaches —
+**[DECIDED] Synthesis: how the run becomes the artifact** (decision 2). Earlier candidates —
 LLM emits the artifact as a final synthesis pass over its own transcript; record-everything then
 prune; or the agent tags each action keep/discard inline. Related: parameter identification.
 
@@ -205,7 +208,7 @@ it is the same mechanism as the per-tenant canary in §4.
 **[DECIDED] Success verification:** explicit checkpoint stored in the artifact. Screenshots are
 evidence, not the decision mechanism. Outputs extracted via OCR + parsing after the final step.
 
-**[OPEN] OCR engine and match tolerance** (decision 3).
+**[DECIDED] OCR engine and match tolerance** (decision 3).
 **Known weakest link, to state plainly in the write-up:** OCR over a scrolling list is the least
 deterministic part of an otherwise model-free path — truncation and format variance are real,
 and a 10-screen scan costs 10 screenshot+OCR cycles (local and cheap, but not free).
@@ -246,7 +249,7 @@ tenants/versions. Route/value canonicalization (`/account/12345` → `/account/:
 discovery hits max steps with no checkpoint match, ambiguity on a write task, **pre-click
 verification mismatch or an undeclared overlay** (§3), LLM emits `escalate`.
 
-**[OPEN] Mechanics** (decision 4). Headful Playwright makes takeover trivial but the human's
+**[DECIDED] Mechanics** (decision 4) — VNC, for the reason that follows. Headful Playwright makes takeover trivial but the human's
 actions **invisible** — §3.6 requires recording what they did, and Playwright can't observe manual
 clicks without instrumentation. VNC captures input events cleanly at the X layer and matches the
 desktop-extension story, which may make it the *simpler* path rather than the stretch goal.
@@ -266,7 +269,7 @@ cannot be classified.
 
 **[DECIDED] Never persist secrets, credentials, or raw PII** into artifacts or logs. Redact.
 
-**[OPEN] Redaction boundary** (decision 7). Real tension specific to a vision design: screenshots
+**[DECIDED, as a cut] Redaction boundary** (decision 7). Real tension specific to a vision design: screenshots
 are simultaneously the evidence *and* the model input, and bank screens are PII by construction.
 A DOM-based design partly sidesteps this; we can't. Decide and state the limit honestly.
 
@@ -315,11 +318,22 @@ correct amount.
 
 ## Appendix C — build tasks
 
-- [ ] Set-of-Marks overlay: candidate enumeration + numbered boxes on screenshot
-- [ ] Agentic prompt / reasoning loop, with `find_and_click` in the action space
-- [ ] Exact artifact schema (pin the types)
-- [ ] Scan loop: OCR, normalization, termination conditions
-- [ ] Replay executor + `ReplayResult` contract
-- [ ] Policy check hook (allowlist + risky classification)
+Scaffolding (done):
+- [x] Repo layout, packaging (uv / pnpm), Dockerfiles, compose
+- [x] Exact artifact schema, pinned and tested — `backend/src/cua/schema/`
+- [x] Result + intervention contracts (error taxonomy, control-transfer states)
+- [x] Target application with injectable faults — `targetapp/`
+- [x] Guardrail config — `backend/policies/targetapp.yaml`
+- [x] Operator console shell + noVNC client — `console/`
+
+Core (typed stubs with documented contracts; not implemented):
+- [ ] Perception: display capture, OmniParser detect, PaddleOCR read, merge
+- [ ] Set-of-Marks overlay: candidate enumeration + numbered boxes
+- [ ] Resolver ladder + pre-click / post-action verification
+- [ ] Discovery loop with `find_and_act` in the action space
+- [ ] Synthesis: prune → parameterize → declare
+- [ ] Replay engine + scan loop + outcome classification
+- [ ] Policy enforcement (allowlist, risk, recoveries)
 - [ ] Evidence writer
-- [ ] Handoff: pause / take control / resume / record
+- [ ] Handoff: pause / take control / resume / record human actions
+- [ ] Two capabilities recorded end to end, with evidence

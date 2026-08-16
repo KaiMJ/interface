@@ -1,0 +1,93 @@
+# Three surfaces, deliberately separated.
+#
+#   desktop    the automation system. Xvfb + x11vnc + noVNC + Chromium + the FastAPI
+#              backend. This is the "computer" the agent uses and the human takes over.
+#   targetapp  the application being automated. A stand-in for a bank back-office.
+#              It lives on its own host so the allowlist means something.
+#   console    operator / debug UI. Watches runs, embeds noVNC, resumes interventions.
+#
+# The agent and its target never share a container: an allowlist that permits
+# "localhost" would permit the agent to reach its own control plane.
+
+services:
+  desktop:
+    build:
+      context: ./backend
+    image: cua-desktop
+    ports:
+      - "8000:8000"   # FastAPI control plane
+      - "6080:6080"   # noVNC (browser-accessible VNC)
+      - "5900:5900"   # raw VNC, for a native client
+    environment:
+      # Provider-qualified model string; LiteLLM routes it. Only the matching key
+      # needs a value — the rest are passed through empty so switching providers
+      # is an .env edit, not a compose edit.
+      CUA_MODEL: ${CUA_MODEL:-xai/grok-4}
+      CUA_API_BASE: ${CUA_API_BASE:-}
+      XAI_API_KEY: ${XAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      DISPLAY: ":1"
+      CUA_DISPLAY_WIDTH: ${CUA_DISPLAY_WIDTH:-1440}
+      CUA_DISPLAY_HEIGHT: ${CUA_DISPLAY_HEIGHT:-900}
+      CUA_TARGET_BASE_URL: http://targetapp:8080
+      CUA_POLICY_FILE: /app/policies/targetapp.yaml
+      CUA_ARTIFACTS_DIR: /data/artifacts
+      CUA_EVIDENCE_DIR: /data/evidence
+      CUA_MODELS_DIR: /models
+      YOLO_CONFIG_DIR: /models/ultralytics
+    volumes:
+      # Artifacts and evidence are deliverables (§6.3) — they belong in the repo,
+      # not in an anonymous volume.
+      - ./artifacts:/data/artifacts
+      - ./evidence:/data/evidence
+      # OmniParser + OCR weights. Bind-mounted rather than baked into the image or
+      # held in an anonymous volume: ~300MB that a rebuild must not re-download,
+      # and that a developer already has on disk. Gitignored.
+      - ./models:/models
+    depends_on:
+      - targetapp
+    shm_size: "2gb"   # Chromium crashes on the default 64MB
+    # Run as the invoking user so that artifacts/ and evidence/ — which are
+    # deliverables committed to this repo — come out owned by you rather than by
+    # root. Without this the container writes root-owned files into your working
+    # tree and you cannot edit or delete them without sudo.
+    user: "${UID:-1000}:${GID:-1000}"
+    # OmniParser's detector on the GPU. Requires the NVIDIA container toolkit; if
+    # it is absent, drop this block and the detector falls back to CPU — slower
+    # per observation, but nothing else changes.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  targetapp:
+    build:
+      context: ./targetapp
+    image: cua-targetapp
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+
+  console:
+    build:
+      context: ./console
+      args:
+        # Baked into the client bundle at build time, not read at runtime.
+        NEXT_PUBLIC_CUA_API: http://localhost:8000
+        NEXT_PUBLIC_NOVNC_URL: http://localhost:6080
+    image: cua-console
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      # Server-side calls go over the compose network; the browser calls localhost.
+      CUA_API_INTERNAL: http://desktop:8000
+      NEXT_PUBLIC_CUA_API: http://localhost:8000
+      NEXT_PUBLIC_NOVNC_URL: http://localhost:6080
+    depends_on:
+      - desktop

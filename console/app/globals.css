@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+/* The console is a tool, not a product surface. Dark, dense, monospaced where it
+   is showing machine output — so that a screenshot of the console is never
+   mistaken for a screenshot of the bank application it is displaying. That
+   confusion is a real hazard when the main panel is a live video of another app. */
+
+:root {
+  --bg: #12161b;
+  --panel: #1a2027;
+  --rule: #2b343e;
+  --text: #d7dee6;
+  --muted: #8593a2;
+  --accent: #5aa9e6;
+  --ok: #56b56a;
+  --warn: #d8a13a;
+  --err: #d6675f;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, "Segoe UI", system-ui, sans-serif;
+  font-size: 13px;
+}
+
+.mono {
+  font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+  font-size: 12px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+}
+.panel-hd {
+  border-bottom: 1px solid var(--rule);
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.btn {
+  border: 1px solid var(--rule);
+  background: #232b34;
+  color: var(--text);
+  border-radius: 3px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.btn-accent {
+  background: #1e4b6b;
+  border-color: #2f6d97;
+}
+.btn-danger {
+  background: #5a2b28;
+  border-color: #8c4340;
+}

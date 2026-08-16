@@ -1,0 +1,25 @@
+{
+  "name": "targetapp",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.18.3",
+  "description": "Mock credit-union back-office. The surface under automation.",
+  "scripts": {
+    "dev": "next dev -p 8080",
+    "build": "next build",
+    "start": "next start -p 8080"
+  },
+  "dependencies": {
+    "next": "^16.3.1",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "22.10.5",
+    "@types/react": "19.0.7",
+    "@types/react-dom": "19.0.3",
+    "tailwindcss": "^4.3.3",
+    "typescript": "5.7.3"
+  }
+}
