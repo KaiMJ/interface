@@ -1,0 +1,18 @@
+{
+  "run_id": "replay-58178bbd",
+  "capability": "cap_get_savings_balance@v2",
+  "status": "failure",
+  "inputs": {
+    "member_id": "12345",
+    "account_nickname": "Primary Savings"
+  },
+  "outputs": {},
+  "outcome": null,
+  "failure": null,
+  "intervention_id": null,
+  "steps": [],
+  "started_at": "2026-08-17T07:46:49.480266+00:00",
+  "finished_at": "",
+  "duration_ms": 0,
+  "evidence_dir": "/data/evidence/replay-58178bbd"
+}

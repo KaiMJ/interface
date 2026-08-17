@@ -48,6 +48,7 @@ class InterventionReason(str, Enum):
     POLICY_DENIED = "policy_denied"
     MAX_STEPS = "max_steps"
     AGENT_REQUESTED = "agent_requested"        # the discovery LLM emitted `escalate`
+    APP_CONDITION = "app_condition"            # a declared app state a human must clear
 
 
 class InterventionRequest(BaseModel):

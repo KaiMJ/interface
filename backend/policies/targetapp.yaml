@@ -49,9 +49,59 @@ recoveries:
       - { action: wait, value: "2000" }
     max_per_run: 3
 
-# Session expiry is deliberately NOT here. Re-authenticating mid-flow would mean
-# the automation holds credentials and can silently resume a run whose context may
-# no longer be valid. It escalates instead.
+# Session expiry is deliberately NOT a recovery. Re-authenticating mid-flow would
+# mean the automation holds credentials and can silently resume a run whose
+# context may no longer be valid. It escalates instead.
+
+# --- Declared conditions with no handler -----------------------------------
+# Two lists, split by who can clear the condition. Without them both of these
+# states would surface as "the checkpoint did not hold", which sends an operator
+# looking for a layout problem that is not there.
+
+# Nobody can fix this from here: stop with APP_ERROR and keep the evidence.
+app_errors:
+  - name: application_error
+    detector: { kind: text_present, value: "An unexpected error occurred" }
+
+# A human can fix this: park the run and hand them the live session.
+escalations:
+  - name: session_expired
+    detector: { kind: text_present, value: "session has expired" }
+  - name: sign_on_required
+    detector: { kind: text_present, value: "Staff Sign-On" }
+
+# --- Sign-on ---------------------------------------------------------------
+# A precondition of every capability, and never a capability itself: this is the
+# one flow that types a credential, and keeping it here means no artifact ever
+# references one. `{{username}}` and `{{password}}` are resolved from
+# configuration in the action layer, below the point where anything is
+# serialized.
+#
+# It is described exactly the way a capability describes anything — by what is on
+# the screen — because the mechanism is the same one. Only the storage differs.
+sign_on:
+  detector: { kind: text_present, value: "Sign-On" }
+  steps:
+    - action: type
+      anchor_text: "User ID"
+      relation: right_of
+      value: "{{username}}"
+      intent: "type the operator id"
+    - action: type
+      anchor_text: "Password"
+      relation: right_of
+      value: "{{password}}"
+      intent: "type the operator password"
+    - action: click
+      anchor_text: "Sign On"
+      intent: "submit the sign-on form"
+
+# --- Discovery -------------------------------------------------------------
+# What the model is told it is looking at. Here rather than in the prompt file
+# because it is the one part of the prompt that is a fact about this application
+# rather than about how the loop works.
+surface: >-
+  a bank back-office application, operated on behalf of a credit-union teller
 
 # --- Redaction -------------------------------------------------------------
 # Seam only in v1 — see cua.policy.redact. Patterns are declared now so the

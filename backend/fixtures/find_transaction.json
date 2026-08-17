@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "id": "fix_find_transaction",
+  "version": 1,
+  "status": "draft",
+  "goal": "find a transaction by merchant in a member's history and read its amount",
+  "description": "Scans the transaction history of a member's account for a row matching the merchant, and returns that row's posted amount. Returns a declared outcome when no transaction matches.",
+  "app": {
+    "name": "targetapp",
+    "vendor": "meridian-core",
+    "base_url_pattern": "^http://targetapp:8080(/.*)?$"
+  },
+  "inputs": [
+    {
+      "name": "member_id",
+      "type": "string",
+      "required": true,
+      "description": "the member's id",
+      "example": "12345",
+      "sensitive": false
+    },
+    {
+      "name": "merchant",
+      "type": "string",
+      "required": true,
+      "description": "the transaction's description as rendered",
+      "example": "PACIFIC WIRELESS",
+      "sensitive": false
+    }
+  ],
+  "outputs": [
+    {
+      "name": "amount",
+      "type": "number",
+      "description": "the transaction's amount; debits are negative",
+      "from_step": 2,
+      "normalize": [
+        "collapse_ws",
+        "strip_currency"
+      ],
+      "required": true
+    }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "risk": "safe",
+      "checkpoint": {
+        "kind": "text_present",
+        "value": "Transaction History",
+        "match": "contains",
+        "timeout_ms": 5000,
+        "normalize": [
+          "casefold",
+          "collapse_ws"
+        ]
+      },
+      "on_error": "hard_fail",
+      "retries": 0,
+      "kind": "act",
+      "action": "navigate",
+      "value": "http://targetapp:8080/members/{{member_id}}"
+    },
+    {
+      "id": 2,
+      "risk": "safe",
+      "on_error": "hard_fail",
+      "retries": 0,
+      "note": "the row's position is a function of the data, not of the layout: this member has 22 transactions today and may have 3 tomorrow",
+      "kind": "find_and_act",
+      "scope": {
+        "intent": "the transaction table",
+        "target_desc": "the rows below the column headers",
+        "anchor_text": "Description",
+        "anchor_match": "exact",
+        "relation": "self",
+        "relation_index": 0,
+        "offset": [
+          0.5,
+          0.5
+        ],
+        "normalize": [
+          "casefold",
+          "collapse_ws"
+        ]
+      },
+      "scope_extent": "below",
+      "predicate": {
+        "match": "row_contains_all",
+        "terms": [
+          "{{merchant}}"
+        ],
+        "normalize": [
+          "casefold",
+          "collapse_ws",
+          "strip_currency"
+        ]
+      },
+      "scan": {
+        "advance": "scroll",
+        "overlap": 0.15,
+        "max_advances": 6,
+        "stop_when": "region_hash_unchanged"
+      },
+      "on_found_action": "extract",
+      "on_found_offset": [
+        0.5,
+        0.5
+      ],
+      "on_found_extract_as": "amount",
+      "on_found_extract_column": "Amount",
+      "collect_all": false,
+      "on_not_found_outcome": "transaction_not_found",
+      "on_multiple": "first"
+    }
+  ],
+  "success": {
+    "kind": "text_present",
+    "value": "Transaction History",
+    "match": "contains",
+    "timeout_ms": 5000,
+    "normalize": [
+      "casefold",
+      "collapse_ws"
+    ]
+  },
+  "business_outcomes": [
+    {
+      "name": "transaction_not_found",
+      "description": "no transaction in the visible history matches that merchant",
+      "detector": {
+        "kind": "text_present",
+        "value": "__never__",
+        "match": "contains",
+        "timeout_ms": 5000,
+        "normalize": [
+          "casefold",
+          "collapse_ws"
+        ]
+      },
+      "result_fields": {
+        "merchant": "string"
+      }
+    }
+  ]
+}

@@ -66,7 +66,7 @@ export default async function Members({
                 No member matches the search criteria entered.
               </p>
             ) : (
-              <table className="grid">
+              <table className="datagrid">
                 <thead>
                   <tr>
                     <th>Member ID</th>

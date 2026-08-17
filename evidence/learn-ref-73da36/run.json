@@ -1,0 +1,96 @@
+{
+  "run_id": "learn-ref-73da36",
+  "capability": "cap_get_savings_balance@v1",
+  "status": "success",
+  "inputs": {
+    "member_id": "12345",
+    "account_nickname": "Primary Savings"
+  },
+  "outputs": {
+    "primary_savings_balance": 18204.55
+  },
+  "outcome": null,
+  "failure": null,
+  "intervention_id": null,
+  "steps": [
+    {
+      "step_id": 1,
+      "intent": "entry point; the run started here",
+      "status": "ok",
+      "resolution": "none",
+      "duration_ms": 3114,
+      "expected": null,
+      "observed": null,
+      "recovery_applied": null,
+      "evidence": {
+        "screenshot": "/data/evidence/learn-ref-73da36/frames/step-01.png",
+        "annotated_screenshot": null,
+        "observation": "/data/evidence/learn-ref-73da36/observations/step-01.json"
+      }
+    },
+    {
+      "step_id": 2,
+      "intent": "type the member ID {{member_id}} into the Member ID or Name search field",
+      "status": "ok",
+      "resolution": "anchor_text",
+      "duration_ms": 3379,
+      "expected": "text_present '{{member_id}}'",
+      "observed": null,
+      "recovery_applied": null,
+      "evidence": {
+        "screenshot": "/data/evidence/learn-ref-73da36/frames/step-02.png",
+        "annotated_screenshot": null,
+        "observation": "/data/evidence/learn-ref-73da36/observations/step-02.json"
+      }
+    },
+    {
+      "step_id": 3,
+      "intent": "click the Search button after entering member ID {{member_id}}",
+      "status": "ok",
+      "resolution": "anchor_text",
+      "duration_ms": 3793,
+      "expected": null,
+      "observed": null,
+      "recovery_applied": null,
+      "evidence": {
+        "screenshot": "/data/evidence/learn-ref-73da36/frames/step-03.png",
+        "annotated_screenshot": null,
+        "observation": "/data/evidence/learn-ref-73da36/observations/step-03.json"
+      }
+    },
+    {
+      "step_id": 4,
+      "intent": "click the View button on the search result row for member {{member_id}} to open their profile",
+      "status": "ok",
+      "resolution": "anchor_text",
+      "duration_ms": 4536,
+      "expected": "text_present 'Member Profile'",
+      "observed": null,
+      "recovery_applied": null,
+      "evidence": {
+        "screenshot": "/data/evidence/learn-ref-73da36/frames/step-04.png",
+        "annotated_screenshot": null,
+        "observation": "/data/evidence/learn-ref-73da36/observations/step-04.json"
+      }
+    },
+    {
+      "step_id": 5,
+      "intent": "extract the current balance of the {{account_nickname}} account from the member profile",
+      "status": "ok",
+      "resolution": "anchor_text",
+      "duration_ms": 5671,
+      "expected": null,
+      "observed": "$18,204.55",
+      "recovery_applied": null,
+      "evidence": {
+        "screenshot": "/data/evidence/learn-ref-73da36/frames/step-05.png",
+        "annotated_screenshot": null,
+        "observation": "/data/evidence/learn-ref-73da36/observations/step-05.json"
+      }
+    }
+  ],
+  "started_at": "2026-08-17T07:44:28.321337+00:00",
+  "finished_at": "2026-08-17T07:44:50.984507+00:00",
+  "duration_ms": 20501,
+  "evidence_dir": "/data/evidence/learn-ref-73da36"
+}

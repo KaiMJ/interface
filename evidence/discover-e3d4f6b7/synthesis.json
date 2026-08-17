@@ -1,0 +1,19 @@
+{
+  "description": "Opens the profile for the given member_id and returns the current balance of the account matching the supplied account_nickname.",
+  "success_text": "Member Profile",
+  "business_outcomes": [],
+  "business_outcomes_rejected": [
+    {
+      "name": "member_not_found",
+      "description": "The supplied member_id matches no record or the caller is not entitled to view it.",
+      "detector_text": "Search Results",
+      "rejected_because": "this text is on a frame the successful run passed through, so it cannot distinguish a different outcome"
+    },
+    {
+      "name": "account_not_found",
+      "description": "The supplied account_nickname does not exist for this member.",
+      "detector_text": "Accounts",
+      "rejected_because": "this text is on a frame the successful run passed through, so it cannot distinguish a different outcome"
+    }
+  ]
+}

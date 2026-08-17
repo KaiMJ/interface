@@ -26,19 +26,19 @@ class DesktopDriver:
         self.display = display
         self.viewport = viewport
 
-    def navigate(self, url: str) -> None:
+    async def navigate(self, url: str) -> None:
         raise NotImplementedError("desktop surfaces have no navigate primitive")
 
-    def click(self, p: Point, button: str = "left") -> None:
+    async def click(self, p: Point, button: str = "left") -> None:
         raise NotImplementedError
 
-    def type_text(self, text: str, secret: bool = False) -> None:
+    async def type_text(self, text: str, secret: bool = False) -> None:
         raise NotImplementedError
 
-    def key(self, keys: str) -> None:
+    async def key(self, keys: str) -> None:
         raise NotImplementedError
 
-    def scroll(self, p: Point, dy: float) -> None:
+    async def scroll(self, p: Point, dy: float) -> None:
         raise NotImplementedError
 
     def current_url(self) -> str | None:

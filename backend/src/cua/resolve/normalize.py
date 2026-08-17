@@ -11,13 +11,38 @@ raises. A normalizer that can throw turns a text comparison into a crash.
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from collections.abc import Callable, Iterable
+from datetime import datetime
 
 from ..schema import Normalizer
 
+_WS = re.compile(r"\s+")
+_CURRENCY_SYMBOL = re.compile(r"[$€£¥]")
+_THOUSANDS = re.compile(r"(?<=\d),(?=\d{3}(\D|$))")
+_PARENTHESIZED = re.compile(r"^\((.*)\)$", re.DOTALL)
+_NUMERIC = re.compile(r"^[+-]?\d+(\.\d+)?$")
+_ELLIPSIS = re.compile(r"(\.{2,}|…)\s*$")
+
+# Ordered most specific first: `%m/%d/%y` would happily parse `01/02/2026` as year
+# 20, so four-digit patterns have to win.
+_DATE_FORMATS = (
+    "%Y-%m-%d",
+    "%m/%d/%Y",
+    "%m-%d-%Y",
+    "%d/%m/%Y",
+    "%b %d, %Y",
+    "%B %d, %Y",
+    "%d %b %Y",
+    "%d %B %Y",
+    "%m/%d/%y",
+    "%m-%d-%y",
+)
+
 
 def casefold(s: str) -> str:
-    raise NotImplementedError
+    return s.casefold()
 
 
 def collapse_ws(s: str) -> str:
@@ -25,17 +50,41 @@ def collapse_ws(s: str) -> str:
 
     OCR line boxes routinely include column padding as spaces.
     """
-    raise NotImplementedError
+    return _WS.sub(" ", s).strip()
 
 
 def strip_currency(s: str) -> str:
     """`$1,234.56` -> `1234.56`. Handles leading symbols, thousands separators and
     parenthesized negatives, which US financial UIs use for debits."""
-    raise NotImplementedError
+    t = s.strip()
+
+    # `($441.56)` is minus four hundred and forty-one dollars. Only treat the
+    # parentheses as a sign when what they wrap is actually a number — otherwise
+    # "(see reverse)" would normalize to "-see reverse".
+    negative = False
+    wrapped = _PARENTHESIZED.match(t)
+    if wrapped:
+        inner = _THOUSANDS.sub("", _CURRENCY_SYMBOL.sub("", wrapped.group(1))).strip()
+        if _NUMERIC.match(inner):
+            negative = True
+            t = wrapped.group(1)
+
+    t = _THOUSANDS.sub("", _CURRENCY_SYMBOL.sub("", t)).strip()
+    if negative and not t.startswith("-"):
+        t = f"-{t}"
+    return t
 
 
 def strip_punct(s: str) -> str:
-    raise NotImplementedError
+    """Drop punctuation, keeping letters, digits and single spaces.
+
+    Blunt by design: it exists for comparing labels ("Member ID:" vs "Member ID"),
+    not values. Applying it to money deletes the decimal point, which is why
+    `strip_currency` is declared before it in every artifact that uses both.
+    """
+    return collapse_ws(
+        "".join(" " if unicodedata.category(c).startswith("P") else c for c in s)
+    )
 
 
 def strip_ellipsis(s: str) -> str:
@@ -46,11 +95,11 @@ def strip_ellipsis(s: str) -> str:
     can only ever be compared by prefix, never by equality — `cell_equals` against
     a truncated cell is unanswerable and must not silently return False.
     """
-    raise NotImplementedError
+    return _ELLIPSIS.sub("", s).rstrip()
 
 
 def digits_only(s: str) -> str:
-    raise NotImplementedError
+    return "".join(c for c in s if c.isdigit())
 
 
 def date_iso(s: str) -> str:
@@ -60,7 +109,13 @@ def date_iso(s: str) -> str:
     the same screen. Returns the input unchanged when it cannot parse — a
     normalizer must not invent data.
     """
-    raise NotImplementedError
+    t = collapse_ws(s)
+    for fmt in _DATE_FORMATS:
+        try:
+            return datetime.strptime(t, fmt).date().isoformat()
+        except ValueError:
+            continue
+    return s
 
 
 _FUNCS: dict[Normalizer, Callable[[str], str]] = {
@@ -77,4 +132,6 @@ _FUNCS: dict[Normalizer, Callable[[str], str]] = {
 def apply(s: str, normalizers: Iterable[Normalizer]) -> str:
     """Apply in the declared order. Order matters: strip_currency before
     strip_punct, or the decimal point is gone before the number is parsed."""
-    raise NotImplementedError
+    for n in normalizers:
+        s = _FUNCS[n](s)
+    return s

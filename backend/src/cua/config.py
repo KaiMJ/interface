@@ -10,6 +10,18 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .schema import Viewport
 
+# The container mounts everything under /app and /data. Outside it — `make api`,
+# `make test`, a reviewer running the CLI from a checkout — those paths do not
+# exist and are not creatable, so each default falls back to the same file in the
+# repository. Defaults that only work in one of the two places are defaults that
+# send people to the configuration reference to run the demo.
+_REPO = Path(__file__).resolve().parents[3]
+
+
+def _path(container: str, in_repo: str) -> Path:
+    installed = Path(container)
+    return installed if installed.exists() else _REPO / in_repo
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CUA_", env_file=".env", extra="ignore")
@@ -38,10 +50,14 @@ class Settings(BaseSettings):
     target_base_url: str = "http://targetapp:8080"
 
     # --- Storage --------------------------------------------------------------
-    artifacts_dir: Path = Path("/data/artifacts")
-    evidence_dir: Path = Path("/data/evidence")
-    models_dir: Path = Path("/models")
-    policy_file: Path = Path("/app/policies/targetapp.yaml")
+    artifacts_dir: Path = Field(default_factory=lambda: _path("/data/artifacts", "artifacts"))
+    evidence_dir: Path = Field(default_factory=lambda: _path("/data/evidence", "evidence"))
+    models_dir: Path = Field(default_factory=lambda: _path("/models", "models"))
+    policy_file: Path = Field(
+        default_factory=lambda: _path(
+            "/app/policies/targetapp.yaml", "backend/policies/targetapp.yaml"
+        )
+    )
 
     # --- Perception -----------------------------------------------------------
     # Detection backend. `omniparser` is the real one; `ocr_only` exists so the
@@ -62,6 +78,13 @@ class Settings(BaseSettings):
     # resolution and checkpoints both compare against OCR output, so a confidently
     # wrong string is worse than a missing one.
     ocr_conf_threshold: float = 0.50
+    # Longest side PP-OCR's detector sees. Its default downscales a 1440x900
+    # display far enough that small coloured text stops being legible: measured on
+    # the target app's permission-denial banner, the default read it as noise and
+    # 1600 reads it exactly. Costs ~20% per frame on a dense page (1.9s -> 2.3s)
+    # and is the difference between detecting a declared runtime condition and
+    # reporting a checkpoint that did not hold.
+    ocr_det_side_len: int = 1600
 
     # --- Determinism ----------------------------------------------------------
     # Two consecutive hash-equal frames means the page settled. Kills the

@@ -44,9 +44,22 @@ model is already in the loop, and its presence in the enum is what keeps
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
-from ..schema import Bbox, Observation, Point, ResolutionTier, Target
+from ..perception import ElementIndex
+from ..schema import (
+    Bbox,
+    Element,
+    MatchMode,
+    Observation,
+    Point,
+    Relation,
+    ResolutionTier,
+    Target,
+)
+from .normalize import apply
+from .template import render
 
 
 @dataclass(frozen=True)
@@ -87,7 +100,21 @@ class Resolver:
         precise, it has failed to know where it is, and clicking anyway is how a
         banking automation submits the wrong form.
         """
-        raise NotImplementedError
+        p = params or {}
+        found = (
+            self._by_anchor_text(target, obs, p)
+            or self._by_role_name(target, obs)
+            or self._by_recorded_bbox(target, obs)
+        )
+        if found is None and self.allow_vlm:
+            found = self._by_vlm(target, obs)
+        if found is None:
+            raise Unresolvable(
+                f"no tier located {target.target_desc!r} "
+                f"(anchor={target.anchor_text!r} role={target.role!r} "
+                f"name={target.name!r} bbox={'yes' if target.bbox else 'no'})"
+            )
+        return found
 
     # --- tiers ---------------------------------------------------------------
 
@@ -100,20 +127,157 @@ class Resolver:
         carries the match count and the caller decides. Two matches on a read may
         be fine; on a write, acting on the wrong record is unrecoverable.
         """
-        raise NotImplementedError
+        if not target.anchor_text:
+            return None
+        needle = apply(render(target.anchor_text, params) or "", target.normalize)
+        if not needle:
+            return None
+
+        matches = [
+            el
+            for el in obs.elements
+            if _matches(apply(_label(el), target.normalize), needle, target.anchor_match)
+        ]
+        # A declared role narrows the field but never decides alone: `infer_role`
+        # is a geometric guess, and letting a bad guess veto a correct text match
+        # would trade a little precision for outright failure.
+        if target.role:
+            narrowed = [el for el in matches if el.role == target.role]
+            if narrowed:
+                matches = narrowed
+        if not matches:
+            return None
+
+        anchor = self._pick(matches, target)
+        best = _follow(anchor, target, obs)
+        if best is None:
+            return None
+        return Resolution(
+            point=point_in(best.bbox, target.offset),
+            bbox=best.bbox,
+            tier=ResolutionTier.ANCHOR_TEXT,
+            matched_text=_label(anchor) or None,
+            candidates=len(matches),
+        )
 
     def _by_role_name(self, target: Target, obs: Observation) -> Resolution | None:
-        raise NotImplementedError
+        if not target.role and not target.name:
+            return None
+        matches = [
+            el
+            for el in obs.elements
+            if (not target.role or el.role == target.role)
+            and (
+                not target.name
+                or apply(el.name or "", target.normalize)
+                == apply(target.name, target.normalize)
+            )
+        ]
+        if not matches:
+            return None
+
+        anchor = self._pick(matches, target)
+        best = _follow(anchor, target, obs)
+        if best is None:
+            return None
+        return Resolution(
+            point=point_in(best.bbox, target.offset),
+            bbox=best.bbox,
+            tier=ResolutionTier.ROLE_NAME,
+            matched_text=_label(anchor) or None,
+            candidates=len(matches),
+            # Not the most portable tier, but still a semantic one: it matched
+            # something the frame actually says, so it is not a drift event.
+            drift=False,
+        )
 
     def _by_recorded_bbox(self, target: Target, obs: Observation) -> Resolution | None:
         """Always sets `drift=True`. Aggregated across runs this is the cheapest
         early-warning signal we have, and it is the same mechanism a per-tenant
         canary would use."""
-        raise NotImplementedError
+        if target.bbox is None:
+            return None
+        return Resolution(
+            point=point_in(target.bbox, target.offset),
+            bbox=target.bbox,
+            tier=ResolutionTier.RECORDED_BBOX,
+            matched_text=None,
+            candidates=1,
+            drift=True,
+        )
 
     def _by_vlm(self, target: Target, obs: Observation) -> Resolution | None:
-        """Discovery only. Asserts `self.allow_vlm` and refuses otherwise."""
-        raise NotImplementedError
+        """Discovery only. Asserts `self.allow_vlm` and refuses otherwise.
+
+        A seam, not an implementation — see REPORT §7. Discovery does not need it:
+        the model picks from an enumerated set of marks, so it never has to be
+        asked "where is this thing" in the first place. The tier exists in the
+        enum and here so that "replay never calls a model" stays a property you
+        can check by construction rather than a claim in a document.
+        """
+        if not self.allow_vlm:
+            # A programming error, not a resolution outcome: the replay path is
+            # handed a resolver that cannot reach a model, and reaching for one
+            # anyway must be loud rather than degrade into a failed step.
+            raise RuntimeError("VLM resolution requested on a resolver built without it")
+        return None
+
+    # --- shared --------------------------------------------------------------
+
+    def _pick(self, matches: list[Element], target: Target) -> Element:
+        """Choose among equally valid matches.
+
+        Nearest to the recorded position first — the recording is a hint about
+        which of several identical 'View' buttons was meant, and using it here
+        costs nothing because ambiguity is still reported to the caller. Failing
+        that, the smallest box, which is the most specific thing that said the
+        right words.
+        """
+        if len(matches) == 1:
+            return matches[0]
+        if target.bbox is not None:
+            anchor = target.bbox.center
+            return min(
+                matches,
+                key=lambda el: (el.bbox.center.x - anchor.x) ** 2
+                + (el.bbox.center.y - anchor.y) ** 2,
+            )
+        return min(matches, key=lambda el: el.bbox.w * el.bbox.h)
+
+
+def _follow(anchor: Element, target: Target, obs: Observation) -> Element | None:
+    """Step from the element that carries the words to the one being acted on.
+
+    Returns None rather than falling back to the anchor when the neighbour is not
+    there: typing into a label because the field beside it could not be found is
+    exactly the class of silent wrong action this system exists to prevent.
+    """
+    if target.relation is Relation.SELF:
+        return anchor
+    index = ElementIndex(obs.elements)
+    neighbours = (
+        index.right_of(anchor) if target.relation is Relation.RIGHT_OF else index.below(anchor)
+    )
+    return neighbours[target.relation_index] if len(neighbours) > target.relation_index else None
+
+
+def _label(el: Element) -> str:
+    return (el.text or el.name or "").strip()
+
+
+def _matches(haystack: str, needle: str, mode: MatchMode) -> bool:
+    if not haystack:
+        return False
+    if mode is MatchMode.EXACT:
+        return haystack == needle
+    if mode is MatchMode.REGEX:
+        try:
+            return re.search(needle, haystack) is not None
+        except re.error:
+            # A bad pattern in an artifact is a resolution miss, not a crash in
+            # the middle of a run: the step then fails with a legible message.
+            return False
+    return needle in haystack
 
 
 def point_in(bbox: Bbox, offset: tuple[float, float]) -> Point:
@@ -122,4 +286,7 @@ def point_in(bbox: Bbox, offset: tuple[float, float]) -> Point:
     Non-center offsets are how a step targets the 'View' button at the right edge
     of a matched row without needing a second resolution pass.
     """
-    raise NotImplementedError
+    return Point(
+        x=min(1.0, max(0.0, bbox.x + offset[0] * bbox.w)),
+        y=min(1.0, max(0.0, bbox.y + offset[1] * bbox.h)),
+    )

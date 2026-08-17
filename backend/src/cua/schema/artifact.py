@@ -41,6 +41,23 @@ SCHEMA_VERSION = 1
 # ---------------------------------------------------------------------------
 
 
+class Relation(str, Enum):
+    """Where the real target sits relative to the thing we can name.
+
+    The control a step acts on is very often not the thing with the words on it.
+    A form field is an empty box beside a label; a balance is a cell to the right
+    of "Available Balance"; a "View" button is at the end of a row identified by
+    its account number. Under vision there is no `for=` attribute to follow, so
+    the relationship has to be recorded — and once recorded it is more portable
+    than either a coordinate or a role, because rebranding an app rarely moves the
+    value out from beside its label.
+    """
+
+    SELF = "self"
+    RIGHT_OF = "right_of"
+    BELOW = "below"
+
+
 class Target(Frozen):
     """How a step identifies the control it acts on.
 
@@ -70,6 +87,12 @@ class Target(Frozen):
     role: str | None = None
     name: str | None = None
     bbox: Bbox | None = None
+
+    # Resolve the anchor, then step to its neighbour. `right_of` is how a step
+    # types into the box beside "User ID" or reads the value beside "Available
+    # Balance" without either one having any text of its own to match.
+    relation: Relation = Relation.SELF
+    relation_index: int = 0               # nth neighbour in that direction
 
     # Click point relative to the resolved box, 0..1. Defaults to its center.
     # Lets a step target the "View" button at the right edge of a matched row.
@@ -141,6 +164,11 @@ class OnError(str, Enum):
 class StepBase(Frozen):
     id: int
     risk: Risk = Risk.SAFE
+    # Which of the capability's declared screens this step expects to be looking
+    # at. Checked before the step acts, so a flow that has gone somewhere else
+    # fails with "we are on the sign-on screen, not the member profile" instead of
+    # "the target was not found" — a different sentence and a different fix.
+    screen: str | None = None
     # Verified after the action. This is the step's own success condition.
     checkpoint: Checkpoint | None = None
     on_error: OnError = OnError.HARD_FAIL
@@ -220,6 +248,12 @@ class FindAndActStep(StepBase):
     on_found_action: Primitive = Primitive.CLICK
     on_found_offset: tuple[float, float] = (0.5, 0.5)
     on_found_extract_as: str | None = None
+    # Which cell of the matched row to read, named by its column header. A row is
+    # not a value: a caller asking for an amount wants a number, and returning
+    # "08/10/2026 08/11/2026 PACIFIC WIRELESS Telecom ($441.56)" makes them parse
+    # a screen we already parsed. The column is located by its header text and the
+    # cell by horizontal overlap with it — the way a person reads a table.
+    on_found_extract_column: Template | None = None
     collect_all: bool = False             # "the last N transactions"
     limit: int | None = None
 
@@ -294,6 +328,25 @@ class BusinessOutcome(Frozen):
 # ---------------------------------------------------------------------------
 
 
+class Screen(Frozen):
+    """A recognisable state of the application.
+
+    The smallest useful piece of a UI model, and the seam a fuller one would grow
+    from. Capabilities on the same application visit the same screens, so this is
+    where per-tenant differences want to attach: two institutions running the same
+    vendor product have the same screens with different branding, and overriding a
+    screen's signature is a smaller and safer change than re-recording every
+    artifact that passes through it.
+
+    Derived from a recording rather than authored beside it — see
+    `discovery.synthesize.screens_from` — so it cannot drift from what replay
+    actually sees.
+    """
+
+    name: str
+    signature: Checkpoint
+
+
 class Status(str, Enum):
     DRAFT = "draft"
     APPROVED = "approved"
@@ -341,6 +394,9 @@ class Capability(BaseModel):
     app: AppRef
     inputs: list[InputSpec] = Field(default_factory=list)
     outputs: list[OutputSpec] = Field(default_factory=list)
+    # The states this flow passes through. Empty is legitimate: a capability that
+    # declares no screens simply makes no claim about where it is.
+    screens: list[Screen] = Field(default_factory=list)
     steps: list[Step] = Field(default_factory=list)
 
     # The final assertion. Screenshots are evidence, not the decision mechanism.

@@ -36,6 +36,19 @@ services:
       CUA_EVIDENCE_DIR: /data/evidence
       CUA_MODELS_DIR: /models
       YOLO_CONFIG_DIR: /models/ultralytics
+      # Signing in is a precondition, not a capability: the credentials are
+      # resolved here and typed in the action layer, below the point where
+      # anything is serialized. No artifact ever references them.
+      CUA_TARGET_USERNAME: ${CUA_TARGET_USERNAME:-}
+      CUA_TARGET_PASSWORD: ${CUA_TARGET_PASSWORD:-}
+      # Repeated from the Dockerfile because `docker compose exec` starts a shell
+      # with HOME forced to the uid's passwd entry — which this uid does not have,
+      # so HOME becomes "/" and fontconfig, matplotlib and friends fail noisily on
+      # every documented `compose exec` command. Set here, they apply to exec too.
+      HOME: /tmp/home
+      XDG_CACHE_HOME: /tmp/home/.cache
+      XDG_CONFIG_HOME: /tmp/home/.config
+      MPLCONFIGDIR: /tmp/home/.cache/matplotlib
     volumes:
       # Artifacts and evidence are deliverables (§6.3) — they belong in the repo,
       # not in an anonymous volume.

@@ -104,6 +104,7 @@ RUN playwright install --with-deps chromium \
 
 COPY src ./src
 COPY policies ./policies
+COPY fixtures ./fixtures
 COPY image ./image
 COPY scripts ./scripts
 RUN chmod +x ./image/*.sh

@@ -135,7 +135,7 @@ export default async function MemberDetail({
       <div className="panel mb-3">
         <div className="panel-hd">Accounts</div>
         <div className="p-3">
-          <table className="grid">
+          <table className="datagrid">
             <thead>
               <tr>
                 <th>Account</th>
@@ -177,7 +177,7 @@ export default async function MemberDetail({
       <div className="panel">
         <div className="panel-hd">Transaction History — Account {selected}</div>
         <div className="p-3">
-          <table className="grid">
+          <table className="datagrid">
             <thead>
               <tr>
                 <th>Date</th>

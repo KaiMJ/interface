@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "id": "fix_transfer_funds",
+  "version": 1,
+  "status": "draft",
+  "goal": "transfer funds between two accounts belonging to one member",
+  "description": "Reviews and confirms a transfer between two of a member's accounts. The confirmation step moves money and is not reversible, so it is recorded as risky and the policy stops for a human.",
+  "app": {
+    "name": "targetapp",
+    "vendor": "meridian-core",
+    "base_url_pattern": "^http://targetapp:8080(/.*)?$"
+  },
+  "inputs": [
+    {
+      "name": "member_id",
+      "type": "string",
+      "required": true,
+      "description": "",
+      "example": "12345",
+      "sensitive": false
+    },
+    {
+      "name": "from_account",
+      "type": "string",
+      "required": true,
+      "description": "",
+      "example": "29883",
+      "sensitive": false
+    },
+    {
+      "name": "to_account",
+      "type": "string",
+      "required": true,
+      "description": "",
+      "example": "13455",
+      "sensitive": false
+    },
+    {
+      "name": "amount",
+      "type": "number",
+      "required": true,
+      "description": "",
+      "example": "25.00",
+      "sensitive": false
+    }
+  ],
+  "outputs": [],
+  "steps": [
+    {
+      "id": 1,
+      "risk": "safe",
+      "checkpoint": {
+        "kind": "text_present",
+        "value": "Step 2 of 3",
+        "match": "contains",
+        "timeout_ms": 5000,
+        "normalize": [
+          "casefold",
+          "collapse_ws"
+        ]
+      },
+      "on_error": "hard_fail",
+      "retries": 0,
+      "kind": "act",
+      "action": "navigate",
+      "value": "http://targetapp:8080/transfer/review?member={{member_id}}&from={{from_account}}&to={{to_account}}&amount={{amount}}"
+    },
+    {
+      "id": 2,
+      "risk": "risky",
+      "checkpoint": {
+        "kind": "text_present",
+        "value": "Transfer Complete",
+        "match": "contains",
+        "timeout_ms": 5000,
+        "normalize": [
+          "casefold",
+          "collapse_ws"
+        ]
+      },
+      "on_error": "hard_fail",
+      "retries": 0,
+      "note": "moves money; irreversible without a supervisor override",
+      "kind": "act",
+      "action": "click",
+      "target": {
+        "intent": "confirm and post the transfer",
+        "target_desc": "the Confirm Transfer button on the review screen",
+        "anchor_text": "Confirm Transfer",
+        "anchor_match": "contains",
+        "relation": "self",
+        "relation_index": 0,
+        "offset": [
+          0.5,
+          0.5
+        ],
+        "normalize": [
+          "casefold",
+          "collapse_ws"
+        ]
+      }
+    }
+  ],
+  "success": {
+    "kind": "text_present",
+    "value": "Transfer Complete",
+    "match": "contains",
+    "timeout_ms": 5000,
+    "normalize": [
+      "casefold",
+      "collapse_ws"
+    ]
+  },
+  "business_outcomes": [
+    {
+      "name": "insufficient_funds",
+      "description": "the source account does not have the available balance",
+      "detector": {
+        "kind": "text_present",
+        "value": "Insufficient available funds",
+        "match": "contains",
+        "timeout_ms": 5000,
+        "normalize": [
+          "casefold",
+          "collapse_ws"
+        ]
+      },
+      "result_fields": {
+        "from_account": "string"
+      }
+    },
+    {
+      "name": "over_daily_limit",
+      "description": "the amount exceeds the member's daily transfer limit",
+      "detector": {
+        "kind": "text_present",
+        "value": "exceeds the daily limit",
+        "match": "contains",
+        "timeout_ms": 5000,
+        "normalize": [
+          "casefold",
+          "collapse_ws"
+        ]
+      },
+      "result_fields": {
+        "member_id": "string"
+      }
+    }
+  ]
+}

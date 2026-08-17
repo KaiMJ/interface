@@ -31,6 +31,12 @@ dependencies = [
     # one env var instead of a design decision baked into the loop.
     "litellm>=1.55",
 
+    # X-layer input capture during a human handoff. Playwright observes only the
+    # events it issued, so a manual click is invisible to it; XRecord taps the
+    # server itself and sees what the operator actually did. Pure Python, no
+    # native build.
+    "python-xlib>=0.33",
+
     "pyyaml>=6.0",
     "typer>=0.12",
     "structlog>=24.4",
@@ -75,6 +81,9 @@ dev = [
     "pytest-asyncio>=0.24",
     "ruff>=0.7",
     "mypy>=1.13",
+    # Type-checking only; the runtime dependencies are pyyaml and python-xlib.
+    "types-pyyaml>=6.0",
+    "types-python-xlib>=0.33",
 ]
 
 [project.scripts]
@@ -104,7 +113,22 @@ python_version = "3.10"
 plugins = ["pydantic.mypy"]
 strict = true
 # The perception backends wrap untyped ML libraries; strictness there buys nothing.
+# `warn_unused_ignores` is off for them because those libraries live in the
+# optional `perception` extra: with it installed an ignore is needed, without it
+# the same ignore is unused, and `make lint` has to pass either way.
 [[tool.mypy.overrides]]
-module = ["cua.perception.detect", "cua.perception.ocr", "ultralytics.*", "paddleocr.*", "mss.*", "rtree.*"]
+module = ["cua.perception.detect", "cua.perception.ocr"]
 ignore_missing_imports = true
 disallow_untyped_calls = false
+warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
+module = [
+    "ultralytics.*",
+    "rapidocr.*",
+    "huggingface_hub.*",
+    "paddleocr.*",
+    "mss.*",
+    "rtree.*",
+]
+ignore_missing_imports = true

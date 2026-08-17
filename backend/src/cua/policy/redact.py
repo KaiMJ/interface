@@ -16,39 +16,52 @@ do it if the balance is masked. A real deployment resolves this with a
 zero-retention / BAA agreement with the provider rather than by masking, and says
 so out loud.
 
-Decision for v1: the seam is built and wired at both call sites; the
-implementation is a no-op. Documented as a cut in REPORT §7 rather than left as an
-implied capability. The call sites existing is the part that matters — retrofitting
-a redaction point into code that already writes screenshots everywhere is the
-expensive version of this problem.
+Decision for v1, and the line is drawn where the guarantee is real:
+
+  - **Declared** sensitive values are redacted for real. `InputSpec.sensitive` is
+    a declaration, not a guess, so `redact_mapping` cannot miss and it runs on
+    every result before serialization.
+  - **Pattern-based** masking of free text and of screenshots is a seam. The
+    patterns load and the call sites are wired; nothing is painted over a frame.
+
+Documented as a cut in REPORT §7 rather than left as an implied capability. The
+call sites existing is the part that matters — retrofitting a redaction point into
+code that already writes screenshots everywhere is the expensive version of this
+problem.
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from ..schema import Observation
 
 
 class Redactor:
-    """No-op in v1. Both call sites are real; the masking is not."""
+    """Declared redaction is real; pattern-based redaction is a seam."""
+
+    MASK = "[redacted]"
 
     def __init__(self, patterns: tuple[str, ...] = (), enabled: bool = False) -> None:
         self.patterns = patterns
         self.enabled = enabled
+        self._res = tuple(re.compile(p) for p in patterns) if enabled else ()
 
     def redact_image(self, src: Path, dst: Path, obs: Observation | None = None) -> Path:
         """Mask PII regions in a screenshot.
 
         Would work by matching `patterns` against OCR elements in `obs` and
         painting over their boxes — which is precisely why `Observation` carries
-        text boxes and not just an image.
+        text boxes and not just an image. v1 returns the frame untouched.
         """
-        raise NotImplementedError
+        return src
 
     def redact_text(self, s: str) -> str:
         """Mask PII in a log line or a result field."""
-        raise NotImplementedError
+        for r in self._res:
+            s = r.sub(self.MASK, s)
+        return s
 
     def redact_mapping(
         self, d: dict[str, object], sensitive_keys: frozenset[str]
@@ -56,6 +69,6 @@ class Redactor:
         """Replace declared-sensitive input values before a result is serialized.
 
         Distinct from pattern matching and strictly stronger: `InputSpec.sensitive`
-        is a declaration, not a guess, so it cannot miss.
+        is a declaration, not a guess, so it cannot miss. This one is implemented.
         """
-        raise NotImplementedError
+        return {k: (self.MASK if k in sensitive_keys else v) for k, v in d.items()}

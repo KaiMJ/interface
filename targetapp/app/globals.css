@@ -20,11 +20,16 @@ body {
   background: #dfe3e8;
 }
 
-table.grid {
+/* `datagrid`, not `grid`: Tailwind owns `.grid` as `display: grid`, and a table
+   turned into a CSS grid lays its header row out independently of its body — the
+   headers stop lining up with the columns beneath them. It renders as a subtly
+   crooked table that a person reads past and that nothing based on column
+   position can read at all. */
+table.datagrid {
   border-collapse: collapse;
   width: 100%;
 }
-table.grid th {
+table.datagrid th {
   background: #ccd4dc;
   border: 1px solid var(--rule);
   padding: 3px 6px;
@@ -32,15 +37,15 @@ table.grid th {
   font-weight: 600;
   white-space: nowrap;
 }
-table.grid td {
+table.datagrid td {
   border: 1px solid var(--rule);
   padding: 3px 6px;
   vertical-align: top;
 }
-table.grid tr:nth-child(even) td {
+table.datagrid tr:nth-child(even) td {
   background: #f2f5f8;
 }
-table.grid tr:nth-child(odd) td {
+table.datagrid tr:nth-child(odd) td {
   background: #ffffff;
 }
 

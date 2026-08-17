@@ -1,0 +1,138 @@
+{
+  "screenshot_path": "/tmp/cua-frames-x5n62w5h/frame-0002.png",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "elements": [
+    {
+      "id": "e0",
+      "role": "text",
+      "name": "Meridian Credit Union — Staff Sign-On",
+      "text": "Meridian Credit Union — Staff Sign-On",
+      "bbox": {
+        "x": 0.3715277777777778,
+        "y": 0.37222222222222223,
+        "w": 0.15694444444444444,
+        "h": 0.02
+      },
+      "source": "ocr",
+      "conf": 0.98962
+    },
+    {
+      "id": "e1",
+      "role": "text",
+      "name": "User ID",
+      "text": "User ID",
+      "bbox": {
+        "x": 0.3770833333333333,
+        "y": 0.42333333333333334,
+        "w": 0.03263888888888889,
+        "h": 0.016666666666666666
+      },
+      "source": "ocr",
+      "conf": 0.9933
+    },
+    {
+      "id": "e2",
+      "role": "textbox",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 0.44490568372938366,
+        "y": 0.4154646131727431,
+        "w": 0.1774617936876085,
+        "h": 0.032505357530381945
+      },
+      "source": "omniparser",
+      "conf": 0.8703328371047974
+    },
+    {
+      "id": "e3",
+      "role": "text",
+      "name": "Password",
+      "text": "Password",
+      "bbox": {
+        "x": 0.3770833333333333,
+        "y": 0.4577777777777778,
+        "w": 0.04097222222222222,
+        "h": 0.017777777777777778
+      },
+      "source": "ocr",
+      "conf": 0.99998
+    },
+    {
+      "id": "e4",
+      "role": "textbox",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 0.4467630174424913,
+        "y": 0.45148756239149307,
+        "w": 0.17800352308485243,
+        "h": 0.03175509982638889
+      },
+      "source": "omniparser",
+      "conf": 0.8842012882232666
+    },
+    {
+      "id": "e5",
+      "role": "button",
+      "name": "Sign On",
+      "text": "Sign On",
+      "bbox": {
+        "x": 0.3785303751627604,
+        "y": 0.4964612494574653,
+        "w": 0.05544035169813368,
+        "h": 0.0325738525390625
+      },
+      "source": "omniparser",
+      "conf": 0.8951783776283264
+    },
+    {
+      "id": "e6",
+      "role": "text",
+      "name": "Demo environment. No real member data. Credentials are in",
+      "text": "Demo environment. No real member data. Credentials are in",
+      "bbox": {
+        "x": 0.3770833333333333,
+        "y": 0.5555555555555556,
+        "w": 0.20902777777777778,
+        "h": 0.017777777777777778
+      },
+      "source": "ocr",
+      "conf": 0.99646
+    },
+    {
+      "id": "e7",
+      "role": "text",
+      "name": ".env. example; the automation reads them from configuration and",
+      "text": ".env. example; the automation reads them from configuration and",
+      "bbox": {
+        "x": 0.37777777777777777,
+        "y": 0.5733333333333334,
+        "w": 0.23194444444444445,
+        "h": 0.01888888888888889
+      },
+      "source": "ocr",
+      "conf": 0.98589
+    },
+    {
+      "id": "e8",
+      "role": "text",
+      "name": "never records them.",
+      "text": "never records them.",
+      "bbox": {
+        "x": 0.37777777777777777,
+        "y": 0.5944444444444444,
+        "w": 0.07152777777777777,
+        "h": 0.016666666666666666
+      },
+      "source": "ocr",
+      "conf": 0.99815
+    }
+  ],
+  "url": "http://targetapp:8080/login",
+  "frame_hash": "34638972902d3ad4",
+  "taken_at": "2026-08-17T07:46:52.523129+00:00"
+}

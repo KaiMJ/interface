@@ -43,6 +43,18 @@ class Bbox(Frozen):
     def contains(self, p: Point) -> bool:
         return self.x <= p.x <= self.x + self.w and self.y <= p.y <= self.y + self.h
 
+    def contained_by(self, other: Bbox) -> float:
+        """Fraction of *this* box that lies inside `other`. 1.0 means enclosed.
+
+        Distinct from `iou` on purpose: a text line inside a large button has a
+        tiny IoU with it and a containment of 1.0, and it is containment that
+        decides whether the line is that button's label.
+        """
+        ix = max(0.0, min(self.x + self.w, other.x + other.w) - max(self.x, other.x))
+        iy = max(0.0, min(self.y + self.h, other.y + other.h) - max(self.y, other.y))
+        area = self.w * self.h
+        return (ix * iy) / area if area > 0 else 0.0
+
     def iou(self, other: Bbox) -> float:
         ix = max(0.0, min(self.x + self.w, other.x + other.w) - max(self.x, other.x))
         iy = max(0.0, min(self.y + self.h, other.y + other.h) - max(self.y, other.y))

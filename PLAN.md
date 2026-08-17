@@ -1,339 +1,284 @@
-# Plan
+# Plan — running against a site we have not seen
 
-Working design doc. Organized under the seven headings the brief mandates for `/REPORT.md`
-(§6.2) so decisions graduate straight into the deliverable rather than being rewritten.
+Written for a fresh context. It assumes nothing about the conversation that
+produced the current code.
 
-At submission: this content becomes `REPORT.md`; `README.md` stays setup + demo path only (§6.1).
+**What exists.** An LLM drives a real UI to complete a goal, the run is recorded
+as a typed capability artifact, and the artifact replays deterministically with no
+model in the loop — plus policy guardrails, an error taxonomy, evidence, and a
+human handoff that takes over the same live browser session. `README.md` runs it,
+`HANDOFF.md` is the current state and the traps, and the design reasoning lives in
+the module docstrings and the commit history. This file is only about what comes
+next.
 
-Each item is tagged **[DECIDED]** or **[OPEN]**. The table below tracks the decisions that were
-blocking; all but one are now settled and the reasoning is recorded in place.
-
----
-
-## Open decisions
-
-| # | Decision | Blocks | Status |
-|---|---|---|---|
-| 1 | **Target application** | which goals, which error states can be triggered, whether failures can be injected for §6.3 | **DECIDED** — purpose-built local app (`targetapp/`), Next.js. A public sandbox cannot be made to emit "session expired" on demand, and §6.3 wants evidence of exactly that. Faults are injected at `/dev`; business outcomes are ordinary behaviour, kept deliberately separate. |
-| 2 | **Run → artifact synthesis** — who decides `12345` was a parameter? | Artifact schema, discovery loop | **DECIDED** — three stages, deterministic first (`discovery/synthesize.py`). Prune → parameterize by exact match against the *declared run inputs* → model-assisted declaration of outputs/checkpoint/outcomes, every proposal validated against recorded frames. Nobody guesses which numbers look like ids; the caller declared them when they started the run. Stage 3 output is `draft` and needs human approval. |
-| 3 | **Checkpoint + extraction mechanism** | Determinism story, replay result contract | **DECIDED** — PaddleOCR behind a `TextReader` protocol; scope regions located by anchor text, not fixed boxes; tolerance via the artifact's own recorded `Normalizer` list, so replay compares strings the way the recording did. Checkpoints authored at synthesis time and validated against the final frame. Known weakest link, stated as such. |
-| 4 | **Handoff mechanics** | §3.6, container design | **DECIDED** — Xvfb + x11vnc + noVNC in the automation container; console embeds the noVNC *library* and toggles `viewOnly`. Playwright cannot see a manual click, so human actions are captured at the X layer instead (`escalation/watch.py`) — same code path for a future desktop surface, and no hole in the audit trail where a person touched regulated data. |
-| 5 | **Stack** | — | **DECIDED** — Python 3.11+/uv backend, Next.js/pnpm for both frontends. Model via **LiteLLM**, so the provider is one env var and not an architectural commitment. Default `xai/grok-4`. |
-| 6 | **"Agent Discovery"** | Scope | **RESOLVED** — it meant the discovery loop. The capability catalog stays a stretch goal, but `catalog/store.py::tool_manifest()` makes it nearly free: `list()` + `InputSpec`/`OutputSpec` is already a function-calling surface. |
-| 7 | **Redaction boundary** | §3.4, honest-limits | **DECIDED (as a cut)** — seam built and wired at both call sites, implementation is a no-op. The tension is real and specific to a vision design: the screenshot is simultaneously the evidence and the model input, and a bank screen is PII by construction. Masking before the model would break the very tasks it is asked to do; real deployments rely on a zero-retention/BAA agreement instead. Documented in REPORT §7 rather than left as an implied capability. |
-
-**Still open.** Cross-tenant override representation (§4 below) — the thinnest section, and the
-only remaining decision that touches the schema.
+**What comes next.** Point it at a live site nobody has looked at, with no
+target-app knowledge available. Everything below is ordered by that.
 
 ---
 
-## 1. Architecture
+## What "ready for an unseen site" means
 
-**[DECIDED] Perception: pure vision + Set-of-Marks.**
-Screenshot + numbered overlay boxes on interactable candidates. LLM sees pixels, not markup.
-Rationale: DOM/accessibility trees are unavailable or useless on legacy and desktop surfaces;
-vision is the worst-case-safe path and the only one that generalizes to all three surface classes.
-The brief biases the same way (§3.1: "bias toward an approach that would still work when the
-surface has no clean DOM").
+Concrete acceptance, in the order you would hit them:
 
-**[DECIDED] Action: Playwright as input engine, not as a DOM locator library.**
-`page.mouse` / `page.keyboard` only. No `page.locator()`, no selectors. Playwright supplies a
-browser and a way to inject input events; it is deliberately not doing element resolution.
-Keeps a single code path that extends to desktop via the same primitives.
+1. `cua probe --url <site>` reports what perception sees on a page nobody
+   calibrated it for, and says which of its assumptions do not hold there.
+2. A human signs in once by hand; the automation reuses that session.
+3. `cua discover --app <name> --goal "..."` records a capability against that
+   site, with that site's policy — no edits to Python.
+4. The capability replays cold and returns typed outputs.
+5. A bad input produces a declared business outcome rather than a failure.
+6. Nothing the agent does leaves the allowlist, and nothing irreversible happens
+   without a human.
 
-**[DECIDED] Reliability ordering:** vision → (future) accessibility tree / DOM.
-The fallback direction is *toward* structure, never dependent on it.
-
-**[DECIDED] Runtime shape:** headful browser, fixed viewport, so a human can take over the same
-live session. Built to be wrappable in a container with x11vnc later for desktop surfaces.
-
-**[DECIDED] Stack** (decision 5) and **target application** (decision 1) — see the table above.
+Anything that has to be edited in `backend/src/` to reach one of those is a bug in
+the architecture, not a configuration step.
 
 ---
 
-## 2. Artifact schema
+## P0 — will stop it working at all
 
-An artifact is a **capability contract**, not a click track. A human reviewer and a calling agent
-must both be able to read what it does, what it needs, and what it returns.
+### 1. Settle on content, not on pixels
 
-**[DECIDED] Fields:**
-- `id` + `version`
-- goal template
-- typed **inputs** (parameters the caller supplies)
-- typed **outputs** (what the caller receives)
-- ordered **steps** (with parameter substitution)
-- **success checkpoint** (explicit, checkable)
-- **business-outcome handlers** (small explicit set)
-- **metadata** — surface, viewport, model used, `recorded_at`
+`XDisplayScreen.capture` hashes the raw pixel buffer, and `Perceiver.settle` waits
+for two consecutive identical hashes. On the target app that converges because
+nothing on the page moves. On a real site, a blinking text caret, a spinner, a
+carousel, a live clock or an animated banner means **no two frames are ever
+identical**, and every step dies with `Unsettled`.
 
-**[DECIDED] Coordinates normalized 0–1, original viewport recorded, viewport held fixed.**
+This is the single most likely reason a first run against a new site produces
+nothing at all.
 
-**[DECIDED] Every step carries semantic intent alongside its coordinate.**
-```json
-{
-  "intent": "click the row for the searched member",
-  "target_desc": "table row containing the member ID",
-  "anchor_text": "{{member_id}}",
-  "coord": [0.42, 0.71]
-}
-```
-A bare coordinate cannot support three separate requirements: data-dependent targeting
-(which row *is* member 12345?), risky-action policy checks (§3.4 — you cannot classify
-`click(0.42,0.71)` as reversible or not), and cross-tenant reuse (§3.7 — different branding
-moves every pixel). Storing the model's own description of the target solves all three at once,
-without reintroducing a DOM dependency. Replay stays LLM-free: it resolves the anchor by OCR
-and clicks relative to the matched box, falling back to the raw coordinate.
+*Change.* Keep the pixel hash as the fast path — when the screen truly is static
+it is the cheapest correct answer. When it does not converge within its budget,
+fall back to comparing what the frame *says*: two full observations whose readable
+text and control boxes match are settled, even if their pixels differ. "The words
+stopped changing" is the property the resolver actually depends on; identical
+pixels was only ever a cheap proxy for it.
 
-**[DECIDED] `find_and_act` is a first-class step type.**
-Lists, scrolling, and pagination mean the target's position is data-dependent. Recording
-`scroll, scroll, click(y)` is wrong four different ways: position drift, page drift, absence,
-and ambiguity. Record the *predicate*, not the position:
+Costs two extra observations (~4s) on animated pages and nothing on static ones.
+Record which path settled, in the step result — a run that settles by text on
+every step is telling you something about the surface.
 
-```json
-{
-  "type": "find_and_act",
-  "scope":     { "anchor_text": "Date | Description | Amount", "extent": "below" },
-  "predicate": { "match": "row_contains_all",
-                 "terms": ["{{merchant}}", "{{amount}}"],
-                 "normalize": ["casefold", "strip_currency", "collapse_ws"] },
-  "scan":      { "advance": "scroll", "overlap": 0.15,
-                 "stop_when": "region_hash_unchanged", "max_advances": 10 },
-  "on_found":     { "action": "click", "anchor": "matched_row", "offset": [0.86, 0.0] },
-  "on_not_found": { "outcome": "transaction_not_found" },
-  "on_multiple":  { "policy": "escalate" }
-}
-```
-Still fully deterministic — a fixed loop (screenshot scope → OCR → test predicate → advance),
-no model in it. Pagination is the same primitive with `advance: {click_anchor: "Next"}`.
-Extraction ("last N transactions") is the same primitive with
-`on_found: {action: "extract", collect: "all", limit: N}`.
+### 2. Bring your own session
 
-**[DECIDED] The discovery action space contains exactly the primitives we want in artifacts.**
-Give the discovery agent `find_and_click(predicate, scope)` as a callable action so it never
-hand-scrolls. Then recordings are replayable *by construction*, instead of requiring fragile
-post-hoc inference of intent from a transcript of scrolls.
+`BrowserDriver.start` launches Chromium with a fresh temporary profile, so every
+run begins logged out, and the only way in is the `sign_on` recipe in policy. On
+an unseen site the first login may be SSO, may be MFA, may be a consent screen
+before the form. Writing a recipe for that before you have seen it is guesswork.
 
-**[DECIDED] Synthesis: how the run becomes the artifact** (decision 2). Earlier candidates —
-LLM emits the artifact as a final synthesis pass over its own transcript; record-everything then
-prune; or the agent tags each action keep/discard inline. Related: parameter identification.
+*Change.* Two supported ways in, and the recipe stays for the case where it fits:
 
----
+- `launch_persistent_context` against a profile directory, so a human can sign in
+  once — over VNC, on the same display — and every later run inherits it.
+- `storage_state` import/export, so a session can be captured elsewhere and
+  handed over.
 
-## 3. Determinism & error handling
+Both belong in `Session`, which already owns "the thing that outlives a run".
+Neither should touch the artifact schema: a capability starts from an
+authenticated state and says nothing about how it got there. That property is
+worth protecting — it is why no artifact references a credential.
 
-**[DECIDED] Replay never calls the LLM for decisions.** It re-executes recorded steps with
-supplied inputs and evaluates the success checkpoint. Determinism means *same procedure, no
-model decisions* — not *same pixels*.
+*Also:* an SSO redirect leaves the allowlist. `check_url` runs after every click,
+so it will deny the login itself. The allowlist needs to name the auth origins for
+that site, which is configuration, not code (see 3).
 
-**[DECIDED] Error & outcome taxonomy.** Three classes, never conflated:
+### 3. One app per configuration, selected per run
 
-| Class | Meaning | System behavior |
-|---|---|---|
-| Success | Checkpoint passed + outputs extracted | Return outputs |
-| Business outcome | Expected legitimate result ("member not found") | Return typed outcome — **not** a failure |
-| Recoverable | Known transient condition | Deterministic wait / dismiss / retry |
-| Hard failure | Anything else | Stop immediately + rich evidence |
+`Settings.policy_file` is a single global path and `policies/targetapp.yaml` is a
+single file. Two applications cannot coexist.
 
-**[DECIDED] Detection under pure vision:** primary signal is checkpoint failure; known cases via
-scoped, tolerant OCR pattern matching; **unknown states are hard failures** — intentional and
-correct, not a gap.
+*Change.* `policies/<app>.yaml` per application; `--app <name>` on `discover`,
+`replay` and `invoke`, defaulting to the capability's own `AppRef.name`. The
+capability already records which app it belongs to and nothing reads it — this is
+the reader it was waiting for. `Catalog.list(app=...)` follows for free.
 
-**[DECIDED] No open-ended LLM self-healing on the replay path.** Hard failures escalate to a
-human instead. Safer default for regulated financial data.
+A new site is then: one YAML file, one `--app` flag. That is the test of whether
+the overfitting is really gone.
 
-**[DECIDED] Scan-loop rules** (these decide whether `find_and_act` actually works):
-- *Exhausted the list and no match* → business outcome. *Hit `max_advances` while content was
-  still changing* → **hard failure** — we don't know whether the record is absent or we quit
-  early, and conflating those is the mistake the brief's glossary calls out by name.
-- Advance ~85% of region height, never 100%, or a row straddling the boundary is skipped and
-  reports a false not-found.
-- Ambiguity is first-class: two matches on a read task may be tolerable; on a write task
-  (dispute/transfer) it must escalate — acting on the wrong record is unrecoverable.
-- Normalize before comparing (`$1,234.56` vs `1234.56`, truncated `ACME Corp…`, date formats)
-  and record the normalizer list in the artifact so replay is reproducible.
-- Locate the scope region by anchor text (column-header row), not a fixed bbox.
+*The file should carry, per app:* allowlist patterns (including auth origins),
+permitted primitives, risky disposition, the sign-on recipe if one fits, the
+surface description handed to the model, declared recoveries, app errors and
+escalations. All of these exist today; they just live in one file with one name.
 
-### Position resolution & verification
+**Start a new site with `risky_disposition: block`.** You do not know what mutates
+there yet. Loosen to `confirm` once you do.
 
-**Framing:** the brief deliberately downgrades layout drift — "the hard part is *not* constant
-drift" (§1), and §6.2 asks for runtime error handling "and, *secondarily*, any UI drift". So this
-is not a drift-tolerance feature. It exists because a target's position varies **within the same
-unchanged version of the app**, on essentially every run:
+### 4. A first-contact diagnostic
 
-- a conditional banner renders (session-expiry warning, maintenance notice) → everything below shifts
-- an **inline validation error** appears → the fields under it move (constant in form flows)
-- variable-length data — a long member name or address wraps to two lines
-- the list above the button has 12 rows today and 3 tomorrow
-- **async reflow** — screenshot at t=0, a widget loads at t=200ms and re-lays out the page (a race, not drift)
-- per-tenant branding: different logo height, same vendor app (§3.7)
-- the human resizes the window during a handoff (real, given the headful/VNC design)
+`scripts/smoke_observe.py` is the right tool and it asserts `"dolores"`,
+`"12345"`, `"savings"` — it can only ever pass on the app it was written for.
 
-None of these are "the app changed." Anchor-relative targeting (§2) handles all of them, which is
-the strongest justification for that decision.
+*Change.* Promote it to `cua probe --url <url> [--expect "..."]`, and have it
+report rather than assert:
 
-**[DECIDED] A stable coordinate can still be the wrong click.** An unexpected modal moves nothing —
-it lands *on top*. The recorded coordinate is still "correct" and the click hits the dialog. The
-brief names unexpected confirmation dialogs as a runtime condition. Blind coordinate clicking has
-no notion of *what it actually hit*; in a banking app that is a correctness and safety failure, not
-a robustness one. The answer is therefore verification, not just better targeting:
+- how many elements, split by detector versus OCR, and how long a frame takes
+- how many detected controls carry text — **zero is the signal that the merge
+  thresholds do not fit this surface**
+- whether rows reconstruct: cluster into rows, print the widest few, and flag any
+  row that spans more than one visual line
+- whether the page settles by pixels or only by text (item 1)
+- any `--expect` strings that are not readable, which is how you check the anchors
+  a capability would need before recording one
+- the annotated set-of-marks frame, written out, because a human looking at it
+  answers most of these faster than any assertion
 
-1. **Pre-click assertion.** After resolving a target and before clicking, OCR the region and check
-   it matches the step's recorded `target_desc` / label. Mismatch → do not click. Nearly free (the
-   screenshot already exists), and converts "silently clicked the wrong thing" into a detected
-   failure.
-2. **Per-step checkpoints, not just a final one.** The brief's glossary defines a checkpoint as
-   asserting "you actually reached the state you expected, rather than assuming the click worked."
-   Per-step turns a wrong click at step 3 into a clean hard failure at step 3 instead of a garbage
-   output at step 9.
-3. **Settle before observe.** Wait until two consecutive frames hash-equal before resolving
-   coordinates. Kills the async-reflow race deterministically — no `sleep()`.
-4. **Overlay detection as a recoverable class.** Check for a modal before each step. Declared
-   dismissal handler → recoverable. Undeclared dialog → hard failure / escalate. Never click
-   through one.
-
-**[DECIDED] Cut line — variance is handled, drift is detected but not repaired.**
-
-| | Definition | Behavior |
-|---|---|---|
-| **Variance within a version** | Position differs run-to-run in an unchanged app (list above, banners, wrapping, reflow) | **Handled** — anchor-relative resolution + the four verifications above |
-| **True drift across versions** | The app itself changed since recording | **Detected, not repaired** — fall back to recorded bbox, log a drift event; if pre-click verification fails, stop and escalate to a human who can re-record |
-
-No LLM repair on the replay path — consistent with §3's no-self-healing decision and the right
-default for regulated data.
-
-**Free drift signal:** record which resolution tier satisfied each target (anchor → bbox fallback).
-Anchor resolutions beginning to fail across runs is an early warning *before* a hard failure, and
-it is the same mechanism as the per-tenant canary in §4.
-
-**[DECIDED] Success verification:** explicit checkpoint stored in the artifact. Screenshots are
-evidence, not the decision mechanism. Outputs extracted via OCR + parsing after the final step.
-
-**[DECIDED] OCR engine and match tolerance** (decision 3).
-**Known weakest link, to state plainly in the write-up:** OCR over a scrolling list is the least
-deterministic part of an otherwise model-free path — truncation and format variance are real,
-and a 10-screen scan costs 10 screenshot+OCR cycles (local and cheap, but not free).
+This is what you run first on a new site, and its output is what tells you whether
+to touch calibration (item 6) before recording anything.
 
 ---
 
-## 4. Heterogeneity & multi-tenant
+## P1 — will make it wrong rather than stuck
 
-*Required §6.2 heading and currently the thinnest section — needs the most work.*
+### 5. Referential integrity in the schema
 
-**[DECIDED] Surface abstraction seam:** perception is `observe() → screenshot + candidates`;
-action is coordinate/anchor-based input. Swapping surfaces (modern web → legacy frameset →
-desktop) swaps the candidate enumerator, not the artifact format. Vision-first means the seam
-holds even where no structured tree exists.
+`Capability` has no validators. Nothing checks that:
 
-**[DECIDED] Predicates and anchors are the portability story.** A `find_and_act` predicate
-("the row containing this merchant") survives rebranding and layout differences across tenants
-running the same vendor product; a coordinate does not. This step type is likely the strongest
-answer to §3.7.
+- step ids are unique
+- `OutputSpec.from_step` names a step that exists, and one that extracts
+- `step.screen` names a declared screen
+- every `{{placeholder}}` in a step, checkpoint, predicate or detector names a
+  declared input
+- `AppRef.base_url_pattern` compiles as a regex
+- `Constraints.not_equal_to` names another declared input
 
-**[OPEN]** Base artifact vs. per-tenant override representation. How drift is detected across
-tenants/versions. Route/value canonicalization (`/account/12345` → `/account/:id`).
+Every one of those is a recording that loads fine and fails mid-run against a
+member's account. On a surface we know, synthesis happens to produce consistent
+artifacts. On one we do not, recordings will be rougher, and the cheapest place to
+catch that is the moment the artifact is constructed.
 
----
+*Change.* A `model_validator` on `Capability` covering the list. It is the same
+argument as `--frozen` on a lockfile: fail where it is cheap, not where it is
+expensive.
 
-## 5. Escalation & handoff
+### 6. Re-measure calibration, do not re-guess it
 
-**[DECIDED] Control-transfer sequence:**
-1. Detect stuck / risky / unrecoverable state
-2. Emit `InterventionRequest` (goal, capability + step, screenshot, reason)
-3. Pause the **same live session** — browser context stays alive
-4. Human takes control of that session
-5. Human signals resume or abort
-6. System records the handoff, then continues or stops
-7. Intervention evidence preserved
+`calibration.py` holds every perceptual threshold with the measurement that set
+it, all taken on one surface. Two are surface-dependent enough to expect trouble:
 
-**[DECIDED] Detection triggers:** scan exhausts without resolution, policy denies a risky action,
-discovery hits max steps with no checkpoint match, ambiguity on a write task, **pre-click
-verification mismatch or an undeclared overlay** (§3), LLM emits `escalate`.
+- `container_frame_area = 0.15` — above this a detection is treated as a container
+  and does not absorb text. A site with large cards will exceed it and lose labels
+  the same way the sign-on panel did before it existed.
+- `row_tolerance = 0.008` — ~7px at 900px tall. A site with taller line spacing
+  merges rows; one with tighter spacing splits them.
 
-**[DECIDED] Mechanics** (decision 4) — VNC, for the reason that follows. Headful Playwright makes takeover trivial but the human's
-actions **invisible** — §3.6 requires recording what they did, and Playwright can't observe manual
-clicks without instrumentation. VNC captures input events cleanly at the X layer and matches the
-desktop-extension story, which may make it the *simpler* path rather than the stretch goal.
-Also unsettled: resume signal (HTTP endpoint is fine) and who holds the control token.
+`ocr_det_side_len` is already a setting and should be reviewed for text size.
 
----
+*Change.* Nothing structural — run `cua probe` (item 4) on three or four pages of
+the new site, read the row and label numbers, and adjust with the measurement
+recorded in the docstring the way the existing ones are. Resist adding a
+threshold; prefer deleting one. The last one deleted (`neighbour_max_gap`) had
+been quietly wrong for days.
 
-## 6. Safety
+### 7. Screens derived from two runs
 
-**[DECIDED] Configurable allowlist:** permitted domains / URL patterns / allowed action types.
-Checked before every action, in both discovery and replay.
+`Screen` exists, steps may declare one, and replay asserts it and fails
+`WRONG_SCREEN` naming where it actually is. Nothing produces them: deriving from a
+single run was tried and named the member profile `riverside_004`, after the
+member's *branch* — data, not a screen, so the capability would have refused to
+run for anybody else.
 
-**[DECIDED] Explicit safe-reversible vs. risky-irreversible classification.** Risky actions are
-blocked or require confirmation / escalation. In banking, latency beats a silently wrong transfer.
-*Note:* this is only enforceable because steps carry `intent` labels (§2) — a coordinate alone
-cannot be classified.
+Two runs with different inputs separate the two: text identical across both is the
+application, text that differs is the record. That is the comparison
+`catalog/learn.py` already performs for outcome detectors, asking about sameness
+instead of difference.
 
-**[DECIDED] Never persist secrets, credentials, or raw PII** into artifacts or logs. Redact.
+*Change.* `cua learn-screens <cap> --input <alternate values>`: replay twice,
+intersect the frames step by step, and name each screen from the longest invariant
+line that the other screens do not show. Emit a new draft version, exactly as
+`learn-outcome` does.
 
-**[DECIDED, as a cut] Redaction boundary** (decision 7). Real tension specific to a vision design: screenshots
-are simultaneously the evidence *and* the model input, and bank screens are PII by construction.
-A DOM-based design partly sidesteps this; we can't. Decide and state the limit honestly.
-
-**Known limits to declare:** heuristic redaction; static per-app policy (no dynamic risk scoring);
-no defense against prompt injection via page content read by the LLM.
-
----
-
-## 7. Cuts
-
-**[DECIDED] Deferred, each at a clean seam:**
-- Accessibility-tree perception — future enhancement; vision path ships first
-- Desktop surface — abstraction designed for it, only browser ships
-- Operator console — minimal/mocked view; handoff *mechanism* is real
-- Multi-tenant plumbing — schema-level only, no registry or vault
-- LLM-assisted recovery on replay failure — deliberately excluded from the main path
-
-**Evidence** — every run (discovery + replay) produces a structured step log, screenshots at key
-points and on failure, the final artifact, and a `ReplayResult` with clear status. All under
-`/evidence/`.
+*Why it matters beyond correctness.* This is the multi-tenant answer made
+concrete. What separates chrome from data across two runs separates a vendor
+product from one tenant's branding across two institutions, and a per-tenant
+override then attaches to a screen — one reviewable diff — instead of to every
+artifact that passes through it.
 
 ---
 
-## Appendix A — candidate goals
+## P2 — the console, and the cases it does not cover
 
-Need to commit to ~2 (see decision 1). One read capability end-to-end, plus one that demonstrates
-a business outcome; a write task is the best vehicle for the risky-action guardrail.
+The console shows runs, per-step frames with the set-of-marks overlay, the
+capability contract, the synthesis proposals and rejections, the policy, and the
+intervention handoff. Four gaps, in order of how much they mislead:
 
-*From the brief:* look up member 12345 and read their savings balance · open a new sub-account and
-reach the confirmation screen · add an item to the cart and reach checkout review.
+### 8. A run in flight reads as `failure`
 
-*Read tasks:* current balance of account X · last N transactions of account X · find transaction
-matching amount Y or merchant Z in account X.
+`ReplayResult` is constructed with `status=FAILURE` and written to `run.json`
+before each step, so the console shows a running replay as failed until it
+finishes. Add `RunStatus.RUNNING` as the initial value and set the real status at
+the end. One line, removes a genuinely misleading display.
 
-*Write tasks:* transfer funds X → Y · pay a bill · request a loan.
+### 9. No catalog view
 
-## Appendix B — runtime error & exception cases to cover
+The catalog is the agent-facing surface and the console does not show it. Add a
+panel listing capabilities with their contracts, `approve` as a button, and
+**invoke with typed inputs** — the same call an agent makes, from the operator's
+screen. That is also how a reviewer tries a capability on a new site without a
+terminal.
 
-*From the brief:* record not found · permission denials · unexpected confirmation dialogs ·
-session/timeout expiry · transient slowness · outright app errors.
+### 10. Cases worth having a view for
 
-*Additional:* not logged in / timed out · needs a confirm/go press · needs scrolling ·
-date format (MM-DD-YYYY) handling · missing transactions or wrong date range · account info not
-found for X or Y · network / server error · verifying a transaction actually happened at the
-correct amount.
+- a discovery run in progress, following its steps as they land (the SSE stream
+  exists and nothing consumes it)
+- a capability with no declared outcomes, said explicitly rather than shown as an
+  empty list
+- a run that escalated and was aborted, distinguished from one that resumed
+- more than one app, once item 3 lands
 
-## Appendix C — build tasks
+---
 
-Scaffolding (done):
-- [x] Repo layout, packaging (uv / pnpm), Dockerfiles, compose
-- [x] Exact artifact schema, pinned and tested — `backend/src/cua/schema/`
-- [x] Result + intervention contracts (error taxonomy, control-transfer states)
-- [x] Target application with injectable faults — `targetapp/`
-- [x] Guardrail config — `backend/policies/targetapp.yaml`
-- [x] Operator console shell + noVNC client — `console/`
+## P3 — tightening, once the above works
 
-Core (typed stubs with documented contracts; not implemented):
-- [ ] Perception: display capture, OmniParser detect, PaddleOCR read, merge
-- [ ] Set-of-Marks overlay: candidate enumeration + numbered boxes
-- [ ] Resolver ladder + pre-click / post-action verification
-- [ ] Discovery loop with `find_and_act` in the action space
-- [ ] Synthesis: prune → parameterize → declare
-- [ ] Replay engine + scan loop + outcome classification
-- [ ] Policy enforcement (allowlist, risk, recoveries)
-- [ ] Evidence writer
-- [ ] Handoff: pause / take control / resume / record human actions
-- [ ] Two capabilities recorded end to end, with evidence
+- `Predicate.match`, `Scan.stop_when` and `FindAndActStep.scope_extent` are bare
+  `Literal` strings while everything comparable (`Relation`, `ScanAdvance`,
+  `MultiplePolicy`) is an enum. Make them enums; the inconsistency is the kind
+  that produces a typo nobody catches.
+- `Target.offset` is an unbounded pair of floats and should be `0..1`.
+- `Screen.signature` is a full `Checkpoint`, which permits a scoped screen
+  signature — probably meaningless. Narrow it or say why not.
+- `ScanAdvance.CLICK_ANCHOR` — pagination — has never run. Real lists paginate.
+
+---
+
+## Not doing, and why
+
+- **A full UI map.** The right abstraction at N capabilities on one app, and the
+  wrong thing to build at two. Item 7 is the seam it would grow from, and it is
+  derived from artifacts rather than maintained beside them, so it cannot drift
+  from what replay sees.
+- **A router that picks a capability for a goal.** The agent-facing product
+  decides *what* to do; this system is how it does it. `/capabilities/manifest`
+  is our side of that line.
+- **Prettier target app.** Its density is the realistic hard case. Making it
+  nicer flatters the system in the one way that matters least.
+- **LLM prompt tuning beyond what a measurement demands.** The loop self-corrects
+  through the `expect` check. One experiment is worth running — strip the rules
+  from the system prompt, re-run the same goal, compare steps taken and discards —
+  because it replaces an opinion with a number in the write-up.
+
+---
+
+## Decisions already made — do not relitigate without new evidence
+
+| Decision | Why |
+|---|---|
+| Vision-first perception (screenshot → detector + OCR → merged elements) | the only path that generalizes to legacy web and desktop; no DOM assumption anywhere |
+| Playwright as an input engine, never a locator library | there is no `page.locator()` in the codebase and there should not be |
+| The X display is the one coordinate space | the model and the operator argue about the same picture |
+| The discovery action space *is* the artifact's step vocabulary | recordings are replayable by construction, not by post-hoc inference over a transcript |
+| `expect` on every action, checked immediately | every checkpoint in a saved artifact has already passed once, on the run that wrote it |
+| Parameterize by exact match against declared inputs | nobody guesses which numbers are ids; the caller declared them |
+| Outcome detectors are falsified, then learned by demonstration | a detector for an unseen screen is a guess; measured, the model proposed a column header that appears on every screen |
+| Replay constructs no model client at all | determinism is a construction-time property, checkable rather than promised |
+| VNC handoff with X-layer capture | Playwright cannot observe a click it did not issue |
+| Redaction: declared values real, pattern masking a seam | stated as a cut where it lives |
+
+---
+
+## Still owed as a deliverable
+
+`REPORT.md`, seven mandated headings (`ASSIGNMENT.md` §6.2). Its material is in
+the module docstrings, this file's decision table, and the commit messages — the
+previous `PLAN.md` organized under those headings was deleted with this rewrite
+and is recoverable from git history if the scaffold is wanted. §4 should be
+written around item 7: the tenant story is now a mechanism, not an assertion.

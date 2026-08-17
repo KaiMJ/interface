@@ -39,6 +39,7 @@ class FailureKind(str, Enum):
     TARGET_MISMATCH = "target_mismatch"             # resolved region says the wrong thing
     UNEXPECTED_OVERLAY = "unexpected_overlay"       # undeclared dialog on top of the target
     CHECKPOINT_FAILED = "checkpoint_failed"         # action executed, state is not what we expected
+    WRONG_SCREEN = "wrong_screen"                   # not the state this step expects to act on
     AMBIGUOUS_MATCH = "ambiguous_match"             # predicate matched more than one record
     SCAN_INCONCLUSIVE = "scan_inconclusive"         # hit max_advances with content still changing
     POLICY_DENIED = "policy_denied"                 # allowlist or risk rule refused the action

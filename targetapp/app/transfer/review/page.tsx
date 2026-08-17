@@ -74,16 +74,27 @@ export default async function Review({
     );
   }
 
-  async function confirm() {
+  // The transfer's parameters travel in the form rather than in this action's
+  // closure. Closing over the page's variables is the shorter spelling and it
+  // fails at run time under Next 16 with `ReferenceError: memberId is not
+  // defined` — the closure is not carried across the server-action boundary. It
+  // surfaces only when the button is actually pressed, which is exactly the kind
+  // of runtime error a replay has to survive rather than assume away.
+  async function confirm(formData: FormData) {
     "use server";
+    const m = String(formData.get("member") ?? "");
+    const src = String(formData.get("from") ?? "");
+    const dst = String(formData.get("to") ?? "");
+    const value = Number(formData.get("amount") ?? 0);
+
     // Re-checked server-side. A guard that only exists in the render path is not
     // a guard.
-    if (amt > DAILY_TRANSFER_LIMIT || amt > availableOf(from)) {
-      redirect(`/transfer/review?member=${memberId}&from=${from}&to=${to}&amount=${amt}&ack=1`);
+    if (value > DAILY_TRANSFER_LIMIT || value > availableOf(src)) {
+      redirect(`/transfer/review?member=${m}&from=${src}&to=${dst}&amount=${value}&ack=1`);
     }
-    applyTransfer(from, to, amt);
+    applyTransfer(src, dst, value);
     const ref = `TRF-${Date.now().toString(36).toUpperCase().slice(-8)}`;
-    redirect(`/transfer/receipt?ref=${ref}&member=${memberId}&from=${from}&to=${to}&amount=${amt}`);
+    redirect(`/transfer/receipt?ref=${ref}&member=${m}&from=${src}&to=${dst}&amount=${value}`);
   }
 
   return (
@@ -136,6 +147,10 @@ export default async function Review({
           </table>
 
           <form action={confirm} className="inline">
+            <input type="hidden" name="member" value={memberId} />
+            <input type="hidden" name="from" value={from} />
+            <input type="hidden" name="to" value={to} />
+            <input type="hidden" name="amount" value={amt} />
             <button
               type="submit"
               className="btn-primary"

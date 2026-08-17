@@ -8,6 +8,18 @@ The primitive list is identical to `schema.Primitive` — the discovery agent's
 action space, the artifact's step vocabulary, and the driver's capabilities are
 the same set by construction. Anything the agent can do, an artifact can record;
 anything an artifact records, replay can execute.
+
+Why these are coroutines
+------------------------
+The runners are async because escalation parks a run on an event and waits, and
+because the control plane must keep answering the operator's console while a run
+sits parked. Playwright's sync API refuses to run inside a live event loop, so a
+synchronous driver would force the whole run onto a worker thread and the handoff
+into thread-safe signalling for no gain.
+
+Perception, by contrast, stays synchronous: it is CPU-bound work (OCR, a YOLO
+forward pass), and the engine hands it to a thread rather than pretending it is
+IO. Async where we wait, threads where we compute.
 """
 
 from __future__ import annotations
@@ -21,11 +33,11 @@ from ..schema import Point
 class Driver(Protocol):
     """Injects input into a surface."""
 
-    def navigate(self, url: str) -> None: ...
+    async def navigate(self, url: str) -> None: ...
 
-    def click(self, p: Point, button: str = "left") -> None: ...
+    async def click(self, p: Point, button: str = "left") -> None: ...
 
-    def type_text(self, text: str, secret: bool = False) -> None:
+    async def type_text(self, text: str, secret: bool = False) -> None:
         """Type into whatever currently has focus.
 
         `secret=True` suppresses the value from every log line and evidence
@@ -35,9 +47,15 @@ class Driver(Protocol):
         """
         ...
 
-    def key(self, keys: str) -> None: ...
+    async def key(self, keys: str) -> None: ...
 
-    def scroll(self, p: Point, dy: float) -> None: ...
+    async def scroll(self, p: Point, dy: float) -> None:
+        """Scroll by `dy` display heights at point `p`. Positive is downward.
+
+        Normalized like every other quantity that crosses this seam, so a recorded
+        scroll means the same thing on a differently-sized display.
+        """
+        ...
 
     def current_url(self) -> str | None:
         """Best-effort. Convenience for checkpoints and evidence only.

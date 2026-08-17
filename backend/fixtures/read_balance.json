@@ -1,0 +1,154 @@
+{
+  "schema_version": 1,
+  "id": "fix_read_balance",
+  "version": 1,
+  "status": "draft",
+  "goal": "look up a member and read the current balance of one of their accounts",
+  "description": "Opens a member's profile and returns the current balance of the named account. Returns a declared outcome when the member does not exist or the operator is not entitled to view them.",
+  "app": {
+    "name": "targetapp",
+    "vendor": "meridian-core",
+    "base_url_pattern": "^http://targetapp:8080(/.*)?$"
+  },
+  "inputs": [
+    {
+      "name": "member_id",
+      "type": "string",
+      "required": true,
+      "description": "the member's id as shown on the profile",
+      "example": "12345",
+      "sensitive": false
+    },
+    {
+      "name": "account_nickname",
+      "type": "string",
+      "required": true,
+      "description": "the account's nickname as shown in the accounts grid",
+      "example": "Primary Savings",
+      "sensitive": false
+    }
+  ],
+  "outputs": [
+    {
+      "name": "balance",
+      "type": "number",
+      "description": "current balance of the named account",
+      "from_step": 2,
+      "normalize": [
+        "collapse_ws",
+        "strip_currency"
+      ],
+      "required": true
+    }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "risk": "safe",
+      "checkpoint": {
+        "kind": "text_present",
+        "value": "Member Profile",
+        "match": "contains",
+        "timeout_ms": 5000,
+        "normalize": [
+          "casefold",
+          "collapse_ws"
+        ]
+      },
+      "on_error": "hard_fail",
+      "retries": 0,
+      "note": "the member profile route; the id is the caller's parameter",
+      "kind": "act",
+      "action": "navigate",
+      "value": "http://targetapp:8080/members/{{member_id}}"
+    },
+    {
+      "id": 2,
+      "risk": "safe",
+      "on_error": "hard_fail",
+      "retries": 0,
+      "note": "the balance is the cell one to the right of the nickname. Anchored on the nickname rather than on a coordinate because the profile block above the grid changes height with the member's name.",
+      "kind": "act",
+      "action": "extract",
+      "target": {
+        "intent": "read the current balance for the named account",
+        "target_desc": "the current balance cell in that account's row",
+        "anchor_text": "{{account_nickname}}",
+        "anchor_match": "contains",
+        "relation": "right_of",
+        "relation_index": 1,
+        "offset": [
+          0.5,
+          0.5
+        ],
+        "normalize": [
+          "casefold",
+          "collapse_ws"
+        ]
+      },
+      "extract_as": "balance",
+      "screen": "member_profile"
+    }
+  ],
+  "success": {
+    "kind": "text_present",
+    "value": "{{account_nickname}}",
+    "match": "contains",
+    "timeout_ms": 5000,
+    "normalize": [
+      "casefold",
+      "collapse_ws"
+    ]
+  },
+  "business_outcomes": [
+    {
+      "name": "member_not_found",
+      "description": "no member exists with that id",
+      "detector": {
+        "kind": "text_present",
+        "value": "No member record found",
+        "match": "contains",
+        "timeout_ms": 5000,
+        "normalize": [
+          "casefold",
+          "collapse_ws"
+        ]
+      },
+      "result_fields": {
+        "member_id": "string"
+      }
+    },
+    {
+      "name": "permission_denied",
+      "description": "the member exists but this operator may not view the record",
+      "detector": {
+        "kind": "text_present",
+        "value": "do not have permission to view",
+        "match": "contains",
+        "timeout_ms": 5000,
+        "normalize": [
+          "casefold",
+          "collapse_ws"
+        ]
+      },
+      "result_fields": {
+        "member_id": "string"
+      }
+    }
+  ],
+  "screens": [
+    {
+      "name": "member_profile",
+      "signature": {
+        "kind": "text_present",
+        "value": "Member Profile",
+        "match": "contains",
+        "timeout_ms": 5000,
+        "normalize": [
+          "casefold",
+          "collapse_ws"
+        ]
+      }
+    }
+  ]
+}

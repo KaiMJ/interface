@@ -18,8 +18,13 @@ REPORT §3 as the known weakest link.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
-from ..schema import Bbox, Element, Viewport
+import numpy as np
+from PIL import Image
+
+from ..calibration import CALIBRATION
+from ..schema import Bbox, Element, ElementSource, Viewport
 
 
 class OnnxTextReader:
@@ -30,13 +35,30 @@ class OnnxTextReader:
     `TextReader` protocol, so swapping engines again touches this file only.
     """
 
-    def __init__(self, models_dir: Path, lang: str = "en") -> None:
+    def __init__(
+        self,
+        models_dir: Path,
+        lang: str = "en",
+        conf_threshold: float = 0.5,
+        det_side_len: int = 1600,
+    ) -> None:
         self.models_dir = models_dir
         self.lang = lang
-        self._ocr: object | None = None
+        self.det_side_len = det_side_len
+        # Below this a line is dropped rather than kept as text. Anchors and
+        # checkpoints both compare against this output, and a confidently wrong
+        # string is worse than a missing one: a missing anchor fails the step
+        # loudly, a wrong one resolves to the wrong control.
+        self.conf_threshold = conf_threshold
+        self._ocr: Any | None = None
 
-    def _load(self) -> object:
-        raise NotImplementedError
+    def _load(self) -> Any:
+        if self._ocr is None:
+            from rapidocr import RapidOCR
+
+            # Models ship inside the wheel; nothing is downloaded at run time.
+            self._ocr = RapidOCR(params={"Det.limit_side_len": self.det_side_len})
+        return self._ocr
 
     def read(
         self,
@@ -54,10 +76,58 @@ class OnnxTextReader:
         Emitted elements carry `source=OCR`, `role="text"`, and the raw string in
         both `text` and `name`.
         """
-        raise NotImplementedError
+        w, h = float(viewport.width), float(viewport.height)
+        img = Image.open(image_path).convert("RGB")
+
+        ox, oy = 0.0, 0.0
+        if region is not None:
+            left, top = region.x * w, region.y * h
+            right, bottom = left + region.w * w, top + region.h * h
+            # A degenerate crop makes PP-OCR's detector raise rather than return
+            # nothing, so treat "no region to read" as "no text".
+            if right - left < 2 or bottom - top < 2:
+                return []
+            img = img.crop((int(left), int(top), int(right), int(bottom)))
+            ox, oy = float(int(left)), float(int(top))
+
+        result = self._load()(np.array(img))
+        if result is None or result.boxes is None or result.txts is None:
+            return []
+
+        out: list[Element] = []
+        for i, (poly, txt, score) in enumerate(
+            zip(result.boxes, result.txts, result.scores, strict=True)
+        ):
+            conf = float(score)
+            text = str(txt).strip()
+            if not text or conf < self.conf_threshold:
+                continue
+            xs = [float(p[0]) + ox for p in poly]
+            ys = [float(p[1]) + oy for p in poly]
+            x0, x1 = min(xs), max(xs)
+            y0, y1 = min(ys), max(ys)
+            out.append(
+                Element(
+                    id=f"t{i}",
+                    role="text",
+                    name=text,
+                    text=text,
+                    bbox=Bbox(
+                        x=max(0.0, min(1.0, x0 / w)),
+                        y=max(0.0, min(1.0, y0 / h)),
+                        w=max(0.0, min(1.0, (x1 - x0) / w)),
+                        h=max(0.0, min(1.0, (y1 - y0) / h)),
+                    ),
+                    source=ElementSource.OCR,
+                    conf=max(0.0, min(1.0, conf)),
+                )
+            )
+        return out
 
 
-def group_rows(elements: list[Element], y_tolerance: float = 0.008) -> list[list[Element]]:
+def group_rows(
+    elements: list[Element], y_tolerance: float = CALIBRATION.row_tolerance
+) -> list[list[Element]]:
     """Cluster text elements into visual rows by vertical overlap.
 
     Row grouping is what makes `row_contains_all` predicates possible without a
@@ -66,4 +136,19 @@ def group_rows(elements: list[Element], y_tolerance: float = 0.008) -> list[list
     deliberately small — merging two adjacent table rows would let a predicate
     match terms that a human would never read as one record.
     """
-    raise NotImplementedError
+    rows: list[list[Element]] = []
+    # Sorted by vertical centre, so a new element can only ever belong to the row
+    # being built. Comparing against every open row instead would let a tall
+    # element chain two table rows into one, which is exactly the failure this
+    # tolerance is small to avoid.
+    for el in sorted(elements, key=lambda e: (e.bbox.center.y, e.bbox.x)):
+        centre = el.bbox.center.y
+        if rows:
+            band = rows[-1]
+            top = min(e.bbox.y for e in band)
+            bottom = max(e.bbox.y + e.bbox.h for e in band)
+            if top - y_tolerance <= centre <= bottom + y_tolerance:
+                band.append(el)
+                continue
+        rows.append([el])
+    return [sorted(row, key=lambda e: e.bbox.x) for row in rows]

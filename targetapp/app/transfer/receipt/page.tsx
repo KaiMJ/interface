@@ -35,7 +35,7 @@ export default async function Receipt({
             Transfer Complete
           </p>
 
-          <table className="grid">
+          <table className="datagrid">
             <tbody>
               <tr>
                 <th className="w-[200px]">Confirmation Reference</th>
