@@ -24,7 +24,7 @@
  * and so connection state is observable here.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type RFBType from "@novnc/novnc";
 
 type Status = "connecting" | "connected" | "disconnected" | "error";
@@ -41,11 +41,19 @@ export function NoVncScreen({
   const host = useRef<HTMLDivElement>(null);
   const rfb = useRef<RFBType | null>(null);
   const [status, setStatus] = useState<Status>("connecting");
+  // Bumping this re-runs the connect effect. A dropped VNC used to be permanent:
+  // the panel froze on its last frame and every run after that looked like an
+  // automation that had stopped moving. The session outlives any one run by
+  // design, so the view of it has to outlive a network blip.
+  const [attempt, setAttempt] = useState(0);
 
-  function report(s: Status) {
-    setStatus(s);
-    onStatus?.(s);
-  }
+  const report = useCallback(
+    (s: Status) => {
+      setStatus(s);
+      onStatus?.(s);
+    },
+    [onStatus],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -81,7 +89,18 @@ export function NoVncScreen({
     // Deliberately does NOT depend on `viewOnly` — see the effect below. Changing
     // who holds control must not reconnect the session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url]);
+  }, [url, attempt]);
+
+  // Retry on its own, slowly. The common causes are a restarted container and a
+  // websocket dropped while nothing was watching, and both fix themselves — so
+  // the panel should recover without anyone reloading the page. Three seconds is
+  // chosen to be unobtrusive rather than fast: nothing is lost by reconnecting a
+  // moment late, because the session is still there.
+  useEffect(() => {
+    if (status === "connected" || status === "connecting") return;
+    const t = setTimeout(() => setAttempt((n) => n + 1), 3000);
+    return () => clearTimeout(t);
+  }, [status, attempt]);
 
   useEffect(() => {
     if (rfb.current) rfb.current.viewOnly = viewOnly;
@@ -95,12 +114,19 @@ export function NoVncScreen({
         <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-center">
           <div className="mono text-[var(--muted)]">
             {status === "connecting" ? "connecting to live session…" : null}
-            {status === "disconnected" ? "session disconnected" : null}
+            {status === "disconnected" ? "session disconnected — retrying" : null}
             {status === "error" ? (
               <>
                 no live session at {url}
                 <div className="mt-1 text-[11px]">start the stack with `docker compose up`</div>
               </>
+            ) : null}
+            {status !== "connecting" ? (
+              <div className="mt-2">
+                <button className="btn" onClick={() => setAttempt((n) => n + 1)}>
+                  reconnect now
+                </button>
+              </div>
             ) : null}
           </div>
         </div>

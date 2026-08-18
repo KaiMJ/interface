@@ -1,382 +1,432 @@
 "use client";
 
 /**
- * One page, three columns, no routing.
+ * One page, three regions, one subject.
  *
- * Left is what happened: runs, the intervention queue, and the step log. Centre
- * is what the agent saw when it happened — the frame for the selected step, with
- * a toggle between the clean capture an operator sees over VNC and the numbered
- * overlay the model was actually shown. Right is the live session plus the two
- * contracts that govern it: the capability being invoked and the policy in force.
+ *   navigator   what exists: runs, and the capabilities that produce them
+ *   the run     what you are looking at — its steps, its frames, its decisions
+ *   session     what is happening right now: the live display, and anyone
+ *               waiting on a human
  *
- * The earlier version had a separate /operator/[run_id] route. It was cut: the
- * debug view and the operator console show the same thing, and the only
- * difference is whether the operator may touch it. Splitting them would mean
- * someone handling an escalation has to navigate away to see why it happened.
+ * The earlier version put eleven panels on screen at once. Everything was
+ * visible and nothing was legible, and it needed a 1440px window before the
+ * columns stopped fighting each other. What changed is not the information —
+ * all of it is still here — but when you are shown it: the two contracts
+ * governing a run (its capability, its policy) and a run's full record are
+ * things you consult once, so they are a drawer; starting a run is a form you
+ * use and dismiss, so it is a modal; the four stages of a step are one at a
+ * time, because you are only ever asking about one of them.
+ *
+ * The live session stays on screen throughout. It is the one panel that is not
+ * a record of something that already happened.
+ *
+ * There is deliberately no separate /operator route. A debug view and an
+ * operator view of the same run differ only in whether you may touch it, and
+ * splitting them would mean whoever is handling an escalation has to navigate
+ * away from the evidence to see why it happened.
+ *
+ * Live updates come from the run's own evidence stream (SSE over `steps.jsonl`
+ * and `run.json`), not an in-process bus, so a run started by the CLI is
+ * watchable here for free and what this shows cannot disagree with the audit
+ * trail — it is reading the audit trail.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CapabilityCard } from "@/components/Catalog";
+import { Frame } from "@/components/Frame";
+import { Inspector } from "@/components/Inspector";
+import { InterventionPanel } from "@/components/Intervention";
+import { Launch } from "@/components/Launch";
+import { Navigator } from "@/components/Navigator";
 import { NoVncScreen } from "@/components/NoVncScreen";
+import { PolicyCard } from "@/components/PolicyCard";
+import { RunBar, RunDetails, StepRail } from "@/components/RunView";
+import { FaultPanel } from "@/components/Faults";
+import { Drawer, Modal } from "@/components/Shell";
+import { Chip, Field, Panel } from "@/components/ui";
 import {
   NOVNC,
   api,
-  evidenceUrl,
+  runEvents,
   type Capability,
+  type CapabilityHistory,
+  type CapabilitySummary,
   type Evidence,
+  type Health,
   type Intervention,
   type Policy,
   type Run,
   type RunSummary,
-  type StepRow,
 } from "@/lib/api";
 
 const OPERATOR = "reviewer";
+type DrawerKind = "details" | "contracts" | null;
 
 export default function Console() {
+  const [health, setHealth] = useState<Health | null>(null);
+  const [online, setOnline] = useState<boolean | null>(null);
   const [runs, setRuns] = useState<RunSummary[]>([]);
+  const [capabilities, setCapabilities] = useState<CapabilitySummary[]>([]);
   const [interventions, setInterventions] = useState<Intervention[]>([]);
+
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
   const [run, setRun] = useState<Run | null>(null);
   const [evidence, setEvidence] = useState<Evidence | null>(null);
   const [policy, setPolicy] = useState<Policy | null>(null);
   const [capability, setCapability] = useState<Capability | null>(null);
-  const [step, setStep] = useState<number | null>(null);
-  const [marks, setMarks] = useState(true);
-  const [hasControl, setHasControl] = useState(false);
-  const [online, setOnline] = useState<boolean | null>(null);
+  const [history, setHistory] = useState<CapabilityHistory | null>(null);
+  const [selectedCapability, setSelectedCapability] = useState<string | null>(null);
 
+  const [stepIndex, setStepIndex] = useState<number | null>(null);
+  const [follow, setFollow] = useState(true);
+  const [filter, setFilter] = useState("");
+  const [hasControl, setHasControl] = useState(false);
+  const [drawer, setDrawer] = useState<DrawerKind>(null);
+  const [launching, setLaunching] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
+
+  // --- the slow poll: things that change when something else starts a run ----
+  //
+  // Each result replaces state only when it actually differs. Re-seating three
+  // arrays every two seconds re-rendered every panel below them on a new object
+  // identity — including re-creating the ~150 absolutely-positioned boxes of the
+  // element overlay, which is what made hovering it stutter.
   const poll = useCallback(async () => {
-    setOnline((await api.health()) !== null);
-    setRuns((await api.runs()) ?? []);
-    setInterventions((await api.interventions()) ?? []);
+    const [up, listed, queue, catalog] = await Promise.all([
+      api.health(),
+      api.runs(),
+      api.interventions(true),
+      api.capabilities(),
+    ]);
+    setOnline(up !== null);
+    setHealth((was) => (same(was, up) ? was : up));
+    if (listed) setRuns((was) => (same(was, listed) ? was : listed));
+    if (queue) setInterventions((was) => (same(was, queue) ? was : queue));
+    if (catalog) setCapabilities((was) => (same(was, catalog) ? was : catalog));
   }, []);
 
   useEffect(() => {
     void poll();
-    const t = setInterval(() => void poll(), 1500);
+    const t = setInterval(() => void poll(), 2000);
     return () => clearInterval(t);
   }, [poll]);
 
+  // A run started anywhere becomes the selected one. The operator's attention
+  // should follow the session, not have to chase it.
+  const active = health?.active_run ?? null;
+  // Anything holding the display, run or not. Arming a fault claims it the same
+  // way; the difference is that a run is something this console can open.
+  const busy = health?.session_busy ? (active ?? "the session") : null;
   useEffect(() => {
-    void api.policy().then(setPolicy);
+    if (active) setSelectedRun(active);
+  }, [active]);
+
+  const current = selectedRun ?? runs[0]?.run_id ?? null;
+
+  // --- deep link: a finding in this console is a URL someone else can open ---
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    const params = new URLSearchParams(window.location.search);
+    const run = params.get("run");
+    const step = params.get("step");
+    if (run) setSelectedRun(run);
+    if (step) {
+      setStepIndex(Number(step));
+      setFollow(false);
+    }
   }, []);
 
-  // The list carries summaries; a run's steps and evidence come from its own
-  // endpoints. Fetching them together keeps the frame and the step row in sync.
-  const current = selectedRun ?? runs[0]?.run_id ?? null;
   useEffect(() => {
     if (!current) return;
-    let live = true;
-    void (async () => {
-      const [detail, files] = await Promise.all([api.run(current), api.evidence(current)]);
-      if (!live) return;
-      setRun(detail);
-      setEvidence(files);
-      setStep((previous) =>
-        previous !== null && files?.steps.some((s) => s.step_id === previous)
-          ? previous
-          : (files?.steps.at(-1)?.step_id ?? null),
-      );
-    })();
-    return () => {
-      live = false;
-    };
-  }, [current, runs.length, interventions.length]);
+    const params = new URLSearchParams();
+    params.set("run", current);
+    if (stepIndex !== null) params.set("step", String(stepIndex));
+    window.history.replaceState(null, "", `?${params}`);
+  }, [current, stepIndex]);
 
-  // A discovery run leaves its capability in evidence; a replay run only names
-  // the one it executed, so that one is fetched from the catalog. Either way the
-  // contract being run is on screen beside the run.
+  // --- the selected run: fetched once, then streamed --------------------------
+  const load = useCallback(async (runId: string) => {
+    const [detail, files] = await Promise.all([api.run(runId), api.evidence(runId)]);
+    setRun(detail);
+    setEvidence(files);
+  }, []);
+
+  useEffect(() => {
+    if (!current) return;
+    setStepIndex(null);
+    setFollow(true);
+    void load(current);
+  }, [current, load]);
+
+  useEffect(() => {
+    if (!current) return;
+    let frames = 0;
+    const stop = runEvents(current, {
+      run: (fresh) => {
+        setRun(fresh);
+        // A new step means a new frame on disk. The manifest maps step ids to
+        // files, so it has to be re-read — but only when the count moved, not on
+        // every heartbeat.
+        if (fresh.steps.length !== frames) {
+          frames = fresh.steps.length;
+          void api.evidence(current).then((e) => e && setEvidence(e));
+        }
+      },
+    });
+    return stop;
+  }, [current]);
+
+  // Follow the live edge unless a step is pinned. A run being watched should show
+  // its newest frame; a run being debugged must not move under the reader.
+  const steps = run?.steps ?? [];
+  useEffect(() => {
+    if (follow) setStepIndex(steps.length ? steps.length - 1 : null);
+  }, [follow, steps.length]);
+
+  const step = stepIndex !== null ? (steps[stepIndex] ?? null) : null;
+  // Only when the manifest in hand is the selected run's. Switching runs replaces
+  // `current` before the new evidence lands, and pairing the new run id with the
+  // old run's file paths asks the control plane for a frame that does not exist.
+  const frame = useMemo(
+    () =>
+      (evidence?.run_id === current
+        ? evidence.steps.find((s) => s.step_id === step?.step_id)
+        : null) ?? null,
+    [evidence, current, step?.step_id],
+  );
+
+  // --- the two contracts beside the run --------------------------------------
+  useEffect(() => {
+    // The selected run's application, not the deployment default. Showing one
+    // app's allowlist beside another app's run is a confident wrong answer.
+    void api.policy(run?.app ?? null).then(setPolicy);
+  }, [run?.app]);
+
+  const capabilityRef = selectedCapability ?? run?.capability ?? run?.capability_ref ?? null;
+
   useEffect(() => {
     const inEvidence = evidence?.capability ?? null;
-    if (inEvidence) {
+    if (!selectedCapability && inEvidence) {
       setCapability(inEvidence);
       return;
     }
-    const ref = run?.capability ?? run?.capability_ref ?? null;
-    if (!ref) {
+    if (!capabilityRef) {
       setCapability(null);
       return;
     }
-    void api.capability(ref).then(setCapability);
-  }, [evidence, run]);
+    void api.capability(capabilityRef).then(setCapability);
+  }, [evidence, capabilityRef, selectedCapability]);
 
-  const open = interventions.find((i) => i.state === "pending" || i.state === "human_control");
-  const frame = evidence?.steps.find((s) => s.step_id === step) ?? null;
-  const stepRow = run?.steps.find((s) => s.step_id === step) ?? null;
+  useEffect(() => {
+    const id = capabilityRef?.split("@v")[0];
+    if (!id) {
+      setHistory(null);
+      return;
+    }
+    void api.history(id).then(setHistory);
+  }, [capabilityRef, runs.length]);
 
-  async function take() {
-    if (!open) return;
-    await api.take(open.id, OPERATOR);
-    setHasControl(true);
-  }
-
-  async function hand(outcome: "resume" | "abort") {
-    if (!open) return;
-    await api.resolve(open.id, outcome, OPERATOR);
-    setHasControl(false);
-  }
+  // --- control ---------------------------------------------------------------
+  const open =
+    interventions.find((i) => i.state === "pending" || i.state === "human_control") ?? null;
+  useEffect(() => {
+    setHasControl(open?.state === "human_control");
+  }, [open?.state, open?.id]);
 
   return (
-    <div className="flex h-screen flex-col">
-      <header className="flex items-center gap-3 border-b border-[var(--rule)] px-4 py-2">
-        <span className="text-[13px] font-semibold tracking-wide">AUTOMATION CONSOLE</span>
-        <span className="mono text-[11px] text-[var(--muted)]">
-          {online === null ? "…" : online ? "control plane: up" : "control plane: unreachable"}
+    <div className="flex h-screen flex-col overflow-hidden">
+      <header className="flex shrink-0 items-center gap-2 border-b border-[var(--rule)] px-3 py-2">
+        <button
+          className="btn lg:hidden"
+          onClick={() => setNavOpen((n) => !n)}
+          title="runs and capabilities"
+        >
+          ☰
+        </button>
+        <span className="text-[13px] font-semibold tracking-wide whitespace-nowrap">
+          AUTOMATION CONSOLE
         </span>
-        {policy ? (
-          <span className="mono ml-auto text-[11px] text-[var(--muted)]">
-            policy: {policy.app} · {policy.allowed_actions.length} actions · risky:{" "}
-            {policy.risky_disposition}
+        <span className="mono hidden text-[11px] text-[var(--muted)] sm:inline">
+          {online === null ? "…" : online ? "up" : "unreachable"}
+        </span>
+        {active ? (
+          <span className="mono truncate text-[11px]" style={{ color: "var(--warn)" }}>
+            ◌ {active}
           </span>
+        ) : null}
+
+        <button className="btn btn-accent ml-auto shrink-0" onClick={() => setLaunching(true)}>
+          + New run
+        </button>
+        {open ? (
+          <button
+            className="btn shrink-0"
+            style={{ borderColor: "var(--warn)", color: "var(--warn)" }}
+            onClick={() => setSelectedRun(open.run_id)}
+            title={open.message}
+          >
+            intervention · {open.reason}
+          </button>
         ) : null}
       </header>
 
-      <div className="flex min-h-0 flex-1">
-        <aside className="flex w-[360px] shrink-0 flex-col gap-3 overflow-y-auto border-r border-[var(--rule)] p-3">
-          <Runs runs={runs} selected={current} onSelect={setSelectedRun} />
-          <Escalation
-            intervention={open}
-            hasControl={hasControl}
-            onTake={take}
-            onResume={() => hand("resume")}
-            onAbort={() => hand("abort")}
+      <div className="relative flex min-h-0 flex-1">
+        {/* --- navigator ---------------------------------------------------
+            A rail at desktop widths, an overlay below them. It is navigation,
+            not content: the run is what the window is for. */}
+        <aside
+          className={`${
+            navOpen ? "absolute inset-y-0 left-0 z-10 flex bg-[var(--bg)] shadow-xl" : "hidden"
+          } w-[250px] shrink-0 flex-col border-r border-[var(--rule)] lg:relative lg:flex`}
+        >
+          <Navigator
+            run={run}
+            step={stepIndex}
+            onSelectStep={(index) => {
+              setStepIndex(index);
+              setFollow(false);
+            }}
+            runs={runs}
+            capabilities={capabilities}
+            selectedRun={current}
+            selectedCapability={selectedCapability}
+            filter={filter}
+            operator={OPERATOR}
+            onSelectRun={(id) => {
+              setSelectedRun(id);
+              setSelectedCapability(null);
+              setNavOpen(false);
+            }}
+            onSelectCapability={(ref) => {
+              setSelectedCapability(ref);
+              setDrawer("contracts");
+            }}
+            onFilter={setFilter}
+            onChanged={poll}
+            onReplay={(ref) => {
+              setSelectedCapability(ref);
+              setLaunching(true);
+            }}
           />
-          <Steps run={run} selected={step} onSelect={setStep} />
         </aside>
 
-        <section className="flex min-w-0 flex-1 flex-col gap-3 p-3">
-          <Frame
-            runId={current}
-            frame={frame}
-            step={stepRow}
-            marks={marks}
-            onToggle={() => setMarks((m) => !m)}
+        {/* --- the run ------------------------------------------------------ */}
+        <main className="flex min-w-0 flex-1 flex-col">
+          <RunBar
+            run={run}
+            evidence={evidence}
+            onOpenDetails={() => setDrawer("details")}
+            onOpenContracts={() => setDrawer("contracts")}
           />
-          <Result run={run} evidence={evidence} />
-        </section>
+          <StepRail
+            run={run}
+            selected={stepIndex}
+            follow={follow}
+            onFollow={setFollow}
+            onSelect={(index) => {
+              setStepIndex(index);
+              setFollow(false);
+            }}
+          />
+          <Frame runId={current} frame={frame} step={step} failure={run?.failure} />
+          <Inspector step={step} />
+        </main>
 
-        <aside className="flex w-[380px] shrink-0 flex-col gap-3 overflow-y-auto border-l border-[var(--rule)] p-3">
-          <div className="panel">
-            <div className="panel-hd flex items-center justify-between">
-              <span>Live Session</span>
-              <span className="mono normal-case">{hasControl ? "you" : "automation"}</span>
-            </div>
-            <div className="h-[240px]">
-              <NoVncScreen url={open?.vnc_url ?? NOVNC} viewOnly={!hasControl} />
+        {/* --- the session -------------------------------------------------- */}
+        <aside className="hidden w-[300px] shrink-0 flex-col border-l border-[var(--rule)] md:flex xl:w-[340px]">
+          <div className="flex shrink-0 items-center justify-between border-b border-[var(--rule)] px-3 py-1.5">
+            <span className="mono text-[11px] tracking-wider text-[var(--muted)] uppercase">
+              Live session
+            </span>
+            <span
+              className="mono text-[11px]"
+              style={{ color: hasControl ? "var(--warn)" : undefined }}
+            >
+              {hasControl ? "you" : "automation"}
+            </span>
+          </div>
+          <div className="h-[220px] shrink-0 xl:h-[260px]">
+            <NoVncScreen url={open?.vnc_url ?? NOVNC} viewOnly={!hasControl} />
+          </div>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
+            <InterventionPanel
+              queue={interventions}
+              operator={OPERATOR}
+              activeRunId={current}
+              evidence={evidence}
+              onSelectRun={setSelectedRun}
+              onChanged={() => {
+                void poll();
+                if (current) void load(current);
+              }}
+            />
+            <div className="px-3 pb-3">
+              <FaultPanel app={run?.app ?? null} busy={busy} />
             </div>
           </div>
-          <CapabilityCard capability={capability} />
-          <SynthesisCard evidence={evidence} />
-          <PolicyCard policy={policy} />
         </aside>
       </div>
-    </div>
-  );
-}
 
-function Runs({
-  runs,
-  selected,
-  onSelect,
-}: {
-  runs: RunSummary[];
-  selected: string | null;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <div className="panel">
-      <div className="panel-hd">Runs</div>
-      <div className="max-h-[160px] overflow-y-auto">
-        {runs.length === 0 ? (
-          <p className="p-3 text-[12px] text-[var(--muted)]">
-            No runs yet. Start one with <code className="mono">cua discover</code> or by
-            invoking a capability.
-          </p>
-        ) : (
-          runs.map((r) => (
-            <button
-              key={r.run_id}
-              onClick={() => onSelect(r.run_id)}
-              className="block w-full border-b border-[var(--rule)] px-3 py-2 text-left last:border-0 hover:bg-[#222a33]"
-              style={{ background: r.run_id === selected ? "#222a33" : undefined }}
-            >
-              <span className="mono">{r.run_id}</span>
-              <StatusDot status={r.status} />
-              <div className="text-[11px] text-[var(--muted)]">
-                {r.kind} · {r.capability ?? "—"}
-              </div>
-            </button>
-          ))
-        )}
-      </div>
-    </div>
-  );
-}
+      {/* --- consulted, not watched ----------------------------------------- */}
+      <Drawer
+        open={drawer === "details"}
+        title={`Run · ${current ?? ""}`}
+        onClose={() => setDrawer(null)}
+      >
+        <RunDetails run={run} evidence={evidence} />
+      </Drawer>
 
-/**
- * The frame for the selected step.
- *
- * Two images per step and the toggle matters: the clean capture is what the
- * operator sees over VNC, and the annotated one is what the model was shown, so
- * any argument about a decision it made is litigated against the second.
- */
-function Frame({
-  runId,
-  frame,
-  step,
-  marks,
-  onToggle,
-}: {
-  runId: string | null;
-  frame: { step_id: number; frame: string; annotated: string | null } | null;
-  step: StepRow | null;
-  marks: boolean;
-  onToggle: () => void;
-}) {
-  const showMarks = marks && !!frame?.annotated;
-  return (
-    <div className="panel flex min-h-0 flex-1 flex-col">
-      <div className="panel-hd flex items-center justify-between">
-        <span>
-          {frame ? `Step ${frame.step_id}` : "Frame"}
-          {step ? ` · ${step.intent}` : ""}
-        </span>
-        <span className="flex items-center gap-2">
-          {frame?.annotated ? (
-            <button className="btn" onClick={onToggle}>
-              {showMarks ? "showing marks" : "showing capture"}
-            </button>
-          ) : (
-            <span className="mono normal-case text-[var(--muted)]">no overlay</span>
-          )}
-        </span>
-      </div>
-      <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-black">
-        {runId && frame ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={evidenceUrl(runId, showMarks && frame.annotated ? frame.annotated : frame.frame)}
-            alt={`step ${frame.step_id}`}
-            className="max-h-full max-w-full object-contain"
-          />
-        ) : (
-          <p className="p-6 text-[12px] text-[var(--muted)]">
-            No frame for this step. Evidence is written per step as a run proceeds.
-          </p>
-        )}
-      </div>
-      {step ? (
-        <div className="border-t border-[var(--rule)] p-2 text-[11px]">
-          <span className="mono text-[var(--muted)]">
-            {step.resolution} · {step.duration_ms}ms ·{" "}
-          </span>
-          <StatusDot status={step.status} />
-          {step.expected ? (
-            <div className="mt-1">
-              <span className="mono text-[var(--muted)]">expected </span>
-              {step.expected}
-              <span className="mono text-[var(--muted)]"> · observed </span>
-              {step.observed ?? "—"}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
-}
+      <Drawer
+        open={drawer === "contracts"}
+        title="Contracts in force"
+        onClose={() => setDrawer(null)}
+      >
+        <CapabilityCard capability={capability} history={history} />
+        <SynthesisCard evidence={evidence} />
+        <PolicyCard policy={policy} />
+      </Drawer>
 
-/** What the caller got back: outputs, a declared outcome, or a failure. */
-function Result({ run, evidence }: { run: Run | null; evidence: Evidence | null }) {
-  if (!run) return null;
-  const actions = evidence?.human_actions ?? [];
-  return (
-    <div className="panel">
-      <div className="panel-hd flex items-center justify-between">
-        <span>Result</span>
-        <StatusDot status={run.status} />
-      </div>
-      <div className="space-y-1 p-3 text-[12px]">
-        {run.outputs && Object.keys(run.outputs).length > 0 ? (
-          <Field label="outputs" value={JSON.stringify(run.outputs)} />
-        ) : null}
-        {run.outcome ? (
-          <>
-            <Field label="outcome" value={run.outcome.name} />
-            <Field label="fields" value={JSON.stringify(run.outcome.fields ?? {})} />
-          </>
-        ) : null}
-        {run.failure ? (
-          <>
-            <Field label="failure" value={run.failure.kind} />
-            <Field label="at step" value={String(run.failure.step_id ?? "—")} />
-            <Field label="expected" value={run.failure.expected} />
-            <Field label="observed" value={run.failure.observed} />
-          </>
-        ) : null}
-        {run.stop_reason ? <Field label="stopped" value={run.stop_reason} /> : null}
-        {actions.length > 0 ? (
-          <Field
-            label="operator"
-            // Captured at the X layer during a handoff. Keystrokes are counted,
-            // never recorded: the operator may be typing a credential.
-            value={`${actions.length} actions · ${[...new Set(actions.map((a) => a.kind))].join(", ")}`}
-          />
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function CapabilityCard({ capability }: { capability: Capability | null }) {
-  const cap = capability;
-  if (!cap) {
-    return (
-      <div className="panel">
-        <div className="panel-hd">Capability</div>
-        <p className="p-3 text-[12px] text-[var(--muted)]">
-          Recorded capabilities appear here with the contract an agent calls them by.
-        </p>
-      </div>
-    );
-  }
-  return (
-    <div className="panel">
-      <div className="panel-hd flex items-center justify-between">
-        <span>Capability</span>
-        <span className="mono normal-case">{cap.status}</span>
-      </div>
-      <div className="space-y-1 p-3 text-[12px]">
-        <Field label="id" value={`${cap.id}@v${cap.version}`} />
-        <Field label="goal" value={cap.goal} />
-        <Field
-          label="inputs"
-          value={cap.inputs.map((i) => `${i.name}: ${i.type}`).join(", ") || "—"}
+      <Modal open={launching} title="Start a run" onClose={() => setLaunching(false)}>
+        <Launch
+          capabilities={capabilities}
+          apps={health?.apps ?? []}
+          defaultApp={health?.default_app ?? "targetapp"}
+          busyWith={active}
+          selected={selectedCapability}
+          onStarted={(id) => {
+            setSelectedRun(id);
+            setFollow(true);
+            setLaunching(false);
+            void poll();
+          }}
+          onSelectCapability={setSelectedCapability}
         />
-        <Field
-          label="outputs"
-          value={cap.outputs.map((o) => `${o.name}: ${o.type}`).join(", ") || "—"}
-        />
-        <Field
-          label="outcomes"
-          value={cap.business_outcomes.map((o) => o.name).join(", ") || "none declared"}
-        />
-      </div>
+      </Modal>
     </div>
   );
+}
+
+/** Cheap identity check, so a poll that found nothing new re-renders nothing. */
+function same(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 /**
  * What synthesis proposed, and what was thrown away.
  *
  * The declaration is the one part of an artifact a model wrote freehand, and the
- * rejections are how a reviewer judges whether to trust the rest: both outcomes
- * the model proposed for this capability were phrases visible on the successful
- * run's own frames.
+ * rejections are how a reviewer judges whether to trust the rest: on the shipped
+ * recording both outcomes the model proposed were phrases visible on the
+ * successful run's own frames, and code caught both.
  */
 function SynthesisCard({ evidence }: { evidence: Evidence | null }) {
   const note = evidence?.synthesis as
     | {
         success_text?: string;
+        capability_id?: string;
+        capability_id_rejected?: { proposed?: string; because?: string };
         business_outcomes?: { name: string }[];
         business_outcomes_rejected?: { name: string; rejected_because?: string }[];
       }
@@ -385,191 +435,30 @@ function SynthesisCard({ evidence }: { evidence: Evidence | null }) {
   if (!note) return null;
   const rejected = note.business_outcomes_rejected ?? [];
   return (
-    <div className="panel">
-      <div className="panel-hd">Synthesis · what the model proposed</div>
-      <div className="space-y-1 p-3 text-[12px]">
-        <Field label="success" value={note.success_text} />
-        <Field
-          label="accepted"
-          value={(note.business_outcomes ?? []).map((o) => o.name).join(", ") || "none"}
-        />
-        {rejected.map((o) => (
-          <Field key={o.name} label="rejected" value={`${o.name} — ${o.rejected_because ?? ""}`} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/**
- * The guardrails, read-only.
- *
- * Editing policy from a debug console is a hole, not a feature. Seeing it is the
- * point: "what is this agent permitted to do" should not require reading a YAML
- * file inside a container.
- */
-function PolicyCard({ policy }: { policy: Policy | null }) {
-  if (!policy) return null;
-  return (
-    <div className="panel">
-      <div className="panel-hd">Policy · read-only</div>
-      <div className="space-y-1 p-3 text-[12px]">
-        <Field label="allowlist" value={policy.allowed_url_patterns.join(" ")} />
-        <Field label="actions" value={policy.allowed_actions.join(" ")} />
-        <Field label="risky" value={policy.risky_disposition} />
-        <Field
-          label="recover"
-          value={policy.recoveries.map((r) => `${r.name}×${r.max_per_run}`).join(", ") || "—"}
-        />
-        <Field
-          label="escalate"
-          value={policy.escalations.map((e) => e.name).join(", ") || "—"}
-        />
-        <Field label="app error" value={policy.app_errors.map((e) => e.name).join(", ") || "—"} />
-      </div>
-    </div>
-  );
-}
-
-/**
- * The escalation card.
- *
- * Carries the context §3.6 requires an operator to have before acting: which
- * capability and goal, which step, why it stopped, and what was expected against
- * what was observed. An operator should not have to read a log to decide.
- */
-function Escalation({
-  intervention,
-  hasControl,
-  onTake,
-  onResume,
-  onAbort,
-}: {
-  intervention?: Intervention;
-  hasControl: boolean;
-  onTake: () => void;
-  onResume: () => void;
-  onAbort: () => void;
-}) {
-  if (!intervention) {
-    return (
-      <div className="panel">
-        <div className="panel-hd">Intervention</div>
-        <p className="p-3 text-[12px] text-[var(--muted)]">
-          Nothing waiting. When a run gets stuck, hits an undeclared dialog, or reaches a
-          risky action, it parks here and the live session becomes controllable.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="panel border-[var(--warn)]">
-      <div className="panel-hd" style={{ color: "var(--warn)" }}>
-        Intervention required
-      </div>
-      <div className="space-y-2 p-3 text-[12px]">
-        <Field label="reason" value={intervention.reason} />
-        <Field label="capability" value={intervention.capability ?? intervention.goal} />
-        <Field
-          label="step"
-          value={`${intervention.step_id ?? "—"} · ${intervention.step_intent}`}
-        />
-        {intervention.expected ? <Field label="expected" value={intervention.expected} /> : null}
-        {intervention.observed ? <Field label="observed" value={intervention.observed} /> : null}
-        <p className="text-[var(--muted)]">{intervention.message}</p>
-
-        <div className="flex flex-wrap gap-2 pt-1">
-          <button className="btn btn-accent" onClick={onTake} disabled={hasControl}>
-            Take control
-          </button>
-          <button className="btn" onClick={onResume} disabled={!hasControl}>
-            Hand back &amp; resume
-          </button>
-          <button className="btn btn-danger" onClick={onAbort} disabled={!hasControl}>
-            Abort run
-          </button>
+    <Panel title="Synthesis · what the model proposed" bodyClassName="space-y-1 p-3 text-[12px]">
+      <Field label="name" value={note.capability_id} mono />
+      {note.capability_id_rejected ? (
+        <div className="flex gap-2">
+          <Chip tone="rejected">rejected</Chip>
+          <span className="min-w-0 break-words">
+            {note.capability_id_rejected.proposed || "(nothing)"} —{" "}
+            {note.capability_id_rejected.because}
+          </span>
         </div>
-        <p className="text-[11px] text-[var(--muted)]">
-          Your actions during control are recorded to the run&apos;s evidence. On resume the
-          runner re-observes rather than assuming which step you left it on.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function Steps({
-  run,
-  selected,
-  onSelect,
-}: {
-  run: Run | null;
-  selected: number | null;
-  onSelect: (id: number) => void;
-}) {
-  return (
-    <div className="panel min-h-[200px] flex-1">
-      <div className="panel-hd">Steps</div>
-      {!run || run.steps.length === 0 ? (
-        <p className="p-3 text-[12px] text-[var(--muted)]">No steps recorded.</p>
-      ) : (
-        <table className="mono w-full">
-          <tbody>
-            {run.steps.map((s, i) => (
-              <tr
-                key={`${s.step_id}-${i}`}
-                onClick={() => onSelect(s.step_id)}
-                className="cursor-pointer border-b border-[var(--rule)] last:border-0 hover:bg-[#222a33]"
-                style={{ background: s.step_id === selected ? "#222a33" : undefined }}
-              >
-                <td className="px-2 py-1 align-top text-[var(--muted)]">{s.step_id}</td>
-                <td className="px-2 py-1 align-top">
-                  <div>{s.intent}</div>
-                  {/* Which resolver tier satisfied this target. A run whose steps
-                      drift toward `recorded_bbox` is the early warning that the app
-                      moved — visible here before it becomes a failure. */}
-                  <div className="text-[11px] text-[var(--muted)]">
-                    {s.resolution} · {s.duration_ms}ms
-                  </div>
-                </td>
-                <td className="px-2 py-1 align-top">
-                  <StatusDot status={s.status} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </div>
-  );
-}
-
-function Field({ label, value }: { label: string; value?: string | null }) {
-  return (
-    <div className="flex gap-2">
-      <span className="mono w-[80px] shrink-0 text-[var(--muted)]">{label}</span>
-      <span className="min-w-0 break-words">{value ?? "—"}</span>
-    </div>
-  );
-}
-
-const COLORS: Record<string, string> = {
-  ok: "var(--ok)",
-  success: "var(--ok)",
-  recovered: "var(--warn)",
-  skipped: "var(--muted)",
-  business_outcome: "var(--accent)",
-  escalated: "var(--warn)",
-  running: "var(--muted)",
-  failed: "var(--err)",
-  failure: "var(--err)",
-};
-
-function StatusDot({ status }: { status: string }) {
-  return (
-    <span className="mono ml-2 text-[11px]" style={{ color: COLORS[status] ?? "var(--muted)" }}>
-      ● {status}
-    </span>
+      ) : null}
+      <Field label="success" value={note.success_text} />
+      <Field
+        label="accepted"
+        value={(note.business_outcomes ?? []).map((o) => o.name).join(", ") || "none"}
+      />
+      {rejected.map((o) => (
+        <div key={o.name} className="flex gap-2">
+          <Chip tone="rejected">rejected</Chip>
+          <span className="min-w-0 break-words">
+            {o.name} — {o.rejected_because ?? ""}
+          </span>
+        </div>
+      ))}
+    </Panel>
   );
 }
