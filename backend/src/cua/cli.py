@@ -3,13 +3,18 @@
 The README's four commands map to the four subcommands here. A reviewer should be
 able to run the whole thread without touching HTTP:
 
-    cua discover  --goal "..." --input member_id=12345
+    cua discover  --app targetapp --goal "..." --input member_id=12345
     cua replay    cap_get_savings_balance --input member_id=12345
     cua replay    cap_get_savings_balance --input member_id=99999   # business outcome
     cua catalog
 
 `replay` runs with no API key set. That is the check that matters: if the
 deterministic path needs a model, it is not deterministic.
+
+Every command that touches a live surface takes `--app`, which selects
+`policies/<app>.yaml`. Replay defaults it to the capability's own `app.name`,
+so an artifact is executed under the guardrails of the application it was
+recorded against and cannot be run under another one by accident.
 """
 
 from __future__ import annotations
@@ -32,7 +37,7 @@ from .catalog.learn import (
 )
 from .config import settings
 from .discovery import synthesize
-from .schema import AppRef, Capability, DiscoveryResult, ReplayResult, RunStatus, Status
+from .schema import Capability, DiscoveryResult, ReplayResult, RunStatus, Status
 
 app = typer.Typer(no_args_is_help=True, add_completion=False)
 
@@ -52,24 +57,51 @@ def _echo(payload: Any) -> None:
     typer.echo(json.dumps(payload, indent=2, default=str))
 
 
-async def _session(cfg: Any) -> Any:
-    """Start the browser and sign in.
+async def _session(cfg: Any, app: str | None = None) -> Any:
+    """Start the browser and sign in, using the named app's policy.
 
     Signing in is a precondition of every capability and is not itself one: it is
     the only flow that types a credential, and keeping it here means no artifact
-    ever has to reference one.
+    ever has to reference one. Which credential and which recipe are facts about
+    the application, so both arrive with the policy.
     """
     from .runtime import build_session
 
-    session = build_session(cfg)
+    session = build_session(cfg, app)
     await session.start()
     await session.authenticate(cfg.target_username, cfg.target_password)
     return session
 
 
+async def _arm_faults(session: Any, base_url: str, names: list[str]) -> None:
+    """Switch on a demo-app fault in the automation's own browser. Harness only.
+
+    Faults live in a cookie so that a reviewer's tab and the automation's browser
+    do not share them, which is the right design and also means there is no way to
+    arm one from outside that browser. This drives the session to the fault panel
+    and back, before the run and before the engine exists.
+
+    Deliberately *not* reachable from the replay path. It uses the driver
+    directly, `/dev` is excluded from the app's allowlist, and nothing about it is
+    recordable — a capability that could arm its own faults would be a capability
+    that could disarm them.
+    """
+    typer.echo(f"[harness] arming faults: {', '.join(names)}", err=True)
+    await session.driver.navigate(f"{base_url.rstrip('/')}/api/faults?set={','.join(names)}")
+    await session.observe()
+
+
+# The flag is named explicitly: typer would otherwise derive `--app-name` from
+# the parameter, and `app` is taken by the Typer instance itself.
+APP_OPT = typer.Option(
+    "--app", help="Application to run against; selects policies/<app>.yaml"
+)
+
+
 @app.command()
 def discover(
     goal: Annotated[str, typer.Option(help="Natural-language goal")],
+    app_name: Annotated[str, APP_OPT] = "",
     start_url: Annotated[str, typer.Option(help="Entry point")] = "",
     input: Annotated[list[str] | None, typer.Option(help="key=value, repeatable")] = None,
     capability_id: Annotated[str, typer.Option(help="Id for the emitted artifact")] = "",
@@ -79,12 +111,13 @@ def discover(
     inputs = _parse_inputs(input or [])
 
     async def run() -> tuple[DiscoveryResult, Capability | None]:
-        from .runtime import build_catalog, build_discovery
+        from .runtime import build_catalog, build_discovery, build_policy, entry_url
 
-        session = await _session(cfg)
-        loop = build_discovery(cfg, session, f"discover-{uuid4().hex[:8]}")
+        policy = build_policy(cfg, app_name or None)
+        session = await _session(cfg, app_name or None)
+        loop = build_discovery(cfg, session, f"discover-{uuid4().hex[:8]}", app_name or None)
         try:
-            result = await loop.run(goal, start_url or cfg.target_base_url, inputs)
+            result = await loop.run(goal, start_url or entry_url(cfg, policy), inputs)
             if result.status is not RunStatus.SUCCESS:
                 return result, None
             cap = await synthesize(
@@ -92,10 +125,10 @@ def discover(
                 inputs,
                 loop.llm,
                 capability_id=capability_id,
-                app=AppRef(
-                    name="targetapp",
-                    base_url_pattern=f"^{cfg.target_base_url}(/.*)?$",
-                ),
+                # From the policy, so the artifact names an application that has
+                # guardrails rather than whichever URL this deployment happens
+                # to sit behind.
+                app=policy.app_ref(),
                 viewport=cfg.viewport,
             )
             path = build_catalog(cfg).save(cap)
@@ -112,6 +145,7 @@ def discover(
     _echo(
         {
             "status": result.status.value,
+            "app": cap.app.name if cap else (app_name or cfg.default_app),
             "capability": result.capability_ref,
             "steps_taken": result.steps_taken,
             "llm_calls": result.llm_calls,
@@ -129,6 +163,7 @@ def replay(
     capability_id: Annotated[str, typer.Argument()],
     input: Annotated[list[str] | None, typer.Option(help="key=value, repeatable")] = None,
     version: Annotated[int, typer.Option()] = 0,
+    app_name: Annotated[str, APP_OPT] = "",
     frames: Annotated[
         str,
         typer.Option(
@@ -138,6 +173,15 @@ def replay(
             )
         ),
     ] = "",
+    fault: Annotated[
+        list[str] | None,
+        typer.Option(
+            help=(
+                "TEST HARNESS: arm a fault in the demo app before the run "
+                "(modal, slow, expired, error500, ...). Repeatable."
+            )
+        ),
+    ] = None,
 ) -> None:
     """Deterministic replay. Prints a ReplayResult and exits non-zero on failure.
 
@@ -151,9 +195,20 @@ def replay(
     inputs = _parse_inputs(input or [])
 
     async def run() -> ReplayResult:
-        from .runtime import build_catalog, build_offline_replay, build_replay
+        from .runtime import (
+            build_catalog,
+            build_offline_replay,
+            build_policy,
+            build_replay,
+            entry_url,
+        )
 
         cap = build_catalog(cfg).load(capability_id, version or None)
+        # The capability names its own application. `--app` is an override for the
+        # case where a tenant runs the same product under a different policy, not
+        # something a caller should have to supply.
+        target_app = app_name or cap.app.name or None
+        policy = build_policy(cfg, target_app)
 
         if frames:
             # The decision path, re-derived from pixels that were recorded
@@ -164,12 +219,18 @@ def replay(
             if not recorded:
                 raise typer.BadParameter(f"no frames in {frames}")
             engine = build_offline_replay(
-                cfg, recorded, f"offline-{uuid4().hex[:8]}", url=cfg.target_base_url
+                cfg,
+                recorded,
+                f"offline-{uuid4().hex[:8]}",
+                url=entry_url(cfg, policy),
+                app=target_app,
             )
             return await engine.replay(cap, inputs)
 
-        session = await _session(cfg)
-        engine = build_replay(cfg, session, f"replay-{uuid4().hex[:8]}")
+        session = await _session(cfg, target_app)
+        if fault:
+            await _arm_faults(session, entry_url(cfg, policy), fault)
+        engine = build_replay(cfg, session, f"replay-{uuid4().hex[:8]}", target_app)
         try:
             return await engine.replay(cap, inputs)
         finally:
@@ -222,6 +283,7 @@ def learn_outcome(
         typer.Option(help="key=value overrides that reach the outcome, repeatable"),
     ] = None,
     version: Annotated[int, typer.Option()] = 0,
+    app_name: Annotated[str, APP_OPT] = "",
 ) -> None:
     """Teach a capability what a legitimate alternative result looks like.
 
@@ -251,19 +313,20 @@ def learn_outcome(
                 f"no reference run to compare against"
             )
 
-        session = await _session(cfg)
+        target_app = app_name or cap.app.name or None
+        session = await _session(cfg, target_app)
         try:
-            happy = await build_replay(cfg, session, f"learn-ref-{uuid4().hex[:6]}").replay(
-                cap, reference
-            )
+            happy = await build_replay(
+                cfg, session, f"learn-ref-{uuid4().hex[:6]}", target_app
+            ).replay(cap, reference)
             if happy.status is not RunStatus.SUCCESS:
                 raise typer.BadParameter(
                     f"the reference run did not succeed ({happy.status.value}); the "
                     f"comparison would be against the wrong screen"
                 )
-            other = await build_replay(cfg, session, f"learn-out-{uuid4().hex[:6]}").replay(
-                cap, {**reference, **overrides}
-            )
+            other = await build_replay(
+                cfg, session, f"learn-out-{uuid4().hex[:6]}", target_app
+            ).replay(cap, {**reference, **overrides})
             if other.status is RunStatus.SUCCESS:
                 raise typer.BadParameter(
                     "the run with your inputs also succeeded, so it did not reach a "
@@ -301,7 +364,9 @@ def learn_outcome(
             "capability": cap.ref,
             "status": cap.status.value,
             "learned": outcome.name,
-            "detector": outcome.detector.value,
+            # `with_outcome` always writes one; the type is optional because an
+            # entry may instead inherit its detector from app policy by name.
+            "detector": outcome.detector.value if outcome.detector else None,
             "observed_as": detector,
             "result_fields": {k: v.value for k, v in outcome.result_fields.items()},
             "reference_run": happy.run_id,
@@ -311,15 +376,21 @@ def learn_outcome(
 
 
 @app.command()
-def catalog(status: Annotated[str, typer.Option()] = "") -> None:
+def catalog(
+    status: Annotated[str, typer.Option()] = "",
+    app_name: Annotated[
+        str, typer.Option("--app", help="Show only this application's capabilities")
+    ] = "",
+) -> None:
     """List saved capabilities with their inputs, outputs and outcomes."""
     from .runtime import build_catalog
 
-    caps = build_catalog(settings()).list(Status(status) if status else None)
+    caps = build_catalog(settings()).list(Status(status) if status else None, app=app_name or None)
     _echo(
         [
             {
                 "ref": c.ref,
+                "app": c.app.name,
                 "status": c.status.value,
                 "goal": c.goal,
                 "inputs": {i.name: i.type.value for i in c.inputs},
@@ -339,6 +410,70 @@ def approve(capability_id: str, version: int, operator: str = "reviewer") -> Non
 
     cap = build_catalog(settings()).approve(capability_id, version, operator)
     typer.echo(f"{cap.ref} is now {cap.status.value} (approved by {operator})")
+
+
+@app.command()
+def diagnose(
+    run_id: Annotated[str, typer.Argument(help="a run that failed or escalated")],
+    app_name: Annotated[str, APP_OPT] = "",
+) -> None:
+    """Propose a declaration for the screen a run stopped on.
+
+    Reads the run's evidence, shows the model the lines that were on the failing
+    screen, and asks which kind of condition it is and which line identifies it —
+    an index, never a phrase, so a detector it made up is not expressible. The
+    answer is falsified against every successful run of the same capability before
+    it is offered, and what comes out is YAML for a person to paste, not an edit.
+
+    Nothing here touches a session or a capability. The run has already ended;
+    this is about making the *next* one not stop in the same place — and because
+    the patch lands in the application's policy, not in one artifact, it answers
+    for every capability on that app at every institution running it.
+    """
+    from .diagnose import diagnose as run_diagnosis
+    from .diagnose import load_run, reference_lines
+    from .discovery.llm import LLMClient
+    from .runtime import build_policy
+
+    cfg = settings()
+    root = Path(cfg.evidence_dir)
+    evidence_dir = root / run_id
+    if not (evidence_dir / "run.json").exists():
+        raise typer.BadParameter(f"no evidence for {run_id}")
+
+    run = load_run(evidence_dir)
+    if run.status in ("success", "business_outcome"):
+        # Nothing stopped, so there is nothing undeclared to name. Refusing here
+        # rather than returning an empty diagnosis keeps a model call from being
+        # spent on a question with no answer.
+        raise typer.BadParameter(
+            f"{run_id} ended as {run.status}; there is nothing undeclared to diagnose"
+        )
+
+    policy = build_policy(cfg, app_name or None)
+    llm = LLMClient(
+        model=cfg.model,
+        max_tokens=cfg.max_tokens,
+        temperature=cfg.temperature,
+        api_base=cfg.api_base,
+        fallbacks=cfg.fallback_models,
+    )
+    reference = reference_lines(root, run.capability, exclude=run_id)
+    result = asyncio.run(run_diagnosis(run, policy, llm, reference))
+
+    # Written beside the run it diagnoses, because a proposal that lives only in a
+    # terminal is not evidence. The rejected ones matter most: they are what shows
+    # the falsification runs.
+    (evidence_dir / "diagnosis.json").write_text(
+        json.dumps(result.to_json(), indent=2) + "\n"
+    )
+    _echo(result.to_json())
+    if result.actionable:
+        typer.echo(f"\nAdd to policies/{policy.app}.yaml:\n")
+        typer.echo(result.patch)
+    elif result.rejected:
+        typer.echo(f"\nNo patch proposed: {result.rejected}")
+    raise typer.Exit(0 if result.actionable else 1)
 
 
 @app.command()

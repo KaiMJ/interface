@@ -82,13 +82,19 @@ class Catalog:
             if m and m.group("id") == capability_id
         )
 
-    def list(self, status: Status | None = None) -> Sequence[Capability]:
+    def list(
+        self, status: Status | None = None, app: str | None = None
+    ) -> Sequence[Capability]:
         # Sequence, not list: a catalog listing is read-only, and naming a method
         # `list` shadows the builtin inside this class body -- so the annotation
         # has to avoid it anyway.
         caps = [Capability.model_validate_json(p.read_text()) for p in self._files()]
-        caps.sort(key=lambda c: (c.id, c.version))
-        return [c for c in caps if status is None or c.status is status]
+        caps.sort(key=lambda c: (c.app.name, c.id, c.version))
+        return [
+            c
+            for c in caps
+            if (status is None or c.status is status) and (app is None or c.app.name == app)
+        ]
 
     def approve(self, capability_id: str, version: int, approver: str) -> Capability:
         """draft -> approved.
@@ -108,7 +114,7 @@ class Catalog:
         )
         return approved
 
-    def tool_manifest(self) -> Sequence[dict[str, object]]:
+    def tool_manifest(self, app: str | None = None) -> Sequence[dict[str, object]]:
         """Approved capabilities as function-calling tool definitions.
 
         The agent-facing surface: name, description, JSON-schema inputs derived
@@ -124,6 +130,10 @@ class Catalog:
                 "name": cap.id,
                 "description": cap.description or cap.goal,
                 "version": cap.version,
+                # Which application this drives. A calling agent holding tools for
+                # several back-office systems needs it to disambiguate; it is also
+                # the only field here that says where the guardrails came from.
+                "app": cap.app.name,
                 "parameters": {
                     "type": "object",
                     "properties": {i.name: _json_schema(i) for i in cap.inputs},
@@ -146,7 +156,7 @@ class Catalog:
                     for o in cap.business_outcomes
                 ],
             }
-            for cap in self.list(status=Status.APPROVED)
+            for cap in self.list(status=Status.APPROVED, app=app)
         ]
 
     # --- internals -----------------------------------------------------------

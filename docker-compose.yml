@@ -30,11 +30,22 @@ services:
       DISPLAY: ":1"
       CUA_DISPLAY_WIDTH: ${CUA_DISPLAY_WIDTH:-1440}
       CUA_DISPLAY_HEIGHT: ${CUA_DISPLAY_HEIGHT:-900}
-      CUA_TARGET_BASE_URL: http://targetapp:8080
-      CUA_POLICY_FILE: /app/policies/targetapp.yaml
+      # This deployment's install of the app. The policy declares a default; this
+      # is what a second tenant on the same vendor product would override.
+      CUA_TARGET_BASE_URL: ${CUA_TARGET_BASE_URL:-http://targetapp:8080}
+      # One YAML file per application; `--app <name>` selects one.
+      CUA_POLICIES_DIR: /app/policies
+      CUA_DEFAULT_APP: ${CUA_DEFAULT_APP:-targetapp}
       CUA_ARTIFACTS_DIR: /data/artifacts
       CUA_EVIDENCE_DIR: /data/evidence
       CUA_MODELS_DIR: /models
+      # This deployment reserves a GPU (see `deploy:` below), and text recognition
+      # is ~95% of a replay's wall clock — 2707ms on the CPU against 807ms on the
+      # card, for identical output. The code default stays `onnxruntime` for a
+      # bare-metal `make api` with no GPU; here it would be leaving the machine's
+      # largest lever unpulled. Run `scripts/fetch_models.py` once to cache the
+      # torch weights, and `scripts/bench_perception.py` to see it.
+      CUA_OCR_ENGINE: ${CUA_OCR_ENGINE:-torch}
       YOLO_CONFIG_DIR: /models/ultralytics
       # Signing in is a precondition, not a capability: the credentials are
       # resolved here and typed in the action layer, below the point where
@@ -54,6 +65,12 @@ services:
       # not in an anonymous volume.
       - ./artifacts:/data/artifacts
       - ./evidence:/data/evidence
+      # Guardrails, mounted rather than baked into the image: changing what an
+      # agent may do should be an edit and a restart, not a rebuild — and it is
+      # what a second tenant on the same vendor product overrides. Read-only,
+      # because nothing inside the container has any business widening its own
+      # allowlist.
+      - ./policies:/app/policies:ro
       # OmniParser + OCR weights. Bind-mounted rather than baked into the image or
       # held in an anonymous volume: ~300MB that a rebuild must not re-download,
       # and that a developer already has on disk. Gitignored.

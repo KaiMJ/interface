@@ -41,10 +41,13 @@ class OnnxTextReader:
         lang: str = "en",
         conf_threshold: float = 0.5,
         det_side_len: int = 1600,
+        engine: str = "onnxruntime",
     ) -> None:
         self.models_dir = models_dir
         self.lang = lang
         self.det_side_len = det_side_len
+        # "onnxruntime" (CPU) or "torch" (the GPU the detector already uses).
+        self.engine = engine
         # Below this a line is dropped rather than kept as text. Anchors and
         # checkpoints both compare against this output, and a confidently wrong
         # string is worse than a missing one: a missing anchor fails the step
@@ -53,11 +56,49 @@ class OnnxTextReader:
         self._ocr: Any | None = None
 
     def _load(self) -> Any:
-        if self._ocr is None:
-            from rapidocr import RapidOCR
+        """Construct the recogniser once, on the configured backend.
 
-            # Models ship inside the wheel; nothing is downloaded at run time.
-            self._ocr = RapidOCR(params={"Det.limit_side_len": self.det_side_len})
+        The torch backend is the GPU path. Its weights are not in the wheel — the
+        ONNX ones are — so the first construction downloads them into RapidOCR's
+        own cache. That is why the image makes that directory writable: a
+        container running as a non-root user cannot otherwise provision them, and
+        the failure surfaces halfway through the first run rather than at build.
+
+        A backend that cannot be constructed falls back to the CPU one rather
+        than taking the run down with it. Losing two seconds a step is a
+        performance problem; refusing to observe is an outage.
+        """
+        if self._ocr is not None:
+            return self._ocr
+
+        from rapidocr import RapidOCR
+
+        params: dict[str, Any] = {"Det.limit_side_len": self.det_side_len}
+        if self.engine == "torch":
+            from rapidocr.utils.typings import EngineType
+
+            params.update(
+                {
+                    "Det.engine_type": EngineType.TORCH,
+                    "Rec.engine_type": EngineType.TORCH,
+                    "EngineConfig.torch.use_cuda": True,
+                    "EngineConfig.torch.gpu_id": 0,
+                }
+            )
+            try:
+                self._ocr = RapidOCR(params=params)
+                return self._ocr
+            except Exception as e:  # noqa: BLE001 - see the docstring
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    "OCR backend 'torch' unavailable (%s: %s); using onnxruntime on the CPU",
+                    type(e).__name__,
+                    e,
+                )
+                params = {"Det.limit_side_len": self.det_side_len}
+
+        self._ocr = RapidOCR(params=params)
         return self._ocr
 
     def read(

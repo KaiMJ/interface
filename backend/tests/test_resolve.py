@@ -20,6 +20,7 @@ from cua.resolve import (
     evaluate,
     point_in,
     render,
+    unrender,
     verify_effect,
     verify_target,
 )
@@ -415,3 +416,31 @@ def test_checkpoint_parameters_are_substituted_before_matching() -> None:
     check = Checkpoint(kind=CheckKind.TEXT_PRESENT, value="{{account_id}}")
     assert evaluate(check, ACCOUNTS, {"account_id": "29455"})
     assert not evaluate(check, ACCOUNTS, {"account_id": "70001"})
+
+
+def test_a_value_inside_a_longer_number_is_not_parameterized() -> None:
+    """Synthesis rewrites recorded literals into placeholders by exact match. A
+    bare string replace does that inside longer runs of digits too, so an account
+    number that happens to contain the member id becomes a URL that exists for
+    nobody — an artifact that is wrong in a way no checkpoint catches, because it
+    navigates somewhere perfectly valid.
+    """
+    params = {"member_id": "12345"}
+
+    assert unrender("Account 9912345 for member 12345", params) == (
+        "Account 9912345 for member {{member_id}}"
+    )
+    # Still substituted where an application actually puts a value: against
+    # punctuation, at a path segment, at the end of a sentence.
+    assert unrender("http://app/members/12345", params) == "http://app/members/{{member_id}}"
+    assert unrender("ID #12345.", params) == "ID #{{member_id}}."
+
+
+def test_the_longest_input_is_substituted_first() -> None:
+    """Two inputs where one value is a prefix of the other. Boundaries do not help
+    here — both matches are properly bounded — so the ordering still has to."""
+    params = {"branch": "123", "member_id": "12345"}
+
+    assert unrender("member 12345 at branch 123", params) == (
+        "member {{member_id}} at branch {{branch}}"
+    )

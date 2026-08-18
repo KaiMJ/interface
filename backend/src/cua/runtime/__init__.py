@@ -1,4 +1,4 @@
-from .session import AuthenticationFailed, Session, SessionPool
+from .session import AuthenticationFailed, Session, SessionPool, WrongApp
 from .wiring import (
     REGISTRY,
     build_catalog,
@@ -10,6 +10,7 @@ from .wiring import (
     build_replay,
     build_session,
     build_session_pool,
+    entry_url,
 )
 
 __all__ = [
@@ -17,6 +18,7 @@ __all__ = [
     "AuthenticationFailed",
     "Session",
     "SessionPool",
+    "WrongApp",
     "build_catalog",
     "build_discovery",
     "build_offline_replay",
@@ -26,4 +28,5 @@ __all__ = [
     "build_replay",
     "build_session",
     "build_session_pool",
+    "entry_url",
 ]

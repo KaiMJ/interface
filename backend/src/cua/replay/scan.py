@@ -48,7 +48,9 @@ from ..schema import (
     FindAndActStep,
     Observation,
     Point,
+    PredicateMatch,
     ScanAdvance,
+    ScopeExtent,
     Target,
 )
 
@@ -88,9 +90,9 @@ class Scanner:
         """
         anchor = self.resolver.resolve(step.scope, obs, params)
         box: Bbox = anchor.bbox
-        if step.scope_extent == "within":
+        if step.scope_extent is ScopeExtent.WITHIN:
             return box
-        if step.scope_extent == "above":
+        if step.scope_extent is ScopeExtent.ABOVE:
             return Bbox(x=0.0, y=0.0, w=1.0, h=max(0.0, box.y))
         top = min(1.0, box.y + box.h)
         return Bbox(x=0.0, y=top, w=1.0, h=max(0.0, 1.0 - top))
@@ -200,7 +202,7 @@ class Scanner:
         if not terms:
             return False
 
-        if predicate.match == "cell_equals":
+        if predicate.match is PredicateMatch.CELL_EQUALS:
             for cell in row:
                 raw = (cell.text or cell.name or "").strip()
                 value = apply(raw, norm)
@@ -215,7 +217,7 @@ class Scanner:
             return False
 
         haystack = apply(" ".join((c.text or c.name or "") for c in row), norm)
-        if predicate.match == "row_contains_any":
+        if predicate.match is PredicateMatch.ROW_CONTAINS_ANY:
             return any(t in haystack for t in terms)
         return all(t in haystack for t in terms)
 

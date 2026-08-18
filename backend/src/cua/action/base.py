@@ -35,6 +35,17 @@ class Driver(Protocol):
 
     async def navigate(self, url: str) -> None: ...
 
+    async def reload(self) -> None:
+        """Re-request the current page.
+
+        A distinct primitive rather than `navigate(current_url())` because on a
+        surface with no URL — a desktop app — re-requesting is still meaningful
+        and an address is not. It is a *recovery* verb, not a step verb: no
+        artifact records it, because a flow that needs a reload to work is a flow
+        that does not work.
+        """
+        ...
+
     async def click(self, p: Point, button: str = "left") -> None: ...
 
     async def type_text(self, text: str, secret: bool = False) -> None:

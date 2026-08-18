@@ -35,15 +35,15 @@ console:       ## Run just the operator console (no docker)
 api:           ## Run just the backend (no docker)
 	cd backend && uv run uvicorn cua.api.main:app --reload --port 8000
 
-test:          ## Backend tests
+test:          ## Backend tests (no browser, no display, no model, no target app)
 	cd backend && uv run pytest -q
 
-lint:
+lint:          ## ruff + mypy strict
 	cd backend && uv run ruff check . && uv run mypy src
 
-fmt:
+fmt:           ## ruff format
 	cd backend && uv run ruff format .
 
-clean:
+clean:         ## Tear down and remove caches
 	docker compose down -v
 	rm -rf backend/.pytest_cache backend/.ruff_cache backend/.mypy_cache

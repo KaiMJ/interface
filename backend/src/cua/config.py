@@ -47,17 +47,34 @@ class Settings(BaseSettings):
     display: str = Field(default=":1", alias="DISPLAY")
     display_width: int = 1440
     display_height: int = 900
-    target_base_url: str = "http://targetapp:8080"
+    # Where this deployment's install of the app actually lives. Empty means "use
+    # whatever the app's policy declares". The split matters: the *policy* is a
+    # fact about the vendor product and is shared, the URL is a fact about one
+    # institution's install of it and is not. That is the seam a second tenant
+    # would arrive through — a different entry URL against the same policy file.
+    target_base_url: str = ""
 
     # --- Storage --------------------------------------------------------------
     artifacts_dir: Path = Field(default_factory=lambda: _path("/data/artifacts", "artifacts"))
     evidence_dir: Path = Field(default_factory=lambda: _path("/data/evidence", "evidence"))
     models_dir: Path = Field(default_factory=lambda: _path("/models", "models"))
-    policy_file: Path = Field(
-        default_factory=lambda: _path(
-            "/app/policies/targetapp.yaml", "backend/policies/targetapp.yaml"
-        )
+    # One file per application, selected per run by `--app`. A directory rather
+    # than a single file because the system is meant to drive more than one
+    # application, and "which app" is the first thing every command needs to know.
+    #
+    # At the repository root, beside `artifacts/` and `evidence/`, because the
+    # three of them are the system's data in the order it moves: policies are
+    # what a human authors, artifacts are what the system records, evidence is
+    # what it did. It is also mounted into the container rather than built into
+    # the image — a guardrail that needs a rebuild to change is a guardrail
+    # nobody edits.
+    policies_dir: Path = Field(
+        default_factory=lambda: _path("/app/policies", "policies")
     )
+    # Used when a command names no app and the capability being run does not
+    # either — i.e. only for `cua discover`, which is the one command that runs
+    # before any artifact exists to say which app it belongs to.
+    default_app: str = "targetapp"
 
     # --- Perception -----------------------------------------------------------
     # Detection backend. `omniparser` is the real one; `ocr_only` exists so the
@@ -74,6 +91,17 @@ class Settings(BaseSettings):
     omniparser_repo_file: str = "icon_detect/model.pt"
     detect_conf_threshold: float = 0.30
     merge_iou_threshold: float = 0.60
+    # Which backend runs text recognition. `onnxruntime` is the CPU path and the
+    # default; `torch` runs the same PP-OCR models through the torch install the
+    # detector already uses, which is the only way to reach this machine's GPU —
+    # onnxruntime-gpu ships CUDA 12 wheels and torch here is CUDA 13, so its CUDA
+    # provider loads and then registers no device.
+    #
+    # It is a setting rather than a swap because OCR is ~95% of a replay's wall
+    # clock (measured: 2.4s of a 2.42s observation on a dense screen), so the
+    # backend is the single largest performance decision in the system and should
+    # be visible as one. `scripts/bench_perception.py` measures both.
+    ocr_engine: str = "onnxruntime"
     # Below this, an OCR line is treated as unreadable rather than as text. Anchor
     # resolution and checkpoints both compare against OCR output, so a confidently
     # wrong string is worse than a missing one.
@@ -102,6 +130,25 @@ class Settings(BaseSettings):
     @property
     def viewport(self) -> Viewport:
         return Viewport(width=self.display_width, height=self.display_height)
+
+    def policy_path(self, app: str | None = None) -> Path:
+        """The guardrail file for one application.
+
+        Raises rather than falling back to a default policy: running an app under
+        another app's allowlist is the one configuration mistake here that could
+        let an agent act somewhere it was never permitted.
+        """
+        name = app or self.default_app
+        path = self.policies_dir / f"{name}.yaml"
+        if not path.exists():
+            known = sorted(p.stem for p in self.policies_dir.glob("*.yaml"))
+            raise FileNotFoundError(
+                f"no policy for app {name!r} at {path}. Known apps: {known or 'none'}"
+            )
+        return path
+
+    def apps(self) -> list[str]:
+        return sorted(p.stem for p in self.policies_dir.glob("*.yaml"))
 
 
 @lru_cache

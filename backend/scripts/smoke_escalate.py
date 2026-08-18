@@ -33,7 +33,7 @@ from uuid import uuid4
 from cua.clock import now_iso
 from cua.config import settings
 from cua.escalation import ControlError, HumanActionWatcher
-from cua.runtime import REGISTRY, build_replay, build_session
+from cua.runtime import REGISTRY, build_policy, build_replay, build_session, entry_url
 from cua.schema import (
     Capability,
     Controller,
@@ -41,6 +41,10 @@ from cua.schema import (
     Point,
     RunStatus,
 )
+
+# Where this deployment's install of the app lives — from its policy, or the
+# CUA_TARGET_BASE_URL override. One answer, the same one every command uses.
+BASE_URL = entry_url(settings(), build_policy(settings()))
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 
@@ -82,7 +86,7 @@ async def wait_for_intervention(run_id: str, seconds: float = 120.0) -> object:
 
 async def main() -> int:
     cfg = settings()
-    cap = transfer_capability(cfg.target_base_url)
+    cap = transfer_capability(BASE_URL)
     inputs = {
         "member_id": "12345",
         "from_account": "29883",

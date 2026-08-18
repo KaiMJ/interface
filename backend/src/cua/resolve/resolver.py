@@ -45,6 +45,7 @@ model is already in the loop, and its presence in the enum is what keeps
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from ..perception import ElementIndex
@@ -56,7 +57,9 @@ from ..schema import (
     Point,
     Relation,
     ResolutionTier,
+    ResolutionTrace,
     Target,
+    TierAttempt,
 )
 from .normalize import apply
 from .template import render
@@ -68,8 +71,14 @@ class Resolution:
     bbox: Bbox
     tier: ResolutionTier
     matched_text: str | None = None
-    candidates: int = 1          # >1 means the match was ambiguous
+    candidates: int = 1          # how many elements the tier had to choose between
     drift: bool = False          # true when a lower tier than anchor_text was used
+    # Whether that choice was a real one. `candidates` alone is the wrong signal
+    # to act on: the default match mode is `contains`, so an anchor of "Search"
+    # counts both the button and the heading "Member Search" and a rule reading
+    # `candidates > 1` would call almost every step ambiguous. This is the count
+    # *after* the anchor's own disambiguators have been applied — see `_narrow`.
+    ambiguous: bool = False
 
 
 class Unresolvable(Exception):
@@ -100,11 +109,32 @@ class Resolver:
         precise, it has failed to know where it is, and clicking anyway is how a
         banking automation submits the wrong form.
         """
+        return self.resolve_traced(target, obs, params)[0]
+
+    def resolve_traced(
+        self,
+        target: Target,
+        obs: Observation,
+        params: dict[str, object] | None = None,
+    ) -> tuple[Resolution, ResolutionTrace]:
+        """The same walk, with a record of every rung.
+
+        The winning tier alone cannot answer the question an operator actually has
+        when a step falls through to the recorded box — *why did the anchor miss?*
+        A miss because the text is no longer on screen and a miss because it
+        matched three elements are different applications and different fixes, and
+        both used to arrive as the same one-word `recorded_bbox`.
+
+        `resolve()` stays the interface everything else uses; the trace is built
+        here so that no caller can accidentally get a resolution without one being
+        available.
+        """
         p = params or {}
+        attempts: list[TierAttempt] = []
         found = (
-            self._by_anchor_text(target, obs, p)
-            or self._by_role_name(target, obs)
-            or self._by_recorded_bbox(target, obs)
+            self._by_anchor_text(target, obs, p, attempts)
+            or self._by_role_name(target, obs, attempts)
+            or self._by_recorded_bbox(target, obs, attempts)
         )
         if found is None and self.allow_vlm:
             found = self._by_vlm(target, obs)
@@ -114,12 +144,16 @@ class Resolver:
                 f"(anchor={target.anchor_text!r} role={target.role!r} "
                 f"name={target.name!r} bbox={'yes' if target.bbox else 'no'})"
             )
-        return found
+        return found, _trace(target, p, attempts, found)
 
     # --- tiers ---------------------------------------------------------------
 
     def _by_anchor_text(
-        self, target: Target, obs: Observation, params: dict[str, object]
+        self,
+        target: Target,
+        obs: Observation,
+        params: dict[str, object],
+        attempts: list[TierAttempt] | None = None,
     ) -> Resolution | None:
         """Most portable tier. Survives rebranding, relayout and per-tenant skins.
 
@@ -127,11 +161,12 @@ class Resolver:
         carries the match count and the caller decides. Two matches on a read may
         be fine; on a write, acting on the wrong record is unrecoverable.
         """
+        note = _noting(attempts, ResolutionTier.ANCHOR_TEXT)
         if not target.anchor_text:
-            return None
+            return note("skipped", detail="the step's target declares no anchor text")
         needle = apply(render(target.anchor_text, params) or "", target.normalize)
         if not needle:
-            return None
+            return note("skipped", detail="the anchor rendered empty against these inputs")
 
         matches = [
             el
@@ -146,23 +181,38 @@ class Resolver:
             if narrowed:
                 matches = narrowed
         if not matches:
-            return None
+            return note("miss", detail=f"no element on this frame reads {needle!r}")
+        raw = len(matches)
+        matches = _narrow(matches, needle, target)
 
         anchor = self._pick(matches, target)
         best = _follow(anchor, target, obs)
         if best is None:
-            return None
+            return note(
+                "miss",
+                candidates=raw,
+                matched_text=_label(anchor) or None,
+                detail=(
+                    f"matched the anchor but found no element {target.relation.value} "
+                    f"of it at index {target.relation_index}"
+                ),
+            )
+        note("matched", candidates=raw, matched_text=_label(anchor) or None)
         return Resolution(
             point=point_in(best.bbox, target.offset),
             bbox=best.bbox,
             tier=ResolutionTier.ANCHOR_TEXT,
             matched_text=_label(anchor) or None,
-            candidates=len(matches),
+            candidates=raw,
+            ambiguous=len(matches) > 1,
         )
 
-    def _by_role_name(self, target: Target, obs: Observation) -> Resolution | None:
+    def _by_role_name(
+        self, target: Target, obs: Observation, attempts: list[TierAttempt] | None = None
+    ) -> Resolution | None:
+        note = _noting(attempts, ResolutionTier.ROLE_NAME)
         if not target.role and not target.name:
-            return None
+            return note("skipped", detail="the step's target declares neither role nor name")
         matches = [
             el
             for el in obs.elements
@@ -174,12 +224,23 @@ class Resolver:
             )
         ]
         if not matches:
-            return None
+            return note(
+                "miss",
+                detail=(
+                    f"nothing on this frame is a {target.role or 'element'} "
+                    f"named {target.name!r}"
+                ),
+            )
 
         anchor = self._pick(matches, target)
         best = _follow(anchor, target, obs)
         if best is None:
-            return None
+            return note(
+                "miss",
+                candidates=len(matches),
+                detail=f"no element {target.relation.value} of the match",
+            )
+        note("matched", candidates=len(matches), matched_text=_label(anchor) or None)
         return Resolution(
             point=point_in(best.bbox, target.offset),
             bbox=best.bbox,
@@ -189,14 +250,21 @@ class Resolver:
             # Not the most portable tier, but still a semantic one: it matched
             # something the frame actually says, so it is not a drift event.
             drift=False,
+            # `name` is compared exactly here, so there is no substring inflation
+            # to strip: more than one match is more than one real candidate.
+            ambiguous=len(matches) > 1,
         )
 
-    def _by_recorded_bbox(self, target: Target, obs: Observation) -> Resolution | None:
+    def _by_recorded_bbox(
+        self, target: Target, obs: Observation, attempts: list[TierAttempt] | None = None
+    ) -> Resolution | None:
         """Always sets `drift=True`. Aggregated across runs this is the cheapest
         early-warning signal we have, and it is the same mechanism a per-tenant
         canary would use."""
+        note = _noting(attempts, ResolutionTier.RECORDED_BBOX)
         if target.bbox is None:
-            return None
+            return note("skipped", detail="the recording carries no box for this target")
+        note("matched", detail="fell through to the recorded position — a drift event")
         return Resolution(
             point=point_in(target.bbox, target.offset),
             bbox=target.bbox,
@@ -245,6 +313,58 @@ class Resolver:
         return min(matches, key=lambda el: el.bbox.w * el.bbox.h)
 
 
+def _noting(
+    attempts: list[TierAttempt] | None, tier: ResolutionTier
+) -> Callable[..., None]:
+    """Record one rung's outcome and return None, so a tier can `return note(...)`.
+
+    Returning None from the recorder rather than recording at each call site keeps
+    the ladder readable: every early return in a tier is still one line, and a rung
+    cannot be added later that forgets to say what it did.
+    """
+
+    def note(
+        outcome: str,
+        candidates: int = 0,
+        matched_text: str | None = None,
+        detail: str | None = None,
+    ) -> None:
+        if attempts is not None:
+            attempts.append(
+                TierAttempt(
+                    tier=tier,
+                    outcome=outcome,
+                    candidates=candidates,
+                    matched_text=matched_text,
+                    detail=detail,
+                )
+            )
+        return None
+
+    return note
+
+
+def _trace(
+    target: Target,
+    params: dict[str, object],
+    attempts: list[TierAttempt],
+    found: Resolution,
+) -> ResolutionTrace:
+    return ResolutionTrace(
+        target_desc=target.target_desc,
+        # Rendered, not the template: an operator comparing the trace against the
+        # frame needs the string that was actually looked for.
+        anchor_text=render(target.anchor_text, params) if target.anchor_text else None,
+        relation=target.relation.value,
+        attempts=tuple(attempts),
+        tier=found.tier,
+        candidates=found.candidates,
+        drift=found.drift,
+        bbox=found.bbox,
+        point=(found.point.x, found.point.y),
+    )
+
+
 def _follow(anchor: Element, target: Target, obs: Observation) -> Element | None:
     """Step from the element that carries the words to the one being acted on.
 
@@ -263,6 +383,33 @@ def _follow(anchor: Element, target: Target, obs: Observation) -> Element | None
 
 def _label(el: Element) -> str:
     return (el.text or el.name or "").strip()
+
+
+def _narrow(matches: list[Element], needle: str, target: Target) -> list[Element]:
+    """Drop the matches the anchor did not really mean.
+
+    `contains` is the right default — a balance sits inside "Available Balance:
+    $18,204.55" and an exact anchor would never find it — but it makes the raw
+    match count a bad measure of ambiguity. Anchoring on "Search" matches the
+    button *and* the heading "Member Search", every time, on a screen where
+    nothing is actually ambiguous.
+
+    So: an element whose whole label is the anchor beats one that merely contains
+    it. That is not a tie-break heuristic, it is what the recording said — a step
+    anchored on "Search" and a control that reads exactly "Search" are the same
+    claim, and a heading that happens to end in the same word is not a rival for
+    it.
+
+    What survives this is the ambiguity worth stopping for: three rows whose
+    buttons all read exactly "View". There the recorded position is not evidence
+    either, because which row is where is a function of the data — which is what
+    `find_and_act` exists for, and why a plain click that lands here on a write is
+    a recording that should have been one.
+    """
+    if len(matches) < 2:
+        return matches
+    exact = [el for el in matches if apply(_label(el), target.normalize) == needle]
+    return exact if exact else matches
 
 
 def _matches(haystack: str, needle: str, mode: MatchMode) -> bool:

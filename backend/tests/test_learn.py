@@ -46,7 +46,7 @@ from cua.schema import (
     ValueType,
 )
 
-POLICY = Policy.load(Path(__file__).resolve().parent.parent / "policies" / "targetapp.yaml")
+POLICY = Policy.load(Path(__file__).resolve().parents[2] / "policies" / "targetapp.yaml")
 BASE = "http://targetapp:8080"
 
 

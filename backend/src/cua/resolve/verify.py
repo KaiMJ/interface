@@ -53,6 +53,12 @@ class VerifyResult:
     expected: str | None = None
     observed: str | None = None
     detail: str = ""
+    # Where on screen the problem is. Carried because "an undeclared element
+    # covers the target" is not actionable without knowing *which* element: an
+    # operator has to find it in the frame, and a policy author has to write a
+    # dismissal handler for it. Reporting the text alone makes both people
+    # open the screenshot and guess.
+    region: Bbox | None = None
 
 
 def verify_target(
@@ -106,6 +112,7 @@ def verify_target(
                     f"resolved via {resolution.tier.value} but the region does not "
                     f"read as the recorded target"
                 ),
+                region=resolution.bbox,
             )
 
     # 2. Is something sitting on top of it?
@@ -130,6 +137,9 @@ def verify_target(
                 :_OBSERVED_SNIPPET
             ],
             detail="an undeclared element covers the target; refusing to click through it",
+            # The *overlay's* box, not the target's: this is the thing a policy
+            # author needs to write a dismissal handler against.
+            region=overlay.bbox,
         )
 
     return VerifyResult(ok=True)

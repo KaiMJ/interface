@@ -44,6 +44,7 @@ from ..schema import (
     Predicate,
     Primitive,
     Relation,
+    ResolutionTier,
     Risk,
     Scan,
     ScanAdvance,
@@ -59,7 +60,7 @@ _INTENT = {
     "type": "string",
     "description": (
         "What you are doing, in the words a reviewer would use: "
-        "'click the View button on the savings account row'."
+        "'click the View button on the row for the account being looked up'."
     ),
 }
 _EXPECT = {
@@ -67,10 +68,27 @@ _EXPECT = {
     "description": (
         "Text that will be LITERALLY ON THE SCREEN after this action — it is matched "
         "as a substring of what is read off the screen, so it must be words the "
-        "application renders. Good: 'Member Profile', 'Transfer Complete', "
-        "'Step 2 of 3'. Bad, and it will not match: 'the profile for 12345 is "
-        "shown', 'search results appear'. Prefer a heading, a panel title or a "
-        "button label. Keep it short — a few words, not a sentence."
+        "application renders. Good: a heading, a panel title, a button label, a "
+        "confirmation line — 'Step 2 of 3'. Bad, and it will not match: 'the "
+        "record is shown', 'search results appear' — nothing renders those words. "
+        "Keep it short: a few words, not a sentence."
+    ),
+}
+_ANCHOR = {
+    "type": "string",
+    "description": (
+        "OPTIONAL. The shortest text ON THIS ELEMENT that will still identify it "
+        "next month. An element's full text is often part durable and part "
+        "volatile, and only the durable part belongs in a recording. Prefer an "
+        "id, a code, an account or reference number, a fixed label. AVOID "
+        "anything that moves: a balance, a date, a count, a status, a relative "
+        "time. If the whole visible text is already stable, give that. "
+        "Good: '29883' / 'View' / 'Primary Savings'. "
+        "Bad: '29883 - Checking - $4,820.19' (the balance changes, and this "
+        "recording is replayed after it has), 'Updated 2 minutes ago'. "
+        "It is checked: it must be text actually on the element you chose, and "
+        "it must still pick out that same element. If it does not, it is dropped "
+        "and the full text is recorded instead."
     ),
 }
 _RISK = {
@@ -107,7 +125,13 @@ TOOLS: list[dict[str, Any]] = [
     _tool(
         "click",
         "Click one of the numbered elements.",
-        {"mark": _MARK, "intent": _INTENT, "expect": _EXPECT, "risk": _RISK},
+        {
+            "mark": _MARK,
+            "intent": _INTENT,
+            "expect": _EXPECT,
+            "risk": _RISK,
+            "anchor": _ANCHOR,
+        },
         ["mark", "intent", "expect", "risk"],
     ),
     _tool(
@@ -118,6 +142,7 @@ TOOLS: list[dict[str, Any]] = [
             "text": {"type": "string", "description": "The exact text to type."},
             "intent": _INTENT,
             "expect": _EXPECT,
+            "anchor": _ANCHOR,
         },
         ["mark", "text", "intent", "expect"],
     ),
@@ -323,6 +348,7 @@ def to_step(
         obs,
         reads_a_value=tool_name == "extract",
         identifiers=identifiers,
+        proposed_anchor=str(tool_input.get("anchor", "")).strip(),
     )
     if tool_name == "click":
         return ActStep(id=step_id, action=Primitive.CLICK, risk=risk, target=target,
@@ -363,6 +389,7 @@ def _target_for(
     obs: Any = None,
     reads_a_value: bool = False,
     identifiers: Sequence[str] = (),
+    proposed_anchor: str = "",
 ) -> Target | None:
     """Write the target from what was actually on screen.
 
@@ -383,6 +410,15 @@ def _target_for(
 
     In both cases the label beside it is what identifies it, and which neighbour
     it is gets measured here rather than guessed by the model.
+
+    A third case needs the anchor to be *part* of the element's own text. A table
+    cell, a row, a dropdown option — "29883 - Checking - $4,820.19" — is durable
+    in one half and volatile in the other, and recording the whole string means
+    recording the balance, which this very flow is about to change. Which half is
+    which is semantic, not geometric, so the model is asked (`anchor`) and the
+    answer is then falsified against the frame it was proposed on. What the model
+    cannot do is assert something unverifiable: a proposal that is not on the
+    element, or that no longer picks out that element, is dropped.
     """
     if element is None:
         return None
@@ -393,6 +429,19 @@ def _target_for(
         if relative is not None:
             return relative
 
+    if label and obs is not None:
+        shorter = _shorter_anchor(proposed_anchor, label, element, obs, identifiers)
+        if shorter is not None:
+            return Target(
+                intent=intent,
+                target_desc=label,
+                anchor_text=shorter,
+                anchor_match=MatchMode.CONTAINS,
+                role=element.role,
+                name=element.name,
+                bbox=element.bbox,
+            )
+
     return Target(
         intent=intent,
         target_desc=label or f"the {element.role or 'element'} at this position",
@@ -402,6 +451,85 @@ def _target_for(
         name=element.name,
         bbox=element.bbox,
     )
+
+
+
+def _shorter_anchor(
+    proposed: str,
+    label: str,
+    element: Element,
+    obs: Any,
+    identifiers: Sequence[str] = (),
+) -> str | None:
+    """A durable substring of `label`, or None to keep the whole thing.
+
+    Two candidates, and the order between them is the whole design:
+
+      1. a value the CALLER DECLARED as an input for this run. This is a fact,
+         not a judgment — the caller named it as the thing that varies per
+         invocation, which is exactly what "identifies this record" means. Free,
+         offline, and it covers the common case.
+      2. what the MODEL proposed. Used when the durable part is not one of the
+         declared inputs — "the row for merchant PACIFIC WIRELESS" — where the
+         code has nothing to go on and the model has read the screen.
+
+    Fact before judgment, because judgment can be wrong in a way this function
+    cannot detect. Measured: asked for an anchor on
+    `29883 - Checking - $4,820.19`, a model may answer `$4,820.19` — which is on
+    the element, is unique on the frame, and passes every check here, because
+    "will this still be true next month" is not answerable from one frame. The
+    declared input `29883` is, and it wins.
+
+    The test both face is `_identifies`, and it is what makes accepting a
+    model's word safe at all: the candidate must be text actually on the chosen
+    element, and resolving it against this same frame must land back on that same
+    element. A proposal that picks out a different element — or three of them —
+    is worse than the full string, not better, and is dropped.
+
+    The residual limit, stated rather than papered over: when the durable part is
+    not a declared input AND the model picks the volatile half, this accepts it.
+    Nothing in one observation can tell those apart. What catches it is the
+    reviewer (the artifact shows `anchor_text` beside the full `target_desc`) and
+    then the resolution-tier drift signal in production.
+    """
+    from ..resolve import Resolver
+
+    resolver = Resolver(allow_vlm=False)
+    lowered = label.casefold()
+    candidates: list[str] = [i for i in identifiers if i and i.casefold() in lowered]
+    if proposed:
+        candidates.append(proposed)
+
+    for candidate in candidates:
+        text = candidate.strip()
+        # No point replacing a string with itself, and a "shorter" anchor that is
+        # the whole label is just the label.
+        if not text or len(text) >= len(label):
+            continue
+        if text.casefold() not in lowered:
+            continue  # not on the element the model chose; it invented it
+        if _identifies(resolver, text, element, obs):
+            return text
+    return None
+
+
+def _identifies(resolver: Any, text: str, element: Element, obs: Any) -> bool:
+    """Does this text still pick out this element, on the frame it came from?"""
+    probe = Target(
+        intent="anchor check",
+        target_desc=text,
+        anchor_text=text,
+        anchor_match=MatchMode.CONTAINS,
+        bbox=element.bbox,
+    )
+    try:
+        found = resolver.resolve(probe, obs)
+    except Exception:  # noqa: BLE001 - any failure to resolve is a rejection
+        return False
+    # `_pick` breaks ties by nearest-to-the-recorded-box, so a resolution that
+    # merely landed here by proximity is not evidence. Require the anchor to have
+    # matched exactly one candidate.
+    return found.candidates == 1 and found.tier is ResolutionTier.ANCHOR_TEXT
 
 
 def _relative_target(

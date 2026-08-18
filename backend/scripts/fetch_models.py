@@ -90,6 +90,40 @@ except Exception as e:  # noqa: BLE001
     bad(f"PP-OCR: {e!r}")
 
 # ---------------------------------------------------------------------------
+print("\nPP-OCR on the GPU (torch weights)")
+try:
+    import torch
+
+    if not torch.cuda.is_available():
+        ok("no GPU visible — skipped; CUA_OCR_ENGINE=onnxruntime is the right setting here")
+    else:
+        from rapidocr import RapidOCR
+        from rapidocr.utils.typings import EngineType
+
+        # The same PP-OCR models in torch format, which is the only route to this
+        # machine's GPU: onnxruntime-gpu ships CUDA 12 wheels and the torch here is
+        # CUDA 13, so its CUDA provider loads and then registers no device.
+        #
+        # Measured on a dense back-office screen, 1440x900: 2707ms on the CPU
+        # against 807ms here, for identical output. Perception is ~95% of a
+        # replay's wall clock, so that is the largest single lever in the system.
+        #
+        # Fetched here rather than on first use so a run never pays for a download
+        # mid-step. ~31MB into RapidOCR's own cache, which the image makes
+        # writable for exactly this.
+        RapidOCR(
+            params={
+                "Det.engine_type": EngineType.TORCH,
+                "Rec.engine_type": EngineType.TORCH,
+                "EngineConfig.torch.use_cuda": True,
+                "EngineConfig.torch.gpu_id": 0,
+            }
+        )
+        ok("torch OCR weights cached — set CUA_OCR_ENGINE=torch to use them")
+except Exception as e:  # noqa: BLE001
+    bad(f"PP-OCR (torch): {e!r}")
+
+# ---------------------------------------------------------------------------
 print(f"\ntotal in {MODELS}: {du(MODELS)}")
 if failures:
     print(f"\n{len(failures)} failure(s):")

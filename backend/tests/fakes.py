@@ -81,7 +81,14 @@ class FakePerceiver:
 
     def settle(self, out_path: Path, timeout_ms: int, poll_ms: int) -> Observation:
         self.observations += 1
+        return self._current()
+
+    def _current(self) -> Observation:
         return self.frames[min(self.index, len(self.frames) - 1)]
+
+    def peek(self, out_path: Path) -> str:
+        """The cheap "has anything changed" probe — no observation is spent."""
+        return self._current().frame_hash or ""
 
 
 class FakeDriver:
@@ -96,6 +103,10 @@ class FakeDriver:
 
     async def navigate(self, url: str) -> None:
         self.calls.append(("navigate", url))
+        self._advance()
+
+    async def reload(self) -> None:
+        self.calls.append(("reload", None))
         self._advance()
 
     async def click(self, p: Point, button: str = "left") -> None:

@@ -99,8 +99,7 @@
       "scan": {
         "advance": "scroll",
         "overlap": 0.15,
-        "max_advances": 6,
-        "stop_when": "region_hash_unchanged"
+        "max_advances": 6
       },
       "on_found_action": "extract",
       "on_found_offset": [

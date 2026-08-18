@@ -41,6 +41,7 @@ from cua.perception.detect import build_detector
 from cua.perception.ocr import OnnxTextReader
 from cua.perception.screen import XDisplayScreen
 from cua.resolve import Resolver, Unresolvable, evaluate, verify_target
+from cua.runtime import build_policy, entry_url
 from cua.schema import (
     Bbox,
     CheckKind,
@@ -51,6 +52,10 @@ from cua.schema import (
     Relation,
     Target,
 )
+
+# Where this deployment's install of the app lives — from its policy, or the
+# CUA_TARGET_BASE_URL override. One answer, the same one every command uses.
+BASE_URL = entry_url(settings(), build_policy(settings()))
 
 OUT = Path("/tmp/smoke/drive")
 MONEY = (Normalizer.CASEFOLD, Normalizer.COLLAPSE_WS, Normalizer.STRIP_CURRENCY)
@@ -135,7 +140,7 @@ async def main() -> int:
     try:
         # -------------------------------------------------------------------
         step("browser on the X display")
-        await driver.start(f"{cfg.target_base_url}/login")
+        await driver.start(f"{BASE_URL}/login")
         ok(f"chromium up on {cfg.display}, url={driver.current_url()}")
         # `start()` refuses to continue if the page and the display disagree about
         # size, so reaching this line already means the coordinate spaces match.
@@ -182,7 +187,7 @@ async def main() -> int:
 
         # -------------------------------------------------------------------
         step("read a value the way a capability would")
-        await driver.navigate(f"{cfg.target_base_url}/members/12345")
+        await driver.navigate(f"{BASE_URL}/members/12345")
         obs = await settle("member")
 
         for name, check in {

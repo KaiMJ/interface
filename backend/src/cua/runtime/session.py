@@ -131,31 +131,51 @@ class Session:
         return f"{self.vnc_base_url}/vnc.html?autoconnect=1&resize=scale"
 
 
+class WrongApp(RuntimeError):
+    """Asked for one application on a display already holding another."""
+
+
 class SessionPool:
     """One session per display. Single-display in v1, so: one session.
 
     Present as a named concept rather than a bare global because concurrency is
     the first thing that breaks this design, and the constraint should be visible
     in the type rather than discovered at runtime.
+
+    A session is also bound to one *application*, because the sign-on recipe and
+    the guardrails come from that app's policy. Two applications cannot share a
+    display: the X display is the coordinate space, so a second browser on it
+    would put two apps in one picture and every resolved coordinate would be
+    ambiguous. Asking for the wrong one raises rather than silently driving app A
+    under app B's allowlist.
     """
 
-    def __init__(self, factory: Callable[[str], Session] | None = None) -> None:
+    def __init__(self, factory: Callable[[str, str | None], Session] | None = None) -> None:
         self._sessions: dict[str, Session] = {}
+        self._apps: dict[str, str | None] = {}
         self._factory = factory
         # Serialized because a session is one browser on one display: two runs
         # sharing it would interleave clicks, and the failure would look like a
         # flaky application rather than like a concurrency bug.
         self._lock = asyncio.Lock()
 
-    async def acquire(self, display: str) -> Session:
+    async def acquire(self, display: str, app: str | None = None) -> Session:
         async with self._lock:
             session = self._sessions.get(display)
             if session is None:
                 if self._factory is None:
                     raise RuntimeError("SessionPool was built without a factory")
-                session = self._factory(display)
+                session = self._factory(display, app)
                 await session.start()
                 self._sessions[display] = session
+                self._apps[display] = app
+                return session
+            held = self._apps.get(display)
+            if app is not None and held is not None and app != held:
+                raise WrongApp(
+                    f"display {display} is holding a session for {held!r}; "
+                    f"restart it to run {app!r}"
+                )
             return session
 
     def get(self, session_id: str) -> Session:

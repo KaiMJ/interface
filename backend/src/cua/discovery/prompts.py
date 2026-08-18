@@ -44,8 +44,9 @@ How this works
 - After each action the screen is re-read and you are shown the result.
 - Every acting tool takes `expect`. It is compared as a substring against the text \
 read off the next screen, so it has to be text the application renders — a \
-heading, a panel title, a button label, a confirmation line. "Member Profile" \
-works. "the profile for 12345 is shown" never will: nothing on screen says that. \
+heading, a panel title, a button label, a confirmation line. A heading copied off \
+the screen works. "the record for 12345 is shown" never will: nothing on screen \
+says that. \
 If the phrase does not appear, you are told what the screen actually reads, and \
 the step is recorded without a checkpoint or discarded entirely — either way the \
 capability is weaker for it.
@@ -59,8 +60,15 @@ identified by its content — a member, an account, a transaction. Scrolling and
 clicking records a position, and the position will be different tomorrow. \
 `find_and_act` records what you were looking for, which keeps working.
 - Mark an action `risky` if it changes the institution's records or is hard to \
-undo: submitting a transfer, confirming, deleting, closing. A risky action may be \
-paused for a human to confirm. That is expected, not a failure.
+undo: submitting a transfer, confirming, deleting, closing. A risky action IS \
+paused for a human to confirm before it is recorded. That is expected, not a \
+failure — wait for them.
+- When the element you are acting on has text that is part durable and part \
+changing — a table row, a dropdown option, a cell like "29883 - Checking - \
+$4,820.19" — give `anchor` as the durable part only ("29883"). This recording \
+will be replayed after the balance has moved, and an anchor containing the old \
+balance will not match. If the whole text is already stable, you can leave \
+`anchor` out.
 - If you are stuck, or the next step is risky and you are not certain it is right, \
 call `escalate`. Handing over to a person is a correct answer here and is preferred \
 over guessing. Acting on the wrong account cannot be undone.
@@ -112,6 +120,12 @@ The caller supplies these parameters on every invocation:
 
 Describe the capability as a contract for the AI agents that will invoke it.
 
+`capability_id`: a short snake_case name an engineer would give this flow, in \
+the form `cap_<verb>_<noun>` — `cap_get_savings_balance`, `cap_open_sub_account`, \
+`cap_find_transaction`. Under about forty characters. Name what the capability \
+*does*, never what this particular run did: none of the parameter values above may \
+appear in it, because the caller supplies a different one every time.
+
 `description`: one or two sentences — what it does and what the caller gets back. \
 From what is above only.
 
@@ -135,6 +149,7 @@ are not outcomes.
 DECLARATION_SCHEMA = {
     "type": "object",
     "properties": {
+        "capability_id": {"type": "string"},
         "description": {"type": "string"},
         "success_text": {"type": "string"},
         "business_outcomes": {
@@ -150,7 +165,7 @@ DECLARATION_SCHEMA = {
             },
         },
     },
-    "required": ["description", "success_text", "business_outcomes"],
+    "required": ["capability_id", "description", "success_text", "business_outcomes"],
 }
 
 

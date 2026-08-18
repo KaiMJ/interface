@@ -102,8 +102,15 @@ COPY --from=builder /app/.venv /app/.venv
 RUN playwright install --with-deps chromium \
  && rm -rf /var/lib/apt/lists/*
 
+# RapidOCR caches model weights inside its own package directory, and the
+# container runs as the invoking user. The ONNX weights ship in the wheel, but the
+# torch ones — the only route to this machine's GPU, and OCR is ~95% of a replay's
+# wall clock — are fetched on first use, which a read-only directory turns into a
+# failure halfway through the first run. Writable here so that `CUA_OCR_ENGINE=torch`
+# can provision itself; see `cua.perception.ocr`.
+RUN chmod -R a+w /app/.venv/lib/python3.12/site-packages/rapidocr/models
+
 COPY src ./src
-COPY policies ./policies
 COPY fixtures ./fixtures
 COPY image ./image
 COPY scripts ./scripts

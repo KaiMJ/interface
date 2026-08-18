@@ -1,9 +1,9 @@
 """Guardrails.
 
 Checked in the same place on both paths — discovery and replay call the identical
-`Policy.check()` before every action. A guardrail that only guards the LLM is not
-a guardrail; a compromised or buggy artifact is just as capable of submitting the
-wrong transfer as a confused model is.
+`check_action()` and `check_url()` before every action. A guardrail that only
+guards the LLM is not a guardrail; a compromised or buggy artifact is just as
+capable of submitting the wrong transfer as a confused model is.
 
 Three rules:
 
@@ -38,7 +38,7 @@ from typing import Any
 
 import yaml
 
-from ..schema import Primitive, Relation, Risk, Target
+from ..schema import AppRef, PolicyDecision, Primitive, Relation, Risk, Target
 
 
 class PolicyDenied(Exception):
@@ -97,6 +97,27 @@ class Condition:
 
 
 @dataclass(frozen=True)
+class AppOutcome:
+    """A business outcome's *detector*, owned by the application.
+
+    The wording of "no member matches the search criteria entered" is a fact about
+    the app, shared by every capability that searches for a member. Declaring it
+    here means it is taught once and inherited, rather than copied into each
+    artifact where the copies would drift.
+
+    What is *not* here is whether any particular flow can return it. That is the
+    capability's declaration, because it is part of the contract its caller
+    branches on — see `schema.BusinessOutcome`.
+    """
+
+    name: str
+    detector_kind: str
+    detector_value: str
+    description: str = ""
+    result_fields: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class SignOnStep:
     """One step of the sign-on recipe.
 
@@ -136,8 +157,34 @@ class Policy:
         sign_on: SignOn | None = None,
         surface: str = "",
         app: str = "",
+        vendor: str | None = None,
+        base_url_pattern: str = "",
+        entry_url: str = "",
+        fault_url: str = "",
+        max_restarts: int = 1,
+        max_escalations_per_step: int = 2,
+        business_outcomes: tuple[AppOutcome, ...] = (),
+        volatile_text: tuple[str, ...] = (),
     ) -> None:
         self.app = app
+        self.vendor = vendor
+        # Which installs of this application an artifact recorded here applies to.
+        # Defaults to the allowlist's first pattern, which is the common case: the
+        # set of URLs the agent may touch and the set an artifact is valid against
+        # are usually the same set.
+        self.base_url_pattern = base_url_pattern or (
+            allowed_url_patterns[0] if allowed_url_patterns else ""
+        )
+        # This deployment's concrete entry point. A per-institution fact, so a
+        # second tenant on the same vendor product overrides this and nothing else.
+        self.entry_url = entry_url
+        # Where this application's fault-injection harness lives, if it has one.
+        # A demo app has one; a core banking system does not, and then the
+        # console simply shows no fault panel. Deliberately *outside* the
+        # allowlist above — arming a fault is something done to the automation
+        # from outside it, never by it, and an agent that could arm its own
+        # faults could disarm them.
+        self.fault_url = fault_url
         self.sign_on = sign_on
         # What the discovery model is told it is looking at. A fact about the
         # application, so it lives with the application's other facts.
@@ -150,6 +197,32 @@ class Policy:
         self.recoveries = recoveries
         self.redact_patterns = redact_patterns
         self.risky_intent_patterns = risky_intent_patterns
+        # Two budgets that bound the ways a run can decline to finish, here
+        # rather than in the engine because both are judgements about an
+        # application and not about the mechanism. How flaky the sessions are
+        # decides the first; how much an operator's attention is worth decides
+        # the second. The defaults are the values the engine used to hardcode.
+        #
+        #   max_restarts               a session that dies twice inside ninety
+        #                              seconds is not a transient, and a run that
+        #                              keeps signing back in is an automation
+        #                              spending its night on a login screen.
+        #   max_escalations_per_step   an operator can resume without clearing the
+        #                              condition; without a bound the run parks on
+        #                              it forever, holding the only session, and a
+        #                              queue that re-issues the same request is how
+        #                              operators learn to ignore the queue.
+        self.max_restarts = max_restarts
+        self.max_escalations_per_step = max_escalations_per_step
+        # Detectors a capability on this app may inherit by name.
+        self.business_outcomes = business_outcomes
+        # Lines this application renders that change while nothing is happening —
+        # a session countdown, a clock, a "last refreshed" stamp. Handed to the
+        # perceiver, which excludes them when deciding whether the screen has
+        # stopped moving. Without it a ticking clock means no two frames agree by
+        # pixels *or* by text, and every step on the app burns two full timeouts
+        # before failing on a screen that was ready throughout.
+        self.volatile_text = volatile_text
         self._url_res = tuple(re.compile(p) for p in allowed_url_patterns)
         self._intent_res = tuple(re.compile(p) for p in risky_intent_patterns)
 
@@ -157,7 +230,11 @@ class Policy:
     def load(cls, path: Path) -> Policy:
         raw: dict[str, Any] = yaml.safe_load(path.read_text()) or {}
         return cls(
-            app=str(raw.get("app", "")),
+            app=str(raw.get("app", path.stem)),
+            vendor=raw.get("vendor"),
+            base_url_pattern=str(raw.get("base_url_pattern", "")),
+            entry_url=str(raw.get("entry_url", "")),
+            fault_url=str(raw.get("fault_url", "")),
             allowed_url_patterns=tuple(raw.get("allowed_url_patterns", ())),
             # An unlisted primitive is denied, so an empty or missing list denies
             # everything. Failing closed is the only safe direction here.
@@ -181,6 +258,31 @@ class Policy:
             escalations=_conditions(raw.get("escalations", ())),
             sign_on=_sign_on(raw.get("sign_on")),
             surface=str(raw.get("surface", "")).strip(),
+            volatile_text=tuple(raw.get("volatile_text", ())),
+            max_restarts=int(raw.get("max_restarts", 1)),
+            max_escalations_per_step=int(raw.get("max_escalations_per_step", 2)),
+            business_outcomes=tuple(
+                AppOutcome(
+                    name=str(o["name"]),
+                    detector_kind=str(o["detector"]["kind"]),
+                    detector_value=str(o["detector"].get("value", "")),
+                    description=str(o.get("description", "")),
+                    result_fields=tuple(o.get("result_fields", ())),
+                )
+                for o in raw.get("business_outcomes", ())
+            ),
+        )
+
+    def app_ref(self) -> AppRef:
+        """The identity a capability recorded against this app carries.
+
+        Sourced here rather than assembled at the call site so that every artifact
+        naming an app names one that has a policy file — the two cannot drift.
+        """
+        return AppRef(
+            name=self.app,
+            vendor=self.vendor,
+            base_url_pattern=self.base_url_pattern,
         )
 
     def check_url(self, url: str) -> None:
@@ -192,6 +294,63 @@ class Policy:
         if not any(r.match(url) for r in self._url_res):
             raise PolicyDenied("allowlist", f"{url} is not in the permitted URL patterns")
 
+    def decide(self, action: Primitive, risk: Risk, intent: str) -> PolicyDecision:
+        """The same verdict `check_action` reaches, as a record instead of a raise.
+
+        Both callers used to keep only the exception. That made a denial legible
+        and an *allow* invisible, so a run's evidence could show which actions the
+        agent was permitted in general and never which it was permitted here — and
+        a risk promotion, the backstop against a mislabelled recording, left no
+        trace at all unless it happened to escalate. This returns the whole
+        decision, including the boring ones; `check_action` is the raising wrapper
+        over it so the enforcement path is unchanged.
+        """
+        declared = risk.value
+        if action not in self.allowed_actions:
+            return PolicyDecision(
+                action=action.value,
+                declared_risk=declared,
+                effective_risk=declared,
+                disposition="denied",
+                rule="allowlist",
+                detail=f"action {action.value!r} not permitted",
+                intent=intent,
+            )
+
+        promoted = self.promoting_pattern(risk, intent)
+        effective = Risk.RISKY if (risk is Risk.RISKY or promoted) else Risk.SAFE
+
+        if effective is Risk.SAFE:
+            return PolicyDecision(
+                action=action.value,
+                declared_risk=declared,
+                effective_risk=effective.value,
+                disposition=RiskDisposition.ALLOW,
+                rule="allowlist",
+                intent=intent,
+            )
+        if self.risky_disposition == RiskDisposition.BLOCK:
+            return PolicyDecision(
+                action=action.value,
+                declared_risk=declared,
+                effective_risk=effective.value,
+                disposition="denied",
+                rule="risk",
+                detail="risky action blocked by policy",
+                promoted_from=declared if promoted else None,
+                intent=intent,
+            )
+        return PolicyDecision(
+            action=action.value,
+            declared_risk=declared,
+            effective_risk=effective.value,
+            disposition=str(self.risky_disposition),
+            rule="risk",
+            detail=(f"intent matches {promoted!r}" if promoted else "declared risky"),
+            promoted_from=declared if promoted else None,
+            intent=intent,
+        )
+
     def check_action(self, action: Primitive, risk: Risk, intent: str) -> str:
         """Return a RiskDisposition, or raise PolicyDenied.
 
@@ -199,14 +358,12 @@ class Policy:
         click' is useless in an audit log, 'denied: submit $500 transfer from
         29883' is not.
         """
-        if action not in self.allowed_actions:
-            raise PolicyDenied("allowlist", f"action {action.value!r} not permitted ({intent})")
-
-        if self.classify_risk(risk, intent) is Risk.SAFE:
-            return RiskDisposition.ALLOW
-        if self.risky_disposition == RiskDisposition.BLOCK:
-            raise PolicyDenied("risk", f"risky action blocked by policy: {intent}")
-        return str(self.risky_disposition)
+        decision = self.decide(action, risk, intent)
+        if decision.disposition == "denied":
+            raise PolicyDenied(
+                decision.rule or "policy", f"{decision.detail} ({intent})"
+            )
+        return decision.disposition
 
     def classify_risk(self, declared: Risk, intent: str) -> Risk:
         """The declared risk, escalated when the intent reads as a mutation.
@@ -217,7 +374,18 @@ class Policy:
         """
         if declared is Risk.RISKY:
             return Risk.RISKY
-        return Risk.RISKY if any(r.search(intent) for r in self._intent_res) else Risk.SAFE
+        return Risk.RISKY if self.promoting_pattern(declared, intent) else Risk.SAFE
+
+    def promoting_pattern(self, declared: Risk, intent: str) -> str | None:
+        """Which risky-intent pattern raised this step, if one did.
+
+        The pattern itself, not a boolean: an operator asking why a read was held
+        for confirmation needs to see the regex that decided it, and a promotion
+        reported without its cause reads as the system being arbitrary.
+        """
+        if declared is Risk.RISKY:
+            return None
+        return next((r.pattern for r in self._intent_res if r.search(intent)), None)
 
     def match_recovery(self, observed_text: str) -> Recovery | None:
         return next(
@@ -230,6 +398,10 @@ class Policy:
 
     def match_escalation(self, observed_text: str) -> Condition | None:
         return next((c for c in self.escalations if _matches(c, observed_text)), None)
+
+    def outcome(self, name: str) -> AppOutcome | None:
+        """The app-level detector a capability inherits under this name."""
+        return next((o for o in self.business_outcomes if o.name == name), None)
 
 
 def _matches(condition: Any, observed_text: str) -> bool:

@@ -22,7 +22,7 @@ from cua.perception.index import ElementIndex
 from cua.perception.merge import infer_role, merge
 from cua.perception.ocr import group_rows
 from cua.perception.screen import ImageFileScreen
-from cua.schema import Bbox, Element, ElementSource, Viewport
+from cua.schema import Bbox, Element, ElementSource, SettledBy, Viewport
 
 VIEWPORT = Viewport(width=1440, height=900)
 
@@ -260,7 +260,7 @@ class NoDetector:
 
 
 class ChangingScreen:
-    """Never settles. Each capture writes a different image."""
+    """Pixels never repeat. A blinking caret or a spinner, in the abstract."""
 
     def __init__(self, tmp: Path) -> None:
         self.tmp = tmp
@@ -270,6 +270,19 @@ class ChangingScreen:
         self.n += 1
         _png(out_path, (self.n % 255, 0, 0))
         return VIEWPORT, f"hash-{self.n}"
+
+
+class MovingTextReader:
+    """The words themselves keep moving — a page still laying out."""
+
+    def __init__(self) -> None:
+        self.n = 0
+
+    def read(
+        self, image_path: Path, viewport: Viewport, region: Bbox | None = None
+    ) -> list[Element]:
+        self.n += 1
+        return [text("t0", 0.10, 0.10 + self.n * 0.05, 0.20, 0.02, f"row {self.n}")]
 
 
 def test_image_file_screen_moves_only_when_something_acts(tmp_path: Path) -> None:
@@ -309,9 +322,77 @@ def test_settle_returns_once_two_frames_agree(tmp_path: Path) -> None:
     perceiver = Perceiver(ImageFileScreen(frames, VIEWPORT), NoDetector(), FakeReader())
     obs = perceiver.settle(tmp_path / "frame.png", timeout_ms=2000, poll_ms=1)
     assert obs.elements
+    # The cheap path fired; nothing had to be read twice.
+    assert obs.settled_by is SettledBy.PIXELS
+
+
+def test_a_page_whose_pixels_never_repeat_settles_on_what_it_says(tmp_path: Path) -> None:
+    """A caret, a spinner or a clock must not make every step unsettleable.
+
+    Pixels never converge here. The words do, and the words are the property the
+    resolver actually depends on.
+    """
+    perceiver = Perceiver(ChangingScreen(tmp_path), NoDetector(), FakeReader())
+    obs = perceiver.settle(tmp_path / "frame.png", timeout_ms=60, poll_ms=1)
+    assert obs.settled_by is SettledBy.TEXT
+    assert [e.text for e in obs.elements] == ["Savings"]
 
 
 def test_settle_raises_rather_than_returning_a_mid_reflow_frame(tmp_path: Path) -> None:
-    perceiver = Perceiver(ChangingScreen(tmp_path), NoDetector(), FakeReader())
+    """Neither test converges: the page is genuinely still laying out."""
+    perceiver = Perceiver(ChangingScreen(tmp_path), NoDetector(), MovingTextReader())
+    with pytest.raises(Unsettled):
+        perceiver.settle(tmp_path / "frame.png", timeout_ms=60, poll_ms=1)
+
+
+class CountdownReader:
+    """A screen with a session countdown on it and nothing else happening.
+
+    The case that defeats both settle tests at once, and not an exotic one: an
+    application that declares session expiry as a condition is very likely to
+    render the countdown for it. The pixels differ because a digit changed; the
+    text differs for the same reason.
+    """
+
+    def __init__(self) -> None:
+        self.n = 0
+
+    def read(
+        self, image_path: Path, viewport: Viewport, region: Bbox | None = None
+    ) -> list[Element]:
+        self.n += 1
+        return [
+            text("t0", 0.10, 0.10, 0.20, 0.02, "Available Balance"),
+            text("t1", 0.60, 0.02, 0.15, 0.02, f"Session expires in 14:{60 - self.n:02d}"),
+        ]
+
+
+def test_a_ticking_clock_does_not_make_a_ready_screen_unsettleable(tmp_path: Path) -> None:
+    """Declared-volatile lines are excluded from the comparison and nothing else.
+
+    Without this the screen above never settles by pixels *or* by text, so every
+    step on the application burns two full timeouts and then fails on a page that
+    was ready throughout.
+    """
+    perceiver = Perceiver(
+        ChangingScreen(tmp_path),
+        NoDetector(),
+        CountdownReader(),
+        volatile=(r"\b\d{1,2}:\d{2}\b",),
+    )
+
+    obs = perceiver.settle(tmp_path / "frame.png", timeout_ms=60, poll_ms=1)
+
+    assert obs.settled_by is SettledBy.TEXT
+    # Excluded from the settling decision, not from the observation: a countdown
+    # is still read, still perceivable, and still available to a checkpoint.
+    assert any("Session expires" in (e.text or "") for e in obs.elements)
+
+
+def test_without_the_declaration_the_same_screen_never_settles(tmp_path: Path) -> None:
+    """The other half of the pair. This is what the application is opting out of,
+    and it is worth seeing that the mechanism is what makes the difference rather
+    than something else about the fixture."""
+    perceiver = Perceiver(ChangingScreen(tmp_path), NoDetector(), CountdownReader())
     with pytest.raises(Unsettled):
         perceiver.settle(tmp_path / "frame.png", timeout_ms=60, poll_ms=1)

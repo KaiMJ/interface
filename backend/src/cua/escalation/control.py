@@ -21,10 +21,13 @@ session, the current page and any half-filled form, and the run's evidence
 directory. Nothing is torn down. The runner is parked on an asyncio event, not
 unwound.
 
-Resume re-observes rather than trusting a step counter. The human may have
-advanced the app several screens, gone back, or fixed something three steps
-earlier. In replay the engine advances to the first step whose checkpoint already
-holds — skip-forward, not blind resume. In discovery the model is told an
+Resume re-observes rather than trusting the frame it parked on, because the human
+may have advanced the app several screens or gone back. In replay, a run parked
+*before* acting (a risky step awaiting confirmation) performs the step; one parked
+*after* a failure (`on_error: escalate`) treats the step as satisfied by the human
+and continues. Neither searches forward for a step whose checkpoint already holds —
+it does not have to, because the next step asserts its own screen and checkpoint
+and so fails loudly rather than clicking blind. In discovery the model is told an
 intervention happened and what the operator noted.
 """
 
@@ -69,13 +72,13 @@ class RunControl:
                 f"{self.holder.value}"
             )
 
-    async def escalate(self, req: InterventionRequest) -> InterventionResolution:
-        """Park the run and wait for a human. Returns how they resolved it.
+    def park(self, req: InterventionRequest) -> None:
+        """Surrender control and publish the request. Does not wait.
 
-        Awaits an event rather than polling, and never times out on its own — a
-        run abandoned mid-intervention is a real state that an operator has to
-        clean up, not something to paper over by silently resuming automation on a
-        screen nobody looked at.
+        Split from `escalate` because it is the whole of the state transition —
+        everything an operator can observe has already happened when this returns.
+        The waiting is a separate concern, and keeping them separate means the
+        queue can be exercised without a background task pretending to be a run.
         """
         # Control is surrendered *before* the request is published, so there is no
         # window in which an operator can see the intervention and start clicking
@@ -85,6 +88,15 @@ class RunControl:
         self.resolution = None
         self._resumed.clear()
 
+    async def escalate(self, req: InterventionRequest) -> InterventionResolution:
+        """Park the run and wait for a human. Returns how they resolved it.
+
+        Awaits an event rather than polling, and never times out on its own — a
+        run abandoned mid-intervention is a real state that an operator has to
+        clean up, not something to paper over by silently resuming automation on a
+        screen nobody looked at.
+        """
+        self.park(req)
         await self._resumed.wait()
 
         resolution = self.resolution
@@ -164,6 +176,15 @@ class ControlRegistry:
             and c.intervention.state
             in (InterventionState.PENDING, InterventionState.HUMAN_CONTROL)
         ]
+
+    def all(self) -> list[InterventionRequest]:
+        """Every intervention this process has seen, open or closed.
+
+        The operator queue is `pending()`; this is the record beside it. An
+        operator who resumed a run five minutes ago and wants to check what they
+        did should not have to go looking in an evidence directory for it.
+        """
+        return [c.intervention for c in self._runs.values() if c.intervention is not None]
 
     def forget(self, run_id: str) -> None:
         """Runs are dropped when they finish. The registry tracks live control,

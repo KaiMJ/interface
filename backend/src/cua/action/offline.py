@@ -38,6 +38,10 @@ class OfflineDriver:
         self._url = url
         self.screen.advance()
 
+    async def reload(self) -> None:
+        self.calls.append(("reload", self._url))
+        self.screen.advance()
+
     async def click(self, p: Point, button: str = "left") -> None:
         self.calls.append(("click", (round(p.x, 4), round(p.y, 4))))
         self.screen.advance()

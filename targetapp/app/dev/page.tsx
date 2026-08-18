@@ -2,9 +2,11 @@
  * Fault panel.
  *
  * Not part of the simulated bank — this is the control surface that makes §6.3
- * evidence producible on demand. It is also outside the agent's allowlist by
- * construction: the policy permits the app's routes, and a reviewer toggling
- * faults here is doing something the automation cannot do to itself.
+ * evidence producible on demand. It is outside the agent's allowlist by
+ * construction: `targetapp.yaml` excludes `/dev`, so a capability that navigated
+ * here would be stopped with POLICY_DENIED. Injecting a fault is something done
+ * *to* the automation, by the harness driving its browser, and never something
+ * the automation can do to itself.
  */
 
 import { redirect } from "next/navigation";

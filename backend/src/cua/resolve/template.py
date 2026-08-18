@@ -53,10 +53,28 @@ def render(template: str | None, params: dict[str, Any] | None = None) -> str | 
 def unrender(text: str | None, params: dict[str, Any] | None = None) -> str | None:
     """The inverse of `render`: replace known values with their placeholders.
 
-    Longest value first, so an input of `123` does not corrupt a recorded `12345`
-    belonging to a different input. This is how a recording becomes reusable —
-    "No member record found for ID 99999" is a fact about one run, and "... for ID
-    {{member_id}}" is a fact about the capability.
+    This is how a recording becomes reusable — "No member record found for ID
+    99999" is a fact about one run, and "... for ID {{member_id}}" is a fact about
+    the capability.
+
+    Two rules keep it from parameterizing things the caller never meant:
+
+      - **Longest value first**, so an input of `123` does not eat the leading
+        digits of a recorded `12345` belonging to a different input.
+      - **Only at token boundaries.** A bare `str.replace` turns the account
+        number `9912345` into `99{{member_id}}` when the member id happens to be
+        `12345`, and the artifact then navigates somewhere that does not exist for
+        any other member. The boundary is alphanumeric-or-underscore on either
+        side, so `12345` still substitutes inside `ID 12345.` and `#12345` — the
+        punctuation an application puts around a value — and not inside a longer
+        run of digits or a word.
+
+    What this deliberately does not attempt is deciding whether a *correctly*
+    bounded match was meant. If a member id and a branch code are both `12345` on
+    the recording run, both become `{{member_id}}` and only a second run with
+    different inputs could tell them apart — the same limit `learn-outcome` works
+    around by comparing two runs, and the reason synthesis parameterizes by exact
+    match against *declared* inputs rather than guessing which numbers are ids.
     """
     if text is None:
         return None
@@ -65,7 +83,11 @@ def unrender(text: str | None, params: dict[str, Any] | None = None) -> str | No
         key=lambda pair: len(pair[1]),
         reverse=True,
     ):
-        text = text.replace(value, f"{{{{{name}}}}}")
+        text = re.sub(
+            rf"(?<![0-9A-Za-z_]){re.escape(value)}(?![0-9A-Za-z_])",
+            f"{{{{{name}}}}}",
+            text,
+        )
     return text
 
 

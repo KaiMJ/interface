@@ -237,6 +237,12 @@ async def declare(state: Any, llm: Any, inputs: dict[str, Any]) -> dict[str, Any
     if not proposal.get("success_text"):
         proposal["success_text"] = state.success_text
 
+    proposed_id = str(proposal.get("capability_id", "")).strip()
+    chosen, why = _name(proposed_id, inputs, state.goal)
+    proposal["capability_id"] = chosen
+    if why:
+        proposal["capability_id_rejected"] = {"proposed": proposed_id, "because": why}
+
     kept, rejected = _falsify(proposal.get("business_outcomes", ()), state)
     proposal["business_outcomes"] = kept
     proposal["business_outcomes_rejected"] = rejected
@@ -311,7 +317,10 @@ async def synthesize(
     )
 
     cap = Capability(
-        id=capability_id or _slug(state.goal),
+        # The caller's choice wins outright — `--capability-id` is someone naming
+        # their own artifact. Otherwise the model's proposal, having survived
+        # `_name`; otherwise a slug of the goal.
+        id=capability_id or str(proposal.get("capability_id")) or _slug(state.goal),
         status=Status.DRAFT,
         goal=state.goal,
         description=str(proposal.get("description", "")),
@@ -428,3 +437,45 @@ def _typed(step: Any) -> Step:
 def _slug(text: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")
     return slug[:60] or "capability"
+
+
+_ID = re.compile(r"^[a-z][a-z0-9_]{2,47}$")
+
+
+def _name(proposed: str, inputs: dict[str, Any], goal: str) -> tuple[str, str]:
+    """The capability's id: proposed by the model, then refuted by code.
+
+    Same shape as everything else the model writes here — it is asked, and what it
+    says has to survive a check before it is believed. The fallback is a slug of
+    the goal, which is correct and unreadable: `open_the_profile_for_member_12345
+    _and_read_the_current_balan`. Note what that name has in it. The id of a thing
+    parameterised by member id should not contain a member id, and that is the one
+    rejection worth making mechanically:
+
+      shape     snake_case, starts with a letter, 3-48 characters. A name that
+                cannot be typed at a shell or read in a manifest is not a name.
+      literals  none of the caller's declared values may appear in it. `12345` is
+                what varies per invocation — it is the argument, not the flow.
+
+    Returns the id and, when the proposal was refused, why. The reason is kept in
+    `synthesis.json` beside the rejected outcome detectors, because what was
+    proposed and thrown away is part of judging the rest.
+    """
+    # Normalised directly rather than through `_slug`, whose empty-string
+    # fallback is the literal name "capability" — which would then pass the shape
+    # check below and ship a capability called `capability`.
+    candidate = re.sub(r"[^a-z0-9]+", "_", proposed.lower()).strip("_")
+    if not candidate:
+        return _slug(goal), "the model proposed no usable id"
+    if not _ID.fullmatch(candidate):
+        return _slug(goal), f"{candidate!r} is not a usable name"
+
+    for name, value in inputs.items():
+        literal = _slug(str(value))
+        if literal and literal in candidate:
+            return (
+                _slug(goal),
+                f"{candidate!r} contains the value of {name!r} — that is the "
+                f"argument, not the flow",
+            )
+    return candidate, ""

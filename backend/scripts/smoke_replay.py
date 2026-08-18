@@ -25,12 +25,16 @@ from pathlib import Path
 from uuid import uuid4
 
 from cua.config import settings
-from cua.runtime import build_replay, build_session
+from cua.runtime import build_policy, build_replay, build_session, entry_url
 from cua.schema import (
     Capability,
     ReplayResult,
     RunStatus,
 )
+
+# Where this deployment's install of the app lives — from its policy, or the
+# CUA_TARGET_BASE_URL override. One answer, the same one every command uses.
+BASE_URL = entry_url(settings(), build_policy(settings()))
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 
@@ -76,7 +80,7 @@ def describe(result: ReplayResult) -> str:
 
 async def main() -> int:
     cfg = settings()
-    cap = savings_capability(cfg.target_base_url)
+    cap = savings_capability(BASE_URL)
 
     session = build_session(cfg)
     step("session")

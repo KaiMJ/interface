@@ -26,6 +26,19 @@ class ElementSource(str, Enum):
     AX = "ax"                   # accessibility tree — off by default
 
 
+class SettledBy(str, Enum):
+    """How the surface was judged to have stopped changing.
+
+    Recorded rather than inferred: a run whose every step settles by TEXT is
+    telling you the surface animates, which is a fact about the application worth
+    having before anyone reaches for the thresholds.
+    """
+
+    PIXELS = "pixels"   # two consecutive frames byte-identical
+    TEXT = "text"       # pixels never converged; readable text and boxes did
+    UNSET = "unset"     # a single un-settled observe()
+
+
 class Element(Frozen):
     """A candidate control or piece of text on the surface.
 
@@ -62,6 +75,7 @@ class Observation(Frozen):
     elements: tuple[Element, ...] = ()
     url: str | None = None               # convenience only; never used for targeting
     frame_hash: str | None = None        # for settle-detection between frames
+    settled_by: SettledBy = SettledBy.UNSET
     taken_at: str
 
     def by_id(self, element_id: str) -> Element | None:

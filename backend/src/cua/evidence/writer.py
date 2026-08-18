@@ -43,16 +43,29 @@ class EvidenceWriter:
             (self.dir / sub).mkdir(parents=True, exist_ok=True)
         return self.dir
 
-    def frame(self, obs: Any, step_id: int, annotated: Path | None = None) -> Evidence:
+    def frame(
+        self,
+        obs: Any,
+        step_id: int,
+        annotated: Path | None = None,
+        after: bool = False,
+        prior: Evidence | None = None,
+    ) -> Evidence:
         """Persist a screenshot (+ optional overlay) and the observation JSON.
 
         Copied out of the working directory rather than referenced in place: the
         perceiver reuses one path per run for the live frame, so a reference would
         point at whatever the screen looked like several steps later. Evidence
         that changes after the fact is not evidence.
+
+        `after=True` writes the post-action frame under its own name instead of
+        overwriting the one the step acted on. Those are different pictures with
+        different meanings — the target was resolved against the first and the
+        checkpoint evaluated against the second — and writing both to one path
+        loses whichever the step cared about.
         """
         self.open()
-        name = f"step-{step_id:02d}"
+        name = f"step-{step_id:02d}" + (".after" if after else "")
         shot = self.dir / "frames" / f"{name}.png"
         source = Path(obs.screenshot_path)
         if source.exists():
@@ -68,6 +81,11 @@ class EvidenceWriter:
         observation = self.dir / "observations" / f"{name}.json"
         observation.write_text(obs.model_dump_json(indent=2))
 
+        if after:
+            # The acted-on frame is the step's identity; the after-frame is added
+            # to it rather than replacing it.
+            base = prior or Evidence()
+            return base.model_copy(update={"after": str(shot) if source.exists() else None})
         return Evidence(
             screenshot=str(shot) if source.exists() else None,
             annotated_screenshot=str(overlay) if overlay else None,

@@ -12,12 +12,14 @@ discover -> synthesize -> replay, with no browser and no API key.
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
 import pytest
-from fakes import FakeDriver, FakePerceiver, ScriptedLLM, frame, row_frame
+from fakes import FakeDriver, FakePerceiver, ScriptedLLM, el, frame, row_frame
 
+from cua.discovery import actions as tools
 from cua.discovery.llm import ToolCall
 from cua.discovery.loop import DiscoveryLoop
 from cua.discovery.synthesize import parameterize, prune, synthesize
@@ -30,7 +32,10 @@ from cua.schema import (
     ActStep,
     AppRef,
     Capability,
+    InterventionResolution,
+    Observation,
     Primitive,
+    ResolutionTier,
     RunStatus,
     Status,
     Target,
@@ -38,10 +43,31 @@ from cua.schema import (
     Viewport,
 )
 
-POLICY = Policy.load(Path(__file__).resolve().parent.parent / "policies" / "targetapp.yaml")
+POLICY = Policy.load(Path(__file__).resolve().parents[2] / "policies" / "targetapp.yaml")
 BASE = "http://targetapp:8080"
 GOAL = "look up a member and read their savings balance"
 INPUTS = {"member_id": "12345", "account_nickname": "Primary Savings"}
+
+
+
+class ApprovingOperator(RunControl):
+    """A control token whose human always says yes, immediately.
+
+    Discovery now parks on a risky action exactly as replay does, so without an
+    operator every test whose intent trips the policy's mutation-verb promotion
+    would deadlock. These tests are about the loop, not about the handoff — the
+    parking itself is asserted separately, below, with a real `RunControl` and a
+    real await.
+    """
+
+    async def escalate(self, req: Any) -> Any:
+        self.park(req)
+        self.take_control("test-operator")
+        resolution = InterventionResolution(
+            id=req.id, outcome="resume", operator="test-operator"
+        )
+        self.release(resolution)
+        return resolution
 
 
 def build(
@@ -53,17 +79,19 @@ def build(
     perceiver = FakePerceiver([frame("Meridian Credit Union"), *frames])
     driver = FakeDriver(perceiver)
     llm = ScriptedLLM(script, declaration)
+    control = ApprovingOperator(run_id="discover-test")
     loop = DiscoveryLoop(
         perceiver=perceiver,
         driver=driver,
         policy=POLICY,
         evidence=EvidenceWriter(tmp_path, "discover-test", Redactor()),
         llm=llm,
+        control=control,
         max_steps=6,
         settle_timeout_ms=100,
         settle_poll_ms=1,
     )
-    return loop, driver, llm
+    return loop, driver, llm, control
 
 
 # The screens a run walks through: the member page, then the same page after the
@@ -78,7 +106,7 @@ ACCOUNTS = row_frame("29455", "Primary Savings", "Active", "$18,204.55")
 
 
 async def test_a_recorded_step_is_one_whose_expectation_came_true(tmp_path: Path) -> None:
-    loop, driver, _ = build(
+    loop, driver, _, _control = build(
         tmp_path,
         [MEMBER, ACCOUNTS],
         [
@@ -110,7 +138,7 @@ async def test_a_recorded_step_is_one_whose_expectation_came_true(tmp_path: Path
 async def test_a_step_whose_expectation_failed_is_discarded_and_explained(
     tmp_path: Path,
 ) -> None:
-    loop, _, llm = build(
+    loop, _, llm, _control = build(
         tmp_path,
         [MEMBER, MEMBER],
         [
@@ -118,7 +146,7 @@ async def test_a_step_whose_expectation_failed_is_discarded_and_explained(
                 name="click",
                 input={
                     "mark": 0,
-                    "intent": "open the transfer screen",
+                    "intent": "open the member search screen",
                     "expect": "Transfer complete",
                     "risk": "safe",
                 },
@@ -145,7 +173,7 @@ async def test_an_action_that_changed_the_screen_is_kept_without_its_checkpoint(
     # did something. Dropping the step would leave the recording missing a state
     # transition the flow actually made — and replay would then start from a
     # screen it never reaches, which is what a discarded "click View" produced.
-    loop, _, llm = build(
+    loop, _, llm, _control = build(
         tmp_path,
         [MEMBER, ACCOUNTS],
         [
@@ -177,7 +205,7 @@ async def test_an_action_that_changed_the_screen_is_kept_without_its_checkpoint(
 
 
 async def test_policy_is_enforced_on_the_discovery_path_too(tmp_path: Path) -> None:
-    loop, driver, llm = build(
+    loop, driver, llm, _control = build(
         tmp_path,
         [MEMBER, MEMBER],
         [
@@ -201,7 +229,7 @@ async def test_policy_is_enforced_on_the_discovery_path_too(tmp_path: Path) -> N
 
 
 async def test_finishing_requires_the_screen_to_agree(tmp_path: Path) -> None:
-    loop, _, llm = build(
+    loop, _, llm, _control = build(
         tmp_path,
         [MEMBER, MEMBER],
         [
@@ -228,7 +256,9 @@ async def test_a_stuck_run_escalates_before_the_step_budget_runs_out(tmp_path: P
         input={"mark": 0, "intent": "click the same thing", "expect": "Member Profile",
                "risk": "safe"},
     )
-    loop, _, _ = build(tmp_path, [MEMBER], [repeat, repeat, repeat, repeat, repeat, repeat])
+    loop, _, _, _control = build(
+        tmp_path, [MEMBER], [repeat, repeat, repeat, repeat, repeat, repeat]
+    )
     result = await loop.run(GOAL, BASE, INPUTS)
 
     assert result.status is RunStatus.ESCALATED
@@ -271,7 +301,7 @@ def test_prune_drops_a_navigation_immediately_superseded() -> None:
 async def test_synthesis_rejects_a_success_phrase_that_is_not_on_the_final_screen(
     tmp_path: Path,
 ) -> None:
-    loop, _, llm = build(
+    loop, _, llm, _control = build(
         tmp_path,
         [ACCOUNTS],
         [
@@ -300,7 +330,7 @@ async def test_a_recorded_capability_replays(tmp_path: Path) -> None:
     No browser, no key, no hand-written artifact — if the shape discovery emits
     were not the shape replay consumes, this is where it would show.
     """
-    loop, _, llm = build(
+    loop, _, llm, _control = build(
         tmp_path,
         [MEMBER, ACCOUNTS],
         [
@@ -381,7 +411,7 @@ async def test_a_recorded_capability_replays(tmp_path: Path) -> None:
 async def test_a_recorded_capability_reports_the_outcome_it_declared(
     tmp_path: Path, member_id: str
 ) -> None:
-    loop, _, llm = build(
+    loop, _, llm, _control = build(
         tmp_path,
         [MEMBER, ACCOUNTS],
         [
@@ -445,7 +475,7 @@ async def test_a_recording_declares_no_screens_it_cannot_justify(tmp_path: Path)
     capability would have refused to run for anybody else. Declaring nothing is
     the honest answer; see `synthesize` for where derivation belongs.
     """
-    loop, _, llm = build(
+    loop, _, llm, _control = build(
         tmp_path,
         [MEMBER, ACCOUNTS],
         [
@@ -525,3 +555,310 @@ async def test_a_step_on_the_wrong_screen_says_where_it_is(tmp_path: Path) -> No
     assert result.failure.kind is FailureKind.WRONG_SCREEN
     assert result.failure.expected == "member_profile"
     assert result.failure.observed == "sign_on"
+
+
+# ---------------------------------------------------------------------------
+# the guardrail binds the recording session too
+# ---------------------------------------------------------------------------
+
+
+async def _until_parked(task: Any, control: RunControl) -> None:
+    for _ in range(500):
+        if control.intervention is not None:
+            return
+        await asyncio.sleep(0.005)
+    task.cancel()
+    raise AssertionError("discovery never parked")
+
+
+async def test_discovery_parks_on_a_risky_action_and_proceeds_when_approved(
+    tmp_path: Path,
+) -> None:
+    """A risky action is risky whoever is driving.
+
+    Replay parks before a risky step; so does discovery. Letting a recording
+    session submit a transfer because a human is notionally watching a VNC
+    window is a guardrail that binds only the path that needs it least.
+    """
+    loop, driver, llm, _ = build(
+        tmp_path,
+        [MEMBER, ACCOUNTS],
+        [
+            ToolCall(
+                name="click",
+                input={
+                    "mark": 0,
+                    "intent": "confirm the transfer",
+                    "expect": "Primary Savings",
+                    "risk": "risky",
+                },
+            ),
+            ToolCall(name="finish", input={"success_text": "Primary Savings", "summary": "done"}),
+        ],
+    )
+    control = RunControl(run_id="discover-test")
+    loop.control = control
+
+    task = asyncio.create_task(loop.run(GOAL, BASE, INPUTS))
+    await _until_parked(task, control)
+
+    assert control.intervention is not None
+    assert control.intervention.mode == "discovery"
+    assert control.intervention.reason.value == "risky_action_confirmation"
+    # Nothing was clicked while the request was open. The entry navigation is the
+    # only thing the driver has been asked to do.
+    assert [kind for kind, _ in driver.calls] == ["navigate"]
+
+    control.take_control("operator-1")
+    control.release(
+        InterventionResolution(
+            id=control.intervention.id, outcome="resume", operator="operator-1", note="checked"
+        )
+    )
+    result = await task
+
+    assert result.status is RunStatus.SUCCESS
+    assert any(kind == "click" for kind, _ in driver.calls)
+
+
+async def test_a_declined_risky_action_ends_the_recording(tmp_path: Path) -> None:
+    """Abort is not "skip the step" — the recording stops.
+
+    A capability recorded around a step a human refused would be a capability
+    that omits the one action they objected to.
+    """
+    loop, driver, llm, _ = build(
+        tmp_path,
+        [MEMBER, ACCOUNTS],
+        [
+            ToolCall(
+                name="click",
+                input={
+                    "mark": 0,
+                    "intent": "submit the transfer",
+                    "expect": "Primary Savings",
+                    "risk": "risky",
+                },
+            ),
+        ],
+    )
+    control = RunControl(run_id="discover-test")
+    loop.control = control
+
+    task = asyncio.create_task(loop.run(GOAL, BASE, INPUTS))
+    await _until_parked(task, control)
+    control.take_control("operator-1")
+    control.release(
+        InterventionResolution(
+            id=control.intervention.id, outcome="abort", operator="operator-1"
+        )
+    )
+    result = await task
+
+    assert result.status is RunStatus.ESCALATED
+    assert "declined" in result.stop_reason
+    assert [kind for kind, _ in driver.calls] == ["navigate"]
+
+
+async def test_a_loop_with_no_operator_refuses_rather_than_proceeding(tmp_path: Path) -> None:
+    """"Nobody can be asked" reads as no, not as yes.
+
+    A DiscoveryLoop built without a control token cannot raise an intervention.
+    The safe reading is that the risky action does not happen.
+    """
+    loop, driver, llm, _ = build(
+        tmp_path,
+        [MEMBER, ACCOUNTS],
+        [
+            ToolCall(
+                name="click",
+                input={
+                    "mark": 0,
+                    "intent": "authorize the payment",
+                    "expect": "Primary Savings",
+                    "risk": "risky",
+                },
+            ),
+        ],
+    )
+    loop.control = None
+
+    result = await loop.run(GOAL, BASE, INPUTS)
+
+    assert result.status is RunStatus.ESCALATED
+    assert [kind for kind, _ in driver.calls] == ["navigate"]
+
+
+# ---------------------------------------------------------------------------
+# anchors: the model proposes, the code falsifies
+#
+# An element's text is often part durable and part volatile — a dropdown option
+# reading "29883 - Checking - $4,820.19". Recording the whole string records the
+# balance, which the very flow being recorded is about to change. Which half is
+# which is semantic, so the model is asked; what it says is then checked against
+# the frame it said it about.
+# ---------------------------------------------------------------------------
+
+
+OPTION_FRAME = Observation(
+    screenshot_path="/nonexistent.png",
+    viewport=Viewport(width=1440, height=900),
+    frame_hash="h",
+    taken_at="2026-08-17T00:00:00+00:00",
+    url=BASE + "/transfer",
+    elements=(
+        el("e0", 0.05, 0.20, 0.12, 0.02, "From Account"),
+        el("e1", 0.20, 0.27, 0.30, 0.02, "29883 - Checking - $4,820.19"),
+        el("e2", 0.20, 0.30, 0.30, 0.02, "13455 - Savings - $18,204.55"),
+    ),
+)
+DECLARED = ["12345", "29883", "13455"]
+
+
+def _anchor(anchor: str | None, obs: Observation = OPTION_FRAME, mark: str = "e1") -> str | None:
+    call = {"mark": 1, "intent": "select the source account", "expect": "x", "risk": "safe"}
+    if anchor is not None:
+        call["anchor"] = anchor
+    step = tools.to_step("click", call, obs.by_id(mark), 4, obs, identifiers=DECLARED)
+    return step.target.anchor_text if step.target else None
+
+
+def test_a_declared_input_beats_the_rest_of_the_cell() -> None:
+    """The floor, with no model involved at all.
+
+    The caller named `29883` as an input for this run, which is the caller
+    saying "this is the thing that varies per invocation" — i.e. the thing that
+    identifies the record. Recording the balance beside it would tie the
+    capability to one moment.
+    """
+    assert _anchor(None) == "29883"
+
+
+def test_a_model_proposal_that_is_not_on_the_element_is_dropped() -> None:
+    """It cannot be verified, so it is not used. Falls back to the floor."""
+    assert _anchor("Source Account") == "29883"
+
+
+def test_a_model_proposal_that_matches_several_elements_is_dropped() -> None:
+    """An anchor that picks out three things is worse than the full string."""
+    assert _anchor("-") == "29883"
+
+
+def test_a_declared_input_beats_a_model_proposal_of_the_volatile_half() -> None:
+    """The case that decided the ordering.
+
+    `$4,820.19` is on the element and unique on the frame, so every check here
+    passes — "will this still be true next month" is not answerable from one
+    observation. A declared input is answerable, and it wins.
+    """
+    assert _anchor("$4,820.19") == "29883"
+
+
+def test_the_model_supplies_the_anchor_when_the_code_has_nothing() -> None:
+    """No declared input appears in this text, so the proposal is the only source.
+
+    This is the case a pure code heuristic cannot cover: the merchant name is
+    what identifies the row, and nobody declared it.
+    """
+    obs = OPTION_FRAME.model_copy(
+        update={
+            "elements": (
+                el("e0", 0.05, 0.20, 0.12, 0.02, "Merchant"),
+                el("e1", 0.20, 0.27, 0.40, 0.02, "PACIFIC WIRELESS  Telecom  ($441.56)"),
+            )
+        }
+    )
+    assert _anchor("PACIFIC WIRELESS", obs) == "PACIFIC WIRELESS"
+
+
+def test_stable_text_is_left_alone() -> None:
+    """A button reading "View" needs no rewriting, and must not get one."""
+    obs = OPTION_FRAME.model_copy(
+        update={"elements": (el("e1", 0.60, 0.27, 0.06, 0.02, "View"),)}
+    )
+    assert _anchor(None, obs) == "View"
+    assert _anchor("View", obs) == "View"
+
+
+async def test_a_dropdown_option_survives_the_balance_changing(tmp_path: Path) -> None:
+    """End to end: the recording must still resolve after the flow it records
+    has moved the money it was anchored beside."""
+    after = OPTION_FRAME.model_copy(
+        update={
+            "elements": (
+                el("e0", 0.05, 0.20, 0.12, 0.02, "From Account"),
+                el("e1", 0.20, 0.27, 0.30, 0.02, "29883 - Checking - $4,795.19"),
+                el("e2", 0.20, 0.30, 0.30, 0.02, "13455 - Savings - $18,229.55"),
+            )
+        }
+    )
+    step = tools.to_step(
+        "click",
+        {"mark": 1, "intent": "select the source account", "expect": "x", "risk": "safe"},
+        OPTION_FRAME.by_id("e1"),
+        4,
+        OPTION_FRAME,
+        identifiers=DECLARED,
+    )
+    resolved = Resolver(allow_vlm=False).resolve(step.target, after)
+    assert resolved.tier is ResolutionTier.ANCHOR_TEXT
+    assert resolved.matched_text is not None and "29883" in resolved.matched_text
+
+
+# ---------------------------------------------------------------------------
+# naming the capability
+# ---------------------------------------------------------------------------
+
+
+def test_the_model_names_the_capability_when_the_name_is_usable() -> None:
+    from cua.discovery.synthesize import _name
+
+    chosen, why = _name(
+        "cap_get_savings_balance",
+        {"member_id": "12345", "account_nickname": "Primary Savings"},
+        "open the profile for member 12345 and read the balance",
+    )
+
+    assert chosen == "cap_get_savings_balance"
+    assert why == ""
+
+
+def test_a_name_carrying_a_parameter_value_is_refused() -> None:
+    """The one rejection worth making mechanically.
+
+    `12345` is what varies per invocation — it is the argument, not the flow — so
+    a capability parameterised by member id must not have a member id in its name.
+    A run that recorded it would produce an artifact whose name is a lie the second
+    time it is called.
+    """
+    from cua.discovery.synthesize import _name
+
+    chosen, why = _name(
+        "cap_get_balance_for_12345",
+        {"member_id": "12345"},
+        "read the balance for member 12345",
+    )
+
+    assert chosen != "cap_get_balance_for_12345"
+    assert "member_id" in why
+
+
+def test_an_unusable_name_falls_back_to_the_goal() -> None:
+    from cua.discovery.synthesize import _name
+
+    # "!!" is the interesting one: it normalises to nothing, and the slug helper's
+    # own fallback would otherwise ship a capability literally called "capability".
+    for proposed in ("", "!!", "x", "Cap With Spaces And A Very Long Name" * 3):
+        chosen, why = _name(proposed, {}, "read a balance")
+        assert chosen == "read_a_balance", proposed
+        assert why, proposed
+
+
+def test_the_callers_own_id_is_never_second_guessed(tmp_path: Path) -> None:
+    """`--capability-id` is someone naming their own artifact. Nothing above
+    overrides that — the refutation is for a name nobody chose."""
+    from cua.discovery.synthesize import _name
+
+    # _name is not consulted at all in that path; this pins the precedence that
+    # `synthesize` implements: caller, then model, then slug.
+    assert _name("cap_x", {}, "goal")[0] == "cap_x"

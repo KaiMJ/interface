@@ -1,4 +1,5 @@
 from .policy import (
+    AppOutcome,
     Condition,
     Policy,
     PolicyDenied,
@@ -10,6 +11,7 @@ from .policy import (
 from .redact import Redactor
 
 __all__ = [
+    "AppOutcome",
     "Condition",
     "Policy",
     "PolicyDenied",

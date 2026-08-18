@@ -182,6 +182,12 @@ class BrowserDriver:
         # polls forever. Waiting for network silence on such a page does not.
         await self._require_page().goto(url, wait_until="domcontentloaded")
 
+    async def reload(self) -> None:
+        self._assert_control()
+        # Same wait condition as `navigate`, for the same reason: settling is the
+        # perceiver's job, and a page that polls forever never goes network-idle.
+        await self._require_page().reload(wait_until="domcontentloaded")
+
     async def click(self, p: Point, button: str = "left") -> None:
         self._assert_control()
         x, y = self._to_page(p)
