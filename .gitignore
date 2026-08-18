@@ -27,3 +27,4 @@ models/
 # Only scratch runs are.
 evidence/scratch/
 evidence/**/*.tmp
+.gstack/

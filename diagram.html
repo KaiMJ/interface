@@ -1,0 +1,1028 @@
+<title>Goal to Click and Back</title>
+
+<style>
+:root {
+  --bg: #fbfbfa;
+  --surface: #ffffff;
+  --surface-2: #f4f5f7;
+  --ink: #1a1d21;
+  --ink-2: #4a5560;
+  --ink-3: #7b8794;
+  --rule: #dde1e6;
+  --rule-2: #eceef1;
+
+  --blue: #1971c2;
+  --green: #2f7d32;
+  --red: #c92a2a;
+  --orange: #d9730d;
+  --violet: #6741d9;
+
+  --blue-bg: #e7f1fb;
+  --green-bg: #e6f4e7;
+  --red-bg: #fdecec;
+  --orange-bg: #fdf0e3;
+  --violet-bg: #efeafc;
+
+  --code-bg: #f6f7f9;
+  --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 1px 3px rgba(16, 24, 40, .04);
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #16181c;
+    --surface: #1c1f24;
+    --surface-2: #22262c;
+    --ink: #e8eaed;
+    --ink-2: #b3bac1;
+    --ink-3: #838b94;
+    --rule: #333840;
+    --rule-2: #2a2f36;
+
+    --blue: #6cb0f5;
+    --green: #6bce74;
+    --red: #ff8787;
+    --orange: #ffb057;
+    --violet: #b197fc;
+
+    --blue-bg: #16283a;
+    --green-bg: #172a1b;
+    --red-bg: #34191b;
+    --orange-bg: #33240f;
+    --violet-bg: #241d3a;
+
+    --code-bg: #14161a;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 1px 3px rgba(0, 0, 0, .2);
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #16181c;
+  --surface: #1c1f24;
+  --surface-2: #22262c;
+  --ink: #e8eaed;
+  --ink-2: #b3bac1;
+  --ink-3: #838b94;
+  --rule: #333840;
+  --rule-2: #2a2f36;
+
+  --blue: #6cb0f5;
+  --green: #6bce74;
+  --red: #ff8787;
+  --orange: #ffb057;
+  --violet: #b197fc;
+
+  --blue-bg: #16283a;
+  --green-bg: #172a1b;
+  --red-bg: #34191b;
+  --orange-bg: #33240f;
+  --violet-bg: #241d3a;
+
+  --code-bg: #14161a;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 1px 3px rgba(0, 0, 0, .2);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.55;
+  overflow-x: hidden;
+}
+
+.wrap { max-width: 1120px; margin: 0 auto; padding: 56px 24px 120px; }
+
+/* ---------- masthead ---------- */
+
+header.top { border-bottom: 2px solid var(--ink); padding-bottom: 22px; margin-bottom: 12px; }
+header.top h1 { font-size: 30px; line-height: 1.15; margin: 0 0 10px; letter-spacing: -.02em; }
+header.top .sub { color: var(--ink-2); font-size: 16px; margin: 0; max-width: 74ch; }
+.thesis {
+  margin: 22px 0 0;
+  padding: 14px 18px;
+  border-left: 3px solid var(--violet);
+  background: var(--violet-bg);
+  color: var(--ink);
+  font-size: 15px;
+  border-radius: 0 6px 6px 0;
+}
+.thesis b { color: var(--violet); }
+
+.legend {
+  display: flex; flex-wrap: wrap; gap: 10px 22px;
+  margin: 26px 0 0; padding: 14px 18px;
+  border: 1px solid var(--rule); border-radius: 8px; background: var(--surface);
+  font-size: 13px; color: var(--ink-2);
+}
+.legend span { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+
+.chip {
+  display: inline-block; padding: 2px 8px; border-radius: 999px;
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  letter-spacing: .02em; white-space: nowrap;
+}
+.chip.model  { background: var(--violet-bg); color: var(--violet); border: 1px solid var(--violet); }
+.chip.checked{ background: var(--green-bg); color: var(--violet); border: 1px dashed var(--violet); }
+.chip.nomodel{ background: var(--green-bg);  color: var(--green);  border: 1px solid var(--green); }
+.chip.drift  { background: var(--orange-bg); color: var(--orange); border: 1px solid var(--orange); }
+.chip.gap    { background: var(--red-bg);    color: var(--red);    border: 1px solid var(--red); }
+
+/* ---------- phase banners ---------- */
+
+.phase {
+  margin: 54px 0 0; padding: 16px 20px; border-radius: 10px;
+  display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+}
+.phase h2 { margin: 0; font-size: 19px; letter-spacing: -.01em; }
+.phase p  { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+.phase.discovery { background: var(--violet-bg); border: 1px solid var(--violet); }
+.phase.discovery h2 { color: var(--violet); }
+.phase.replay { background: var(--green-bg); border: 1px solid var(--green); }
+.phase.replay h2 { color: var(--green); }
+
+/* ---------- stages ---------- */
+
+.stage {
+  position: relative;
+  margin: 0; padding: 22px 0 8px 62px;
+  border-left: 2px solid var(--rule);
+}
+.stage:last-of-type { border-left-color: transparent; }
+.stage > .n {
+  position: absolute; left: -17px; top: 24px;
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--surface); border: 2px solid var(--ink-3); color: var(--ink);
+  display: grid; place-items: center;
+  font-family: var(--mono); font-size: 13px; font-weight: 700;
+}
+.stage.is-model > .n { border-color: var(--violet); color: var(--violet); background: var(--violet-bg); }
+.stage.is-key > .n  { border-color: var(--blue);   color: var(--blue);   background: var(--blue-bg); }
+
+.stage h3 { margin: 0 0 4px; font-size: 17px; letter-spacing: -.01em; }
+.stage h3 code { font-size: 14.5px; }
+.stage .lede { margin: 0 0 16px; color: var(--ink-2); font-size: 14px; max-width: 78ch; }
+
+code, kbd { font-family: var(--mono); font-size: .88em; }
+h3 code, .lede code, p code, li code, td code {
+  background: var(--surface-2); padding: 1px 5px; border-radius: 4px;
+  border: 1px solid var(--rule-2);
+}
+
+/* ---------- the transformation box ---------- */
+
+.xform {
+  border: 1px solid var(--rule); border-radius: 10px;
+  background: var(--surface); box-shadow: var(--shadow);
+  overflow: hidden; margin: 0 0 14px;
+}
+.xform > .row { display: flex; flex-wrap: wrap; }
+.xform .side { flex: 1 1 320px; min-width: 0; }
+.xform .side + .side { border-left: 1px solid var(--rule); }
+@media (max-width: 760px) {
+  .xform .side + .side { border-left: 0; border-top: 1px solid var(--rule); }
+}
+.xform .cap {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 700;
+  letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3);
+  padding: 9px 14px 7px; border-bottom: 1px solid var(--rule-2);
+  background: var(--surface-2);
+  display: flex; justify-content: space-between; gap: 10px; align-items: center;
+}
+.xform .cap .who { color: var(--blue); text-transform: none; letter-spacing: 0; font-size: 11px; }
+
+pre {
+  margin: 0; padding: 13px 15px;
+  background: var(--code-bg);
+  font-family: var(--mono); font-size: 12.2px; line-height: 1.62;
+  color: var(--ink);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+pre .c { color: var(--ink-3); font-style: italic; }
+pre .k { color: var(--violet); }
+pre .s { color: var(--green); }
+pre .num { color: var(--orange); }
+pre .hi { background: var(--orange-bg); border-radius: 3px; padding: 0 2px; }
+pre .em { color: var(--red); font-weight: 600; }
+
+.arrow {
+  text-align: center; color: var(--ink-3);
+  font-family: var(--mono); font-size: 12px;
+  margin: -4px 0 10px; padding: 0;
+}
+.arrow b { color: var(--ink-2); font-weight: 600; }
+
+/* ---------- notes ---------- */
+
+.note {
+  border-left: 3px solid var(--blue); background: var(--blue-bg);
+  padding: 11px 15px; border-radius: 0 6px 6px 0; margin: 0 0 14px;
+  font-size: 13.5px; color: var(--ink);
+}
+.note.warn { border-left-color: var(--orange); background: var(--orange-bg); }
+.note.stop { border-left-color: var(--red);    background: var(--red-bg); }
+.note.good { border-left-color: var(--green);  background: var(--green-bg); }
+.note strong { font-weight: 650; }
+.note :last-child { margin-bottom: 0; }
+.note p { margin: 0 0 7px; }
+
+/* ---------- ladders / ordered lists ---------- */
+
+.ladder { border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; margin: 0 0 14px; background: var(--surface); }
+.ladder .rung { display: flex; gap: 14px; padding: 11px 15px; border-bottom: 1px solid var(--rule-2); align-items: flex-start; }
+.ladder .rung:last-child { border-bottom: 0; }
+.ladder .tag {
+  flex: 0 0 auto; min-width: 132px;
+  font-family: var(--mono); font-size: 12px; font-weight: 650;
+}
+.ladder .body { flex: 1 1 auto; min-width: 0; font-size: 13.5px; color: var(--ink-2); }
+.ladder .body b { color: var(--ink); font-weight: 620; }
+.rung.g .tag { color: var(--green); }  .rung.g { background: var(--green-bg); }
+.rung.b .tag { color: var(--blue); }   .rung.b { background: var(--blue-bg); }
+.rung.o .tag { color: var(--orange); } .rung.o { background: var(--orange-bg); }
+.rung.r .tag { color: var(--red); }    .rung.r { background: var(--red-bg); }
+.rung.v .tag { color: var(--violet); } .rung.v { background: var(--violet-bg); }
+
+/* ---------- tables ---------- */
+
+.tbl-scroll { overflow-x: auto; margin: 0 0 14px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--rule-2); vertical-align: top; }
+th { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-3); background: var(--surface-2); font-weight: 700; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+
+/* ---------- footer ---------- */
+
+.footer { margin-top: 64px; padding-top: 22px; border-top: 2px solid var(--ink); }
+.footer h2 { font-size: 18px; margin: 0 0 10px; }
+.footer p { color: var(--ink-2); font-size: 14px; max-width: 80ch; }
+.pillrow { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; }
+.pill {
+  font-family: var(--mono); font-size: 11.5px;
+  border: 1px solid var(--rule); border-radius: 999px;
+  padding: 4px 11px; color: var(--ink-2); background: var(--surface);
+}
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <h1>A goal becomes a click, and comes back as a typed result</h1>
+  <p class="sub">
+    The whole pipeline, in the order it runs, with the actual data at every boundary.
+    One worked example throughout — the real recording in <code>evidence/discover-e3d4f6b7</code>
+    and the real replay in <code>evidence/replay-dd1bbee1</code>. Every value on this page is
+    copied out of the repository, not illustrative.
+  </p>
+
+  <p class="thesis">
+    <b>The thesis:</b> a model is present at exactly three points, and they are not the same kind
+    of thing. Once it <b>asserts</b> — choosing one action per turn (stage&nbsp;5). Twice it only
+    <b>proposes</b>, and code then tries to refute what it said: the anchor for a step
+    (stage&nbsp;6) and the capability's contract (stage&nbsp;8c). A proposal that fails the check
+    is dropped, and the deterministic answer is used instead.
+  </p>
+  <p class="thesis" style="border-left-color:var(--green);background:var(--green-bg)">
+    <b style="color:var(--green)">Everywhere else — including the entire production execution
+    path — there is no model, and structurally cannot be.</b>
+    <code>ReplayEngine.__init__</code> takes no LLM parameter at all, so it holds no reference to
+    one, and its resolver is built <code>allow_vlm=False</code>, which raises if the tier is
+    reached. Determinism is a property you can check by reading a constructor.
+  </p>
+
+  <div class="legend">
+    <span><span class="chip model">MODEL ASSERTS</span> the model's word is taken</span>
+    <span><span class="chip checked">MODEL PROPOSES</span> …and code tries to refute it</span>
+    <span><span class="chip nomodel">NO MODEL</span> deterministic, by construction</span>
+    <span><span class="chip drift">DRIFT SIGNAL</span> emitted for free, per step</span>
+    <span><span class="chip gap">NOT BUILT</span> declared but not derived</span>
+  </div>
+</header>
+
+
+<!-- ================================================================= -->
+<div class="phase discovery">
+  <h2>Discovery — run once, supervised, and it can stop and ask</h2>
+  <p>5 model calls · 48 s · <code>xai/grok-4.3</code> · produced <code>cap_get_savings_balance@v1</code></p>
+</div>
+
+<!-- 1 -->
+<section class="stage">
+  <div class="n">1</div>
+  <h3>The ask — <code>DiscoveryLoop.run(goal, start_url, inputs)</code></h3>
+  <p class="lede">
+    A goal in English plus the concrete values this run will use. The inputs are not just
+    "what to type": they are the <em>parameter declaration</em>. Any literal in the recording
+    that matches one of them becomes a placeholder at stage 8b, which is how
+    "who decided <code>12345</code> was a parameter?" gets a deterministic answer.
+  </p>
+  <div class="xform">
+    <div class="cap">input</div>
+<pre>goal   = <span class="s">"open the profile for member 12345 and read the current
+          balance of their Primary Savings account"</span>
+inputs = { <span class="k">"member_id"</span>: <span class="s">"12345"</span>,
+           <span class="k">"account_nickname"</span>: <span class="s">"Primary Savings"</span> }</pre>
+  </div>
+  <div class="note">
+    <p>The entry navigation is <strong>recorded, not merely performed</strong> — it becomes step 1
+    of the artifact. Without it a capability begins wherever the browser happened to be, and a
+    second invocation in the same session starts on the previous run's member profile.</p>
+  </div>
+</section>
+
+<div class="arrow">↓ &nbsp; <b>loop until</b> finish / escalate / stuck / budget</div>
+
+<!-- 2 -->
+<section class="stage">
+  <div class="n">2</div>
+  <h3>Pixels — <code>XDisplayScreen.capture()</code> then <code>Perceiver.settle()</code></h3>
+  <p class="lede">
+    <code>mss.grab(monitors[1])</code> photographs the <em>whole X display</em>, not the browser
+    viewport — the same image an operator sees over VNC, in the same coordinate space the input
+    layer clicks in. One coordinate system, so there is no translation bug to have.
+  </p>
+  <div class="xform"><div class="row">
+    <div class="side">
+      <div class="cap">out — geometry + content hash</div>
+<pre>viewport   1440 × 900
+frame_hash <span class="s">"3c75a7e6d36123ea"</span>
+           <span class="c"># sha256 of the raw BGRA buffer,</span>
+           <span class="c"># not the PNG: encoders may vary
+           # their output for identical input,
+           # which would never converge</span></pre>
+    </div>
+    <div class="side">
+      <div class="cap">settle — two tests, in order</div>
+<pre><span class="c"># 1. cheapest correct answer</span>
+hash == previous  → <span class="s">settled_by = "pixels"</span>
+
+<span class="c"># 2. only if that never converges</span>
+two observations whose readable
+text + boxes match (quantised to
+0.5% of frame — OCR edges wobble)
+                  → <span class="s">settled_by = "text"</span>
+
+else → <span class="em">Unsettled</span>  <span class="c">(terminal)</span></pre>
+    </div>
+  </div></div>
+  <div class="note warn">
+    <p><span class="chip drift">DRIFT SIGNAL</span> &nbsp; <code>settled_by</code> is recorded on every
+    step result. The text fallback exists because a caret, spinner, carousel or live clock means
+    <strong>no two frames are ever byte-identical</strong> — on such a surface the pixel test alone
+    fails every single step. A capability that starts settling by <code>text</code> is telling you
+    the surface began to animate. Our worked run: <code>pixels</code> on all five steps.</p>
+  </div>
+</section>
+
+<div class="arrow">↓ &nbsp; one settled PNG</div>
+
+<!-- 3 -->
+<section class="stage is-key">
+  <div class="n">3</div>
+  <h3>Pixels become meaning — <code>merge(controls, texts)</code></h3>
+  <p class="lede">
+    Detection knows <em>where</em> the controls are. OCR knows <em>what</em> the words are.
+    Neither alone is enough: a bare box cannot be targeted semantically, and a bare text line is
+    not necessarily clickable. This is the hop that makes everything above it surface-agnostic.
+  </p>
+  <div class="xform"><div class="row">
+    <div class="side">
+      <div class="cap">in — two independent readings</div>
+<pre>OmniParser  → boxes, no words
+PP-OCR/ONNX → words + boxes, no
+              idea what is clickable
+
+<span class="c"># measured, dense member page:
+# 146 elements = 7 detector boxes
+#              + 139 OCR lines.
+# enterprise back-office screens are
+# dense text with few icons — the
+# merge step is where the value is.</span></pre>
+    </div>
+    <div class="side">
+      <div class="cap">out — <span class="who">real elements, step-03.json</span></div>
+<pre>e11 text   ocr        1.00 <span class="s">"Member ID or Name"</span>
+e12 button omniparser 0.89 <span class="s">"12345"</span>
+e13 button omniparser 0.92 <span class="s">"Search"</span>
+e14 text   ocr        0.99 <span class="s">"Try 12345, 22841, …"</span>
+
+<span class="c"># e13 carries text ONLY because merge
+# gave it the OCR line. The detector
+# emitted an anonymous box.</span></pre>
+    </div>
+  </div></div>
+
+  <div class="ladder">
+    <div class="rung g"><div class="tag">rule 1</div><div class="body">
+      Text inside a control becomes its <b>name/text</b>, and goes to the <b>smallest</b>
+      containing control — a button inside a card is contained by both.</div></div>
+    <div class="rung r"><div class="tag">rule 2</div><div class="body">
+      Control inside the <b>text</b> is also a label. Measured: detector box 29×16 vs OCR line
+      41×23 on the same "View" button — containment only 0.49. Without this rule
+      <b>every button on the page is anonymous</b>. A size guard stops an icon claiming a whole row.</div></div>
+    <div class="rung o"><div class="tag">rule 3</div><div class="body">
+      A control larger than 15% of the frame is a <b>container</b> and absorbs nothing. Measured:
+      a 21%-of-frame detection on the sign-on screen swallowed both field labels and left
+      "User ID" unaddressable.</div></div>
+    <div class="rung b"><div class="tag">rule 4</div><div class="body">
+      Text with no enclosing control survives as <code>role="text"</code>. Not clickable — but it
+      is <b>exactly what anchors and checkpoints match against</b>.</div></div>
+  </div>
+
+  <div class="note">
+    <p>Then: NMS dedupe (highest confidence first) → re-infer <code>role</code> now the box has
+    words → reassign ids <code>e0, e1, …</code> in <strong>reading order</strong>, top-to-bottom
+    then left-to-right. Ids are stable <em>within</em> one observation and meaningless across them.
+    Nothing may persist them.</p>
+  </div>
+</section>
+
+<div class="arrow">↓ &nbsp; <code>Observation { elements[], viewport, url?, frame_hash, settled_by }</code></div>
+
+<!-- 4 -->
+<section class="stage">
+  <div class="n">4</div>
+  <h3>What the model is shown — <code>annotate()</code> + <code>candidate_digest()</code></h3>
+  <p class="lede">
+    The screenshot with numbered boxes drawn on it, plus a compact list of those numbers.
+    The model replies with a <em>number</em>, never a coordinate.
+  </p>
+  <div class="xform"><div class="row">
+    <div class="side">
+      <div class="cap">out — the candidate list</div>
+<pre>[ { <span class="k">"mark"</span>: <span class="num">11</span>, <span class="k">"role"</span>: <span class="s">"text"</span>,
+    <span class="k">"box"</span>: [.096, .118, .155, .031],
+    <span class="k">"text"</span>: <span class="s">"Member ID or Name"</span> },
+  { <span class="k">"mark"</span>: <span class="num">13</span>, <span class="k">"role"</span>: <span class="s">"button"</span>,
+    <span class="k">"box"</span>: [.253, .118, .051, .031],
+    <span class="k">"text"</span>: <span class="s">"Search"</span> }, … ]</pre>
+    </div>
+    <div class="side">
+      <div class="cap">the budget, and what it costs</div>
+<pre>MAX_CANDIDATES = <span class="num">80</span>
+
+<span class="c"># that same page has 146 elements,
+# so 66 are TRUNCATED. Ordering is
+# reading order, so truncation drops
+# the bottom of the page rather than
+# an arbitrary slice — and the count
+# is passed to the model, so
+# scrolling stays available to it.</span></pre>
+    </div>
+  </div></div>
+</section>
+
+<div class="arrow">↓ &nbsp; annotated PNG + candidates + goal + history</div>
+
+<!-- 5 -->
+<section class="stage is-model">
+  <div class="n">5</div>
+  <h3>The model decides <span class="chip model">MODEL</span></h3>
+  <p class="lede">
+    <strong>One call, one tool call back.</strong> The action space handed to the model
+    <em>is</em> the artifact's step vocabulary — it cannot express anything replay cannot execute.
+    That is what makes recordings replayable by construction rather than by post-hoc inference
+    over a transcript.
+  </p>
+  <div class="xform"><div class="row">
+    <div class="side">
+      <div class="cap">in — the turn</div>
+<pre><span class="k">system</span>: role, the app's `surface` line
+        from policy, allowed actions,
+        the rules, the trust boundary
+<span class="k">user</span>:   goal, declared parameters,
+        history, candidate list,
+        how many were truncated
+<span class="k">image</span>:  the annotated overlay</pre>
+    </div>
+    <div class="side">
+      <div class="cap">out — <span class="who">exactly one tool call</span></div>
+<pre>{ <span class="k">"name"</span>: <span class="s">"click"</span>,
+  <span class="k">"input"</span>: {
+    <span class="k">"mark"</span>:   <span class="num">13</span>,          <span class="c">← a NUMBER</span>
+    <span class="k">"intent"</span>: <span class="s">"click the Search button
+                after entering member
+                ID 12345"</span>,
+    <span class="k">"expect"</span>: <span class="s">"Member Profile"</span>,
+    <span class="k">"anchor"</span>: <span class="s">"Search"</span>,   <span class="c">← optional,
+                          and checked</span>
+    <span class="k">"risk"</span>:   <span class="s">"safe"</span> } }</pre>
+    </div>
+  </div></div>
+  <div class="note">
+    <p><strong>None of the extra fields is decoration.</strong> <code>intent</code> is what the
+    policy layer classifies for risk — <code>click(0.42, 0.71)</code> cannot be judged reversible or
+    not — and it is what a human reviewer reads. <code>expect</code> is checked immediately at
+    stage 7. <code>anchor</code> is the model's answer to <em>"the shortest text on this element
+    that will still identify it next month"</em>, and it is checked at stage 6 before it is
+    believed.</p>
+    <p>Page text is declared <strong>untrusted input</strong> in the system prompt. That is a
+    mitigation, not a defence: the allowlist bounds the blast radius, it does not stop the model
+    being misled inside it.</p>
+  </div>
+</section>
+
+<div class="arrow">↓ &nbsp; <b>the single most important hop on this page</b></div>
+
+<!-- 6 -->
+<section class="stage is-key">
+  <div class="n">6</div>
+  <h3>Mark + measured element → typed step — <code>to_step()</code></h3>
+  <p class="lede">
+    The model supplied a number. The <em>element behind that number</em> supplies role, name, text
+    and box. So <code>Target</code> is written from <strong>measured data</strong>, never from the
+    model's description of what it thought it was clicking. This is the join that makes the
+    artifact trustworthy.
+  </p>
+  <div class="xform"><div class="row">
+    <div class="side">
+      <div class="cap">in — two sources, fused</div>
+<pre><span class="c"># from the MODEL</span>
+intent = <span class="s">"click the Search button …"</span>
+expect = <span class="s">"Member Profile"</span>
+risk   = <span class="s">"safe"</span>
+
+<span class="c"># from the ELEMENT at mark 13</span>
+role = <span class="s">"button"</span>
+name = <span class="s">"Search"</span>
+text = <span class="s">"Search"</span>
+bbox = {x .2534, y .1184,
+        w .0512, h .0314}</pre>
+    </div>
+    <div class="side">
+      <div class="cap">out — <span class="who">artifact step 3, verbatim</span></div>
+<pre>{ <span class="k">"kind"</span>: <span class="s">"act"</span>, <span class="k">"id"</span>: <span class="num">3</span>, <span class="k">"action"</span>: <span class="s">"click"</span>,
+  <span class="k">"risk"</span>: <span class="s">"safe"</span>,
+  <span class="k">"target"</span>: {
+    <span class="k">"intent"</span>:      <span class="s">"click the Search button …"</span>,
+    <span class="k">"target_desc"</span>: <span class="s">"Search"</span>,
+    <span class="k">"anchor_text"</span>: <span class="s">"Search"</span>,   <span class="c">← tier 1</span>
+    <span class="k">"anchor_match"</span>: <span class="s">"contains"</span>,
+    <span class="k">"role"</span>: <span class="s">"button"</span>,        <span class="c">← tier 2</span>
+    <span class="k">"name"</span>: <span class="s">"Search"</span>,
+    <span class="k">"bbox"</span>: { … },           <span class="c">← tier 3</span>
+    <span class="k">"relation"</span>: <span class="s">"self"</span> } }</pre>
+    </div>
+  </div></div>
+
+  <div class="note good">
+    <p><strong>Two cases rewrite the anchor to a <em>neighbour</em></strong>, and both were found by
+    reading a recorded artifact:</p>
+    <p>· <strong>an empty control</strong> — a form field has no text, so anchoring on it is
+    anchoring on nothing and replay falls straight through to the recorded box.<br>
+    · <strong>a value</strong> — anchoring an extraction on the value it read is self-defeating:
+    <code>$18,204.55</code> identifies this balance only until the balance changes, which for a
+    balance is the whole point.</p>
+    <p>Which neighbour is <strong>measured, not guessed</strong>, and ranked: (1) text the caller
+    declared as an input, (2) text appearing exactly once on screen, (3) nearest — only as a
+    fallback, because nearest is <em>wrong</em> in a grid: the cell left of a balance is its status,
+    and "Active" is on every row. Step 5 of our artifact is the result:
+    <code>anchor_text: "{{account_nickname}}", relation: right_of, index: 1</code>.</p>
+  </div>
+
+  <h3 style="margin-top:30px">…and a third case: the element's text is <em>part</em> durable
+  <span class="chip checked">MODEL PROPOSES</span></h3>
+  <p class="lede">
+    <code>"Search"</code> is entirely durable, so it becomes the anchor untouched. But an element's
+    text is often part durable and part volatile, and <strong>only the durable part belongs in a
+    recording</strong>. This is the <code>_falsify</code> pattern from stage 8d, applied one level
+    down — the model may propose a shorter anchor, and code then tries to refute it.
+  </p>
+
+  <div class="note stop">
+    <p><strong>The failure this prevents, proven before it was fixed.</strong> A dropdown option on
+    the transfer form reads <code>29883 - Checking - $4,820.19</code>. Taking the full text as the
+    anchor, then parameterizing, produced:</p>
+<pre style="background:transparent;padding:8px 0 0;font-size:12px">anchor_text: <span class="s">"{{from_account}} - Checking - <span class="em">$4,820.19</span>"</span>   match: contains</pre>
+    <p style="margin-top:7px">That artifact <strong>dies on its own second run</strong> — a transfer
+    changes the balance, and the anchor never matches again. The shipped read capability never
+    exhibited it, because that flow only ever clicks buttons with short stable text
+    (<code>"Search"</code>, <code>"View"</code>). A latent bug that one recorded flow hid.</p>
+  </div>
+
+  <div class="ladder">
+    <div class="rung g"><div class="tag">1 · a FACT</div><div class="body">
+      A value the caller <b>declared as an input</b> that appears in the element's text. Not a
+      judgment — the caller <em>named</em> it as the thing that varies per invocation, which is
+      exactly what "identifies this record" means. Free, offline, and it covers the common case.
+      Here: <code>29883</code>.</div></div>
+    <div class="rung v"><div class="tag">2 · a JUDGMENT</div><div class="body">
+      What the <b>model proposed</b>. Used only when the durable part is not one of the declared
+      inputs — <i>"the row for merchant PACIFIC WIRELESS"</i> — where the code has nothing to go on
+      and the model has read the screen.</div></div>
+    <div class="rung o"><div class="tag">both face</div><div class="body">
+      <code>_identifies()</code> — the candidate must be text <b>actually on the chosen element</b>,
+      and re-resolving it against <b>that same frame</b> must land back on <b>that same element</b>
+      with <code>candidates == 1</code> and <code>tier is ANCHOR_TEXT</code>. A proposal that picks
+      out a different element, or three of them, is <em>worse</em> than the full string — and is
+      dropped.</div></div>
+  </div>
+
+  <div class="note">
+    <p><strong>Why fact beats judgment, and it is not a preference.</strong> Asked for an anchor on
+    <code>29883 - Checking - $4,820.19</code>, a model may answer <code>$4,820.19</code>. That text
+    <em>is</em> on the element, <em>is</em> unique on the frame, and <strong>passes every check
+    here</strong> — because "will this still be true next month?" is not answerable from one
+    observation. The declared input <code>29883</code> <em>is</em> answerable. So it wins, and the
+    model is never consulted.</p>
+  </div>
+
+  <div class="tbl-scroll">
+    <table>
+      <thead><tr><th>the model proposed</th><th>outcome</th><th>anchor recorded</th></tr></thead>
+      <tbody>
+        <tr><td><em>nothing</em></td><td>fact applies</td><td><code>29883</code></td></tr>
+        <tr><td><code>"29883"</code></td><td>agrees with the fact</td><td><code>29883</code></td></tr>
+        <tr><td><code>"Acct 29883"</code> — hallucinated, not on the element</td><td><strong>dropped</strong></td><td><code>29883</code></td></tr>
+        <tr><td><code>"Checking"</code> — matches three rows</td><td><strong>dropped</strong>, ambiguous</td><td><code>29883</code></td></tr>
+        <tr><td><code>"$4,820.19"</code> — the volatile half</td><td>passes every check, but <strong>fact wins</strong></td><td><code>29883</code></td></tr>
+        <tr><td><code>"PACIFIC WIRELESS"</code>, no declared id present</td><td>accepted — the model is the only source</td><td><code>PACIFIC WIRELESS</code></td></tr>
+        <tr><td><em>anything</em>, on <code>"View"</code></td><td>already stable, left alone</td><td><code>View</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note warn">
+    <p><strong>The residual limit, stated rather than papered over.</strong> When the durable part is
+    <em>not</em> a declared input <em>and</em> the model picks the volatile half, this accepts it.
+    <strong>Nothing in one observation can tell those two apart.</strong> What catches it is the
+    reviewer — the artifact shows <code>anchor_text</code> beside the full <code>target_desc</code>,
+    so the substitution is visible in a diff — and then the resolution-tier drift signal in
+    production, as that anchor decays into <code>recorded_bbox</code>.</p>
+  </div>
+</section>
+
+<div class="arrow">↓ &nbsp; <b>before the primitive runs</b> — the same guardrail replay uses</div>
+
+<!-- 6b -->
+<section class="stage">
+  <div class="n" style="border-color:var(--orange);color:var(--orange);background:var(--orange-bg)">!</div>
+  <h3>The guardrail gate — <code>policy.check_action(primitive, risk, intent)</code></h3>
+  <p class="lede">
+    The <strong>same policy object replay uses</strong>, on the same primitive, called before the
+    action rather than after it. A guardrail that only guards the LLM is not a guardrail — and one
+    that only guards replay is not either.
+  </p>
+  <div class="ladder">
+    <div class="rung r"><div class="tag">denied</div><div class="body">
+      Primitive not in the allowlist, URL outside the permitted patterns, or
+      <code>risky_disposition: block</code> → <code>PolicyDenied</code>. The step is refused and
+      recorded as refused; the model is told and tries something else.</div></div>
+    <div class="rung o"><div class="tag">confirm → PARK</div><div class="body">
+      <b>A risky action is risky whoever is driving.</b> The recording session parks on the same
+      <code>RunControl</code> token replay uses, raises an <code>InterventionRequest</code> with
+      <code>mode="discovery"</code>, and hands the <b>live browser</b> to a human. Abort ends the
+      run <code>ESCALATED</code>; resume writes the approval into the history and proceeds.</div></div>
+    <div class="rung g"><div class="tag">allow</div><div class="body">Execute.</div></div>
+  </div>
+  <div class="note stop">
+    <p><strong>This was a real asymmetry until recently.</strong> The loop called
+    <code>check_action(...)</code> and <em>discarded the return value</em> — it reacted only to
+    <code>PolicyDenied</code>. So under <code>risky_disposition: confirm</code>, replay parked for a
+    human and <strong>discovery executed the risky step unattended</strong>. Recording a transfer
+    would have sailed straight through "Confirm Transfer", the one control in the app that moves
+    money. The method returned a disposition that one of its two callers threw away.</p>
+    <p>The alternative — letting a recording session submit a transfer because a human is
+    <em>notionally</em> watching a VNC window — is a guardrail that binds only the path needing it
+    least.</p>
+  </div>
+  <div class="note">
+    <p>The model's own <code>escalate</code> tool now parks the same way
+    (<code>AGENT_REQUESTED</code>) instead of merely ending the run: a human can unstick it on the
+    live session and <strong>the recording continues</strong>. On resume the model is told what
+    happened and that <em>"the screen may have moved; look again before acting"</em> — without that
+    line its next action is reasoned from a state it never saw.</p>
+    <p>A loop built with <code>control=None</code> (the offline tests) treats a park as a
+    <strong>refusal, not permission</strong>. The safe reading of "nobody can be asked" is not
+    "proceed anyway".</p>
+  </div>
+</section>
+
+<div class="arrow">↓ &nbsp; execute the primitive, re-observe</div>
+
+<!-- 7 -->
+<section class="stage">
+  <div class="n">7</div>
+  <h3>Was the model right? — the <code>expect</code> check <span class="chip nomodel">NO MODEL</span></h3>
+  <p class="lede">
+    Verified immediately against the next frame, deterministically. This is why
+    <strong>every checkpoint in a saved artifact has already passed once</strong> — on the run that
+    wrote it.
+  </p>
+  <div class="ladder">
+    <div class="rung r">
+      <div class="tag">unmet · unchanged</div>
+      <div class="body"><b>DISCARD the step.</b> Nothing happened, so there is nothing worth
+      replaying. The model is told what the screen actually reads, so its next attempt differs.</div>
+    </div>
+    <div class="rung o">
+      <div class="tag">unmet · changed</div>
+      <div class="body"><b>KEEP the step, DROP its checkpoint</b>, and note it for the reviewer.
+      Dropping the step would leave the recording missing a state transition the flow actually
+      made — replay would then start on a screen it never reaches.</div>
+    </div>
+    <div class="rung g">
+      <div class="tag">met</div>
+      <div class="body"><b>KEEP with the checkpoint.</b> The expected path.</div>
+    </div>
+  </div>
+  <div class="note warn">
+    <p><strong>The middle branch fired on the real run.</strong> Step 3 of the shipped artifact
+    carries, verbatim:</p>
+<pre style="background:transparent;padding:8px 0 0;font-size:12px">"note": <span class="s">"recorded without a checkpoint: the run expected 'Member Profile'
+         here and the screen showed something else. Review before approving."</span></pre>
+    <p style="margin-top:7px">The model predicted the profile would appear after clicking Search;
+    the search-results list appeared instead. The click was real and the screen did change, so the
+    step is kept — <strong>and the assertion it could not verify is not written into the
+    artifact.</strong> An unverifiable claim has no business in a contract.</p>
+  </div>
+</section>
+
+<div class="arrow">↓ &nbsp; 5 verified steps, 5 model calls</div>
+
+<!-- 8 -->
+<section class="stage is-key">
+  <div class="n">8</div>
+  <h3>Recording becomes a contract — <code>synthesize()</code></h3>
+  <p class="lede">
+    Four passes. Three are deterministic code; exactly one consults the model, and everything it
+    proposes is then <em>refuted</em> by code before it survives.
+  </p>
+
+  <div class="ladder">
+    <div class="rung g"><div class="tag">a · prune</div><div class="body">
+      Drop steps that did not advance state — a second read of a value already read under the same
+      name, a navigate immediately superseded by another. <b>Conservative on purpose</b>: anything
+      more aggressive is deciding after the fact that a step the run verified was unnecessary.
+      Step ids are left alone here — they are what ties an extraction to its output.</div></div>
+
+    <div class="rung g"><div class="tag">b · parameterize</div><div class="body">
+      Substitute declared input values with placeholders, <b>longest match first</b> so an input of
+      <code>123</code> does not corrupt a recorded <code>12345</code> belonging to a different
+      input. An input appearing nowhere in the recording is <b>not declared</b> — telling a calling
+      agent it can steer something it cannot is worse than silence.</div></div>
+
+    <div class="rung v"><div class="tag">c · declare <span class="chip model">MODEL</span></div><div class="body">
+      The model writes the <code>description</code>, proposes a <code>success_text</code>, and —
+      this one is forward-looking by design — proposes <b>business outcomes for screens this run
+      never visited</b>. Describing them is the job, not a mistake.</div></div>
+
+    <div class="rung r"><div class="tag">d · _falsify</div><div class="body">
+      <b>Code refutes what the model proposed.</b> An outcome detector cannot be confirmed — the run
+      never saw that screen — but it can be <em>refuted</em>: a phrase visible while the flow
+      <b>succeeded</b> cannot be what distinguishes it having gone another way.</div></div>
+  </div>
+
+  <div class="xform"><div class="row">
+    <div class="side">
+      <div class="cap">b · parameterize — real substitution</div>
+<pre><span class="c"># before</span>
+value: <span class="s">"12345"</span>
+intent: <span class="s">"type the member ID 12345 …"</span>
+checkpoint.value: <span class="s">"12345"</span>
+
+<span class="c"># after</span>
+value: <span class="s">"<span class="hi">{{member_id}}</span>"</span>
+intent: <span class="s">"type the member ID
+         <span class="hi">{{member_id}}</span> …"</span>
+checkpoint.value: <span class="s">"<span class="hi">{{member_id}}</span>"</span></pre>
+    </div>
+    <div class="side">
+      <div class="cap">d · _falsify — <span class="who">real synthesis.json</span></div>
+<pre>proposed <span class="num">2</span>, kept <span class="em">0</span>:
+
+<span class="s">"member_not_found"</span>
+  detector_text: <span class="s">"Search Results"</span>
+  <span class="em">REJECTED</span> — on a frame the
+  successful run passed through
+
+<span class="s">"account_not_found"</span>
+  detector_text: <span class="s">"Accounts"</span>
+  <span class="em">REJECTED</span> — same reason</pre>
+    </div>
+  </div></div>
+
+  <div class="note stop">
+    <p><strong>Both proposals were wrong, and code caught both.</strong> <code>"Accounts"</code> is a
+    column header on every screen in the app — had it survived, <em>every successful run</em> would
+    have been classified as <code>account_not_found</code>. The rejections are kept in
+    <code>synthesis.json</code> rather than discarded: what was proposed and thrown away is part of
+    judging whether the rest is trustworthy.</p>
+    <p>So <code>cap_get_savings_balance@v1</code> shipped with <strong>zero</strong> business
+    outcomes. The real one was added later by <code>cua learn-outcome</code>, which replays the
+    capability twice — once with the recorded inputs, once with <code>member_id=99999</code> — and
+    takes the detector from the <em>difference</em>: <code>"No member matches the search criteria
+    entered."</code>, the app's own wording, copied off the screen that produces it. That is
+    <code>@v2</code>.</p>
+  </div>
+
+  <div class="note">
+    <p>The result round-trips through its own schema before anyone is told it exists, and a
+    <code>model_validator</code> rejects an artifact whose internal references do not resolve:
+    duplicate step ids, an output reading from a step that does not extract, a
+    <code>{{placeholder}}</code> naming no declared input, an undeclared <code>screen</code>, an
+    uncompilable <code>base_url_pattern</code>. Each is otherwise an artifact that loads fine,
+    passes review, and dies halfway through a run against a member's account.</p>
+  </div>
+</section>
+
+<div class="arrow">↓ &nbsp; <code>artifacts/cap_get_savings_balance.v2.json</code> — the model's job is over</div>
+
+<!-- ================================================================= -->
+<div class="phase replay">
+  <h2>Replay — run many times, unattended, by an AI agent</h2>
+  <p>No model is constructed on this path. <code>unset XAI_API_KEY</code> and it behaves identically.</p>
+</div>
+
+<!-- 9 -->
+<section class="stage is-key">
+  <div class="n">9</div>
+  <h3>The capability executes <span class="chip nomodel">NO MODEL</span></h3>
+  <p class="lede">
+    <code>ReplayEngine.__init__(perceiver, driver, resolver, policy, evidence, control, …)</code>
+    — there is <strong>no <code>llm</code> parameter</strong>. It cannot call a model because it
+    holds no reference to one. The resolver it is handed is built <code>allow_vlm=False</code>,
+    whose VLM method raises <code>RuntimeError</code> rather than degrading quietly.
+  </p>
+
+  <div class="xform">
+    <div class="cap">in — the caller's invocation</div>
+<pre>replay(<span class="k">cap</span>=cap_get_savings_balance@v2,
+       <span class="k">inputs</span>={ <span class="s">"member_id"</span>: <span class="s">"12345"</span>, <span class="s">"account_nickname"</span>: <span class="s">"Primary Savings"</span> })
+
+<span class="c"># validated BEFORE anything is touched: type coercion, pattern,
+# min/max, choices, not_equal_to. A bad call is a rejected call, not a
+# run that gets four steps in and types "None" into an amount field.</span></pre>
+  </div>
+
+  <p class="lede" style="margin-top:18px"><strong>Per step, in this order:</strong></p>
+  <div class="ladder">
+    <div class="rung o"><div class="tag">verify permission</div><div class="body">
+      Policy: is this action allowed? this URL? is it risky, and does the app say
+      <code>allow</code> / <code>confirm</code> / <code>block</code>? Policy can <b>promote</b>
+      safe→risky from the declared intent, one-directionally — a recording that mislabels a submit
+      as safe is the expensive failure. <b>Identical to the discovery gate above</b>: same policy
+      object, same <code>RunControl</code>, same live session handed to the same operator.</div></div>
+    <div class="rung b"><div class="tag">settle + observe</div><div class="body">
+      Two hash-equal frames, or stable text. Same perceiver the recording used — if replay saw the
+      screen through a different pipeline, every checkpoint written at record time would be a guess.</div></div>
+    <div class="rung b"><div class="tag">check screen</div><div class="body">
+      Is this the state the step expects? → <code>WRONG_SCREEN</code>, naming where it actually is.
+      <span class="chip gap">NOT BUILT</span> <code>Screen</code> is declared and enforced but never
+      <em>derived</em>, so recorded capabilities declare none and make no claim about where they are.</div></div>
+    <div class="rung g"><div class="tag">resolve</div><div class="body">
+      <b>The ladder</b>, most portable first — see below.</div></div>
+    <div class="rung o"><div class="tag">verify target</div><div class="body">
+      Does the region <b>say</b> what the recording said it said? Is anything stacked on top of it?
+      Nearly free — the observation already exists.</div></div>
+    <div class="rung v"><div class="tag">EXECUTE</div><div class="body">The primitive.</div></div>
+    <div class="rung g"><div class="tag">verify effect</div><div class="body">
+      Poll the checkpoint until <b>its own</b> declared timeout. There is no <code>sleep()</code> on
+      this path with exactly one exception: a recovery the policy explicitly declares as a wait.
+      "Not true yet" and "not true" are the same picture, so they get the same loop.</div></div>
+  </div>
+
+  <div class="xform">
+    <div class="cap">resolve — the ladder, and what fired on the real run</div>
+<pre><span class="num">1</span>  anchor_text     visible text at/near the target; may contain {{param}},
+                   which is what makes data-dependent targeting possible.
+                   Survives rebranding and relayout.        <span class="s">← all 4 targeted
+                                                                 steps used this</span>
+<span class="num">2</span>  role + name     semantic match. role is a HINT that narrows candidates,
+                   never the sole key — a bad guess costs precision, not
+                   correctness.
+<span class="num">3</span>  recorded_bbox   the position from the recording. Correct until something
+                   above it changes height. <span class="em">Using it logs a drift event.</span>
+<span class="em">x</span>  vlm (gated)     <span class="em">in the enum, and RAISES.</span> Discovery never needs it —
+                   the model picks from marks, so it is never asked
+                   "where is this thing". Unreachable by construction is
+                   what makes "no model in replay" checkable.
+
+<span class="c"># no tier matched → Unresolvable, terminal. It does NOT fall back to the
+# recorded box as a last-ditch guess: a step that cannot find its target has
+# not failed to be precise, it has failed to know where it is.</span></pre>
+  </div>
+
+  <div class="note warn">
+    <p><span class="chip drift">DRIFT SIGNAL</span> &nbsp; The tier that succeeded is recorded on
+    every step result. Aggregated across runs, <strong>anchors decaying into
+    <code>recorded_bbox</code> means the application moved</strong> — an early warning that costs
+    nothing and arrives long before a hard failure.</p>
+  </div>
+
+  <p class="lede" style="margin-top:22px"><strong><code>classify()</code> — one function, called
+  after every step. The order is load-bearing.</strong></p>
+  <div class="ladder">
+    <div class="rung g"><div class="tag">1 · outcomes</div><div class="body">
+      <b>[ARTIFACT]</b> &nbsp; First, always. If the checkpoint ran first, "no such member" would be
+      reported as a failed assertion instead of the <b>answer the caller asked for</b>.
+      → <code>BUSINESS_OUTCOME</code>, clean stop.</div></div>
+    <div class="rung b"><div class="tag">2 · recoveries</div><div class="body">
+      <b>[POLICY]</b> &nbsp; Apply the handler, re-observe, retry. Bounded by
+      <code>max_per_run</code>: dismissing the same modal eleven times means the dismissal is
+      <b>not working</b>, and that is a hard failure, not eleven successful recoveries.</div></div>
+    <div class="rung o"><div class="tag">3 · declared</div><div class="body">
+      <b>[POLICY]</b> &nbsp; <code>app_errors</code> and <code>escalations</code>, split by
+      <b>who can clear it</b>. Before the checkpoint on purpose — both would otherwise arrive as
+      "the checkpoint did not hold", which describes the symptom and hides the cause.</div></div>
+    <div class="rung g"><div class="tag">4 · checkpoint</div><div class="body">
+      <b>[ARTIFACT]</b> &nbsp; The expected path. → <code>OK</code>.</div></div>
+    <div class="rung r"><div class="tag">5 · anything else</div><div class="body">
+      <b>HARD FAILURE.</b> Not a gap: under vision-first perception we cannot enumerate every screen
+      an enterprise app can produce, and guessing at an unknown state in a banking application is
+      worse than stopping.</div></div>
+  </div>
+
+  <div class="note">
+    <p><strong>Where each detector lives is the multi-tenant argument in miniature.</strong>
+    Business outcomes belong to the <em>capability</em> — they are answers one flow can return.
+    Recoveries, app errors, escalations and the sign-on recipe belong to the <em>app policy</em> —
+    a session interstitial interrupts every flow on the app, and copying it into each artifact
+    would guarantee they drift apart. Session expiry is deliberately an <strong>escalation, not a
+    recovery</strong>: re-authenticating mid-flow means the automation holds credentials and
+    silently resumes a run whose context may no longer be valid.</p>
+  </div>
+</section>
+
+<div class="arrow">↓ &nbsp; typed, and the caller can branch on it</div>
+
+<!-- 10 -->
+<section class="stage">
+  <div class="n">10</div>
+  <h3>What comes back — <code>ReplayResult</code></h3>
+  <p class="lede">
+    Four terminal classes, never conflated, plus <code>RUNNING</code> written before step 1 so a
+    live run is not displayed as failed while it is still going.
+  </p>
+  <div class="xform">
+    <div class="cap">out — <span class="who">evidence/replay-dd1bbee1/run.json, verbatim</span></div>
+<pre>{ <span class="k">"run_id"</span>: <span class="s">"replay-dd1bbee1"</span>,
+  <span class="k">"capability"</span>: <span class="s">"cap_get_savings_balance@v2"</span>,
+  <span class="k">"app"</span>: <span class="s">"targetapp"</span>,
+  <span class="k">"status"</span>: <span class="s">"success"</span>,
+  <span class="k">"inputs"</span>:  { <span class="k">"member_id"</span>: <span class="s">"12345"</span>, <span class="k">"account_nickname"</span>: <span class="s">"Primary Savings"</span> },
+  <span class="k">"outputs"</span>: { <span class="k">"primary_savings_balance"</span>: <span class="num">18204.55</span> },   <span class="c">← typed NUMBER,
+                                                        normalised from
+                                                        "$18,204.55"</span>
+  <span class="k">"outcome"</span>: <span class="k">null</span>, <span class="k">"failure"</span>: <span class="k">null</span>,
+  <span class="k">"duration_ms"</span>: <span class="num">21612</span>,
+  <span class="k">"steps"</span>: [
+    { <span class="k">"id"</span>: <span class="num">1</span>, <span class="k">"status"</span>: <span class="s">"ok"</span>, <span class="k">"resolution"</span>: <span class="s">"none"</span>,        <span class="k">"settled_by"</span>: <span class="s">"pixels"</span> },
+    { <span class="k">"id"</span>: <span class="num">2</span>, <span class="k">"status"</span>: <span class="s">"ok"</span>, <span class="k">"resolution"</span>: <span class="s">"anchor_text"</span>, <span class="k">"settled_by"</span>: <span class="s">"pixels"</span> },
+    { <span class="k">"id"</span>: <span class="num">3</span>, <span class="k">"status"</span>: <span class="s">"ok"</span>, <span class="k">"resolution"</span>: <span class="s">"anchor_text"</span>, <span class="k">"settled_by"</span>: <span class="s">"pixels"</span> },
+    { <span class="k">"id"</span>: <span class="num">4</span>, <span class="k">"status"</span>: <span class="s">"ok"</span>, <span class="k">"resolution"</span>: <span class="s">"anchor_text"</span>, <span class="k">"settled_by"</span>: <span class="s">"pixels"</span> },
+    { <span class="k">"id"</span>: <span class="num">5</span>, <span class="k">"status"</span>: <span class="s">"ok"</span>, <span class="k">"resolution"</span>: <span class="s">"anchor_text"</span>, <span class="k">"settled_by"</span>: <span class="s">"pixels"</span> } ] }</pre>
+  </div>
+
+  <div class="tbl-scroll">
+    <table>
+      <thead><tr><th>status</th><th>means</th><th>the caller does</th><th>CLI</th><th>API</th></tr></thead>
+      <tbody>
+        <tr><td><code>success</code></td><td>checkpoint held, declared outputs extracted</td><td>uses <code>outputs</code></td><td>0</td><td>200</td></tr>
+        <tr><td><code>business_outcome</code></td><td>a legitimate answer — "no such member", "permission denied"</td><td>branches on <code>outcome.name</code></td><td><strong>0</strong></td><td><strong>200</strong></td></tr>
+        <tr><td><code>escalated</code></td><td>stopped, handed to a human, may resume</td><td>waits, or gives up</td><td>2</td><td>200</td></tr>
+        <tr><td><code>failure</code></td><td>something we do not understand</td><td>pages someone, with evidence</td><td>1</td><td>500</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note good">
+    <p><strong>The same artifact, a different input, a different class.</strong>
+    <code>member_id=99999</code> → <code>evidence/replay-5fc26609</code> returns
+    <code>{"status": "business_outcome", "outcome": {"name": "member_not_found", "step_id": 3}}</code>
+    and <strong>exit code 0</strong>. Conflating that with a crash is the mistake the brief names
+    outright — "no such member" is an answer the caller needs, not a failure.</p>
+  </div>
+</section>
+
+
+<!-- ================================================================= -->
+<div class="footer">
+  <h2>What this page does not cover</h2>
+  <p>
+    This is the pipeline — one path, one example, the data at each hop. The
+    <strong>subsystem detail</strong> lives in the nine reference panels appended below the sketch
+    in <code>diagram.excalidraw</code>: the merge thresholds with the measurements that set them,
+    the full artifact schema field by field, the escalation state machine and X-layer capture, the
+    three ways an undeclared popup is caught, and the known gaps. <code>REPORT.md</code> carries the
+    argument; <code>evidence/README.md</code> says which run shows what.
+  </p>
+  <div class="pillrow">
+    <span class="pill">discovery/loop.py</span>
+    <span class="pill">discovery/actions.py</span>
+    <span class="pill">discovery/synthesize.py</span>
+    <span class="pill">perception/base.py</span>
+    <span class="pill">perception/merge.py</span>
+    <span class="pill">resolve/resolver.py</span>
+    <span class="pill">resolve/verify.py</span>
+    <span class="pill">replay/engine.py</span>
+    <span class="pill">replay/outcomes.py</span>
+  </div>
+</div>
+
+</div>
