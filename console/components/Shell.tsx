@@ -1,12 +1,8 @@
 "use client";
 
 /**
- * The chrome: a drawer, a modal, a tab strip, a collapsible section.
- *
- * All four exist for the same reason — the console had eleven panels on screen
- * at once and no way to put any of them away, which made a wide window a
- * requirement and a narrow one unusable. Everything that is not the run you are
- * looking at now lives behind one of these.
+ * The chrome: a drawer, a modal, a tab strip, a collapsible section. All four exist
+ * so that everything which is not the run you are looking at now can be put away.
  */
 
 import { useEffect } from "react";

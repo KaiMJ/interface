@@ -1,36 +1,13 @@
-"""The `find_and_act` scan loop.
-
-Fully deterministic: locate the scope, observe it, evaluate the predicate over
-detected rows, advance, repeat. No model in it.
+"""The `find_and_act` scan loop. Fully deterministic; no model in it.
 
     locate scope (by anchor text, not a fixed box)
       └─ loop, bounded by scan.max_advances:
-           observe scope region
-           group into rows, normalize, test predicate
-           match?      -> act / collect
-           no match?   -> advance (scroll or click "Next"), re-observe
-           stopped changing? -> exhausted
+           observe scope region, group into rows, normalize, test predicate
+           match -> act / collect;  no match -> advance
 
-Termination is the part that has to be right, because getting it wrong produces
-the specific mistake the brief singles out — confusing "the record is not there"
-with "we stopped looking".
-
-  exhausted the list, no match
-      -> BUSINESS OUTCOME (`on_not_found_outcome`). A legitimate answer.
-
-  hit max_advances while the region was still changing
-      -> HARD FAILURE (SCAN_INCONCLUSIVE). We do not know whether the record is
-         absent or we quit early. Reporting "not found" here would be a
-         confidently wrong answer, which is worse than an error.
-
-Two other rules that decide whether this works at all:
-
-  - Advance by ~(1 - overlap) of the region height, never a full height. A row
-    straddling the boundary would otherwise be skipped and reported as a false
-    not-found — the same wrong answer, arrived at more subtly.
-  - Ambiguity is first-class. Two matches on a read may be tolerable; on a write,
-    acting on the wrong record is unrecoverable, so `on_multiple=escalate` is the
-    default and the caller must opt out deliberately.
+Termination is the judgement that matters: exhausting the list is a business outcome,
+while hitting `max_advances` with the region still changing is a hard failure, because
+"not found" would be a confidently wrong answer.
 """
 
 from __future__ import annotations
@@ -220,58 +197,6 @@ class Scanner:
         if predicate.match is PredicateMatch.ROW_CONTAINS_ANY:
             return any(t in haystack for t in terms)
         return all(t in haystack for t in terms)
-
-
-def column_span(obs: Observation, name: str, above: float) -> tuple[float, float] | None:
-    """Where the column headed `name` starts and ends, horizontally.
-
-    A column's boundaries are set by its *header row*, not by the width of any one
-    piece of text: the span runs from this header to the next one along. Matching a
-    cell to a header by overlapping their text boxes looks equivalent and is not —
-    measured on the transaction table, the header "Amount" renders left-aligned at
-    x=1223 and its values right-aligned at x=1336, inside one column spanning
-    1236..1415. The two never overlap, and every read of that column failed.
-
-    The first column starts at the left edge and the last ends at the right, so a
-    cell that begins fractionally outside its header still lands in it.
-    """
-    header = find_header(obs, name, above)
-    if header is None:
-        return None
-
-    from ..perception import ElementIndex
-
-    rows = ElementIndex(obs.elements).rows()
-    header_row = next((r for r in rows if any(e.id == header.id for e in r)), [header])
-    ordered = sorted(header_row, key=lambda e: e.bbox.x)
-    index = next(i for i, e in enumerate(ordered) if e.id == header.id)
-    start = ordered[index].bbox.x if index > 0 else 0.0
-    end = ordered[index + 1].bbox.x if index + 1 < len(ordered) else 1.0
-    return (start, end)
-
-
-def cell_in_column(row: Sequence[Element], span: tuple[float, float]) -> Element | None:
-    """The cell of `row` whose centre falls inside the column's span.
-
-    A table column is not a thing that exists in pixels any more than a row is —
-    it is the vertical band between one header and the next, and which cell is in
-    it is decided by where the cell sits, not by how wide its text happens to be.
-    """
-    start, end = span
-    inside = [c for c in row if start <= c.bbox.center.x < end]
-    return min(inside, key=lambda c: c.bbox.x) if inside else None
-
-
-def find_header(obs: Observation, name: str, above: float) -> Element | None:
-    """The column header with this text, nearest above the matched row."""
-    wanted = " ".join(name.casefold().split())
-    candidates = [
-        e
-        for e in obs.elements
-        if " ".join((e.text or e.name or "").casefold().split()) == wanted
-        and e.bbox.y + e.bbox.h <= above + 1e-6
-    ]
-    return max(candidates, key=lambda e: e.bbox.y) if candidates else None
 
 
 def _truncated(s: str) -> bool:

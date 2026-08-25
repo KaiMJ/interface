@@ -1,18 +1,10 @@
 """The capability artifact.
 
-This is the contract between the discovery run that wrote it and the AI agents
-that will invoke it in production. Three readers have to be served at once:
-
-  - a *calling agent*, which needs typed inputs, typed outputs, and a declared set
-    of legitimate business outcomes so it can branch on them;
-  - a *human reviewer*, who has to be able to approve it without watching a video;
-  - the *replay engine*, which must be able to execute it with no model present.
-
-Two shapes were rejected on purpose. A raw model transcript fails all three. A
-bare click track (`click(0.42, 0.71)`) fails the reviewer, fails risk
-classification — a coordinate cannot be judged reversible or not — and fails
-cross-tenant reuse, since rebranding moves every pixel. Every step therefore
-carries its semantic intent alongside its coordinate.
+The contract between the discovery run that wrote it and the agents that invoke it.
+Three readers at once: a *calling agent*, needing typed inputs, typed outputs and a
+declared set of business outcomes to branch on; a *human reviewer*, who must approve it
+without watching a video; and the *replay engine*, which executes it with no model
+present.
 """
 
 from __future__ import annotations
@@ -63,22 +55,19 @@ class Relation(str, Enum):
 class Target(Frozen):
     """How a step identifies the control it acts on.
 
-    Ordered from most to least portable. The resolver walks these in order (see
-    `cua.resolve.resolver`); the tier that succeeded is recorded on every step
-    result, which gives a free drift signal — anchor resolutions starting to fall
-    through to `bbox` is an early warning long before a hard failure.
+    Ordered from most to least portable, and the resolver walks these in order. The tier that
+    succeeded is recorded on every step result, which gives a free drift signal: anchors
+    starting to fall through to `bbox` are an early warning long before a hard failure.
 
-      1. anchor_text  visible text at/near the target. Survives rebranding and
-                      relayout. May contain `{{param}}`, which is what makes
-                      data-dependent targeting possible ("the row for member
-                      {{member_id}}").
+      1. anchor_text  visible text at/near the target. Survives rebranding and relayout, and
+                      may contain `{{param}}`, which is what makes data-dependent targeting
+                      possible ("the row for member {{member_id}}").
       2. role + name  semantic match against detected elements.
-      3. bbox         the recorded position. Correct until something above it on
-                      the page changes height. Using it logs a drift event.
+      3. bbox         the recorded position. Correct until something above it changes height;
+                      using it logs a drift event.
 
-    `intent` and `target_desc` are not decoration: `intent` is what the policy
-    layer classifies for risk, and `target_desc` is what the pre-click assertion
-    checks the resolved region actually says.
+    `intent` and `target_desc` are not decoration: policy classifies `intent` for risk, and
+    the pre-click assertion checks the resolved region actually says `target_desc`.
     """
 
     intent: str                                   # "click the Transfer button"
@@ -90,15 +79,22 @@ class Target(Frozen):
     name: str | None = None
     bbox: Bbox | None = None
 
-    # Resolve the anchor, then step to its neighbour. `right_of` is how a step
-    # types into the box beside "User ID" or reads the value beside "Available
-    # Balance" without either one having any text of its own to match.
+    # Resolve the anchor, then step to its neighbour: how a step types into the box
+    # beside "User ID" or reads the value beside "Available Balance", neither of
+    # which has text of its own to match.
     relation: Relation = Relation.SELF
     relation_index: int = 0               # nth neighbour in that direction
+    # For a value in a table, the header above it. Preferred over `relation_index`
+    # when both are recorded, because an index is a count of the cells that happened
+    # to be filled in on the row it was recorded from: a blank status, an extra
+    # column, or an anchor that matches one element here and two elsewhere all shift
+    # it silently onto the wrong cell. A header is what a person reads, and it does
+    # not move when the row's contents do.
+    column: Template | None = None
 
-    # Click point relative to the resolved box, 0..1. Defaults to its center.
-    # Lets a step target the "View" button at the right edge of a matched row.
-    # Bounded, because an offset outside the box is not a click on the box.
+    # Click point within the resolved box, 0..1, centre by default — how a step
+    # targets the "View" button at the right edge of a matched row. Bounded, because
+    # an offset outside the box is not a click on the box.
     offset: tuple[Unit, Unit] = (0.5, 0.5)
 
     normalize: tuple[Normalizer, ...] = (Normalizer.CASEFOLD, Normalizer.COLLAPSE_WS)
@@ -176,16 +172,14 @@ class OnError(str, Enum):
 class StepBase(Frozen):
     id: int
     risk: Risk = Risk.SAFE
-    # Which of the capability's declared screens this step expects to be looking
-    # at. Checked before the step acts, so a flow that has gone somewhere else
-    # fails with "we are on the sign-on screen, not the member profile" instead of
-    # "the target was not found" — a different sentence and a different fix.
+    # Which declared screen this step expects. Checked before it acts, so a flow
+    # that went elsewhere fails with "we are on the sign-on screen, not the member
+    # profile" rather than "the target was not found" — a different fix.
     screen: str | None = None
     # Verified after the action. This is the step's own success condition.
     checkpoint: Checkpoint | None = None
     on_error: OnError = OnError.HARD_FAIL
-    # Re-executions allowed when `on_error` is RETRY. Ignored otherwise: a budget
-    # without a policy is a field that reads as if it does something.
+    # Re-executions allowed when `on_error` is RETRY, ignored otherwise.
     retries: int = 0
     note: str | None = None               # reviewer-facing
 
@@ -237,8 +231,8 @@ class Scan(Frozen):
 
     advance: ScanAdvance = ScanAdvance.SCROLL
     anchor: Template | None = None        # for CLICK_ANCHOR, e.g. "Next"
-    # Never advance a full region height: a row straddling the boundary would be
-    # skipped and reported as a false not-found.
+    # Never a full region height: a row straddling the boundary would be skipped and
+    # reported as a false not-found.
     overlap: Unit = 0.15
     max_advances: int = 10
 
@@ -271,8 +265,8 @@ class FindAndActStep(StepBase):
 
     kind: Literal["find_and_act"] = "find_and_act"
 
-    # Where to look. Located by anchor text (a column-header row), not a fixed box,
-    # so a banner appearing above the table does not invalidate the scope.
+    # Located by anchor text (a column-header row), not a fixed box, so a banner
+    # above the table does not invalidate the scope.
     scope: Target
     scope_extent: ScopeExtent = ScopeExtent.BELOW
 
@@ -282,20 +276,18 @@ class FindAndActStep(StepBase):
     on_found_action: Primitive = Primitive.CLICK
     on_found_offset: tuple[Unit, Unit] = (0.5, 0.5)
     on_found_extract_as: str | None = None
-    # Which cell of the matched row to read, named by its column header. A row is
-    # not a value: a caller asking for an amount wants a number, and returning
-    # "08/10/2026 08/11/2026 PACIFIC WIRELESS Telecom ($441.56)" makes them parse
-    # a screen we already parsed. The column is located by its header text and the
-    # cell by horizontal overlap with it — the way a person reads a table.
+    # Which cell of the matched row to read, named by its column header. A row is not
+    # a value: returning "08/10/2026 PACIFIC WIRELESS Telecom ($441.56)" makes the
+    # caller parse a screen we already parsed. Located by header text and horizontal
+    # overlap — the way a person reads a table.
     on_found_extract_column: Template | None = None
     collect_all: bool = False             # "the last N transactions"
     limit: int | None = None
 
     # Exhausting the list without a match is a legitimate answer, so it maps to a
-    # declared business outcome rather than to a failure. Hitting max_advances
-    # while content was still changing is NOT the same thing and is a hard failure:
-    # we cannot tell absence from quitting early, and conflating those is the
-    # mistake the brief names outright.
+    # business outcome. Hitting max_advances while content was still moving is a hard
+    # failure: absence and quitting early are not the same, and conflating them is
+    # the mistake the brief names.
     on_not_found_outcome: str | None = None
     on_multiple: MultiplePolicy = MultiplePolicy.ESCALATE
 
@@ -323,9 +315,8 @@ class InputSpec(Frozen):
     description: str = ""
     example: str | None = None
     constraints: Constraints | None = None
-    # Marks a value that must never be logged, screenshotted into evidence
-    # unredacted, or included in an LLM prompt. Its value is supplied at execution
-    # time and substituted below the serialization boundary.
+    # Never logged, never written unredacted to evidence, never in a prompt.
+    # Supplied at execution time, substituted below the serialization boundary.
     sensitive: bool = False
 
 
@@ -333,52 +324,35 @@ class OutputSpec(Frozen):
     name: str
     type: ValueType
     description: str = ""
-    # Which step produced it. Outputs are declared, not "whatever the model
-    # happened to read" — the caller's contract must be stable across runs.
+    # Which step produced it. Declared, not "whatever the model happened to read" —
+    # the caller's contract has to be stable across runs.
     from_step: int
     normalize: tuple[Normalizer, ...] = (Normalizer.COLLAPSE_WS,)
     required: bool = True
-    # The same class the inputs use, pointed the other way. A checkpoint proves we
-    # are on the right screen; it says nothing about whether the characters read
-    # out of it are a number this capability may return. Under vision that is the
-    # gap that matters: a misread digit produces a value that is type-valid,
-    # passes every assertion, and is wrong — `18204.55` read as `1820455` is a
-    # balance a downstream agent will happily quote to a member. A declared range
-    # or format turns that from an answer into `OUTPUT_REJECTED`.
-    #
-    # Authored at review time rather than derived. The recording only ever saw one
-    # value, and a bound inferred from one observation would either be the value
-    # itself or a guess.
+    # The inputs' class, pointed the other way. A checkpoint proves we are on the
+    # right screen; it says nothing about whether what was read off it is a value
+    # this capability may return. `18204.55` misread as `1820455` is type-valid,
+    # passes every assertion, and is a balance an agent will quote to a member.
+    # Authored at review time — the recording saw one value, so a derived bound
+    # would be that value or a guess.
     constraints: Constraints | None = None
 
 
 class BusinessOutcome(Frozen):
     """A legitimate alternative result, not a failure.
 
-    "No such member" is an answer the caller needs, and conflating it with a crash
-    is the most common design mistake in this problem. Declared per capability so
-    the calling agent knows the full set of shapes it may receive.
+    "No such member" is an answer the caller needs, and conflating it with a crash is the most
+    common design mistake in this problem. Declared per capability so the calling agent knows
+    the full set of shapes it may receive; detectors are evaluated before the success check at
+    each step, first match wins, and the run stops cleanly.
 
-    Detectors are evaluated before the success check at each step; first match wins
-    and the run stops cleanly.
-
-    **`detector` may be omitted, and then it is inherited from app policy by
-    name.** The two halves of an outcome belong to different owners and it took a
-    second capability on the same app to see it: *what the screen says* is a
-    property of the application — ten flows that search for a member meet the same
-    "no member matches" wording — while *whether this flow can return that answer*
-    is a property of the capability, and only the capability can say it. So the
-    app owns the detector and the capability owns the declaration.
-
-    Inheriting rather than copying is what makes teaching scale: `learn-outcome`
-    and `diagnose` write the detector once into `policies/<app>.yaml`, and every
-    capability that opts in gets it — including the ones recorded next year.
-    Copying it into each artifact would guarantee they drift, which is the same
-    argument that put recoveries in policy in the first place.
-
-    Opting in is still explicit rather than automatic. This list is the contract a
-    calling agent branches on, and a capability that advertises an outcome it
-    cannot actually reach is lying to its caller about the shapes it may receive.
+    **`detector` may be omitted, and is then inherited from app policy by name.** *What the
+    screen says* is a property of the application — every flow that searches for a member
+    meets the same "no member matches" wording — while *whether this flow can return that
+    answer* is a property of the capability. Inheriting rather than copying is what makes
+    teaching scale: `learn-outcome` and `diagnose` write the detector once into
+    `policies/<app>.yaml`. Opting in stays explicit, because a capability advertising an
+    outcome it cannot reach is lying to its caller about the shapes it may return.
     """
 
     name: str
@@ -395,20 +369,15 @@ class BusinessOutcome(Frozen):
 class Screen(Frozen):
     """A recognisable state of the application.
 
-    The smallest useful piece of a UI model, and the seam a fuller one would grow
-    from. Capabilities on the same application visit the same screens, so this is
-    where per-tenant differences want to attach: two institutions running the same
-    vendor product have the same screens with different branding, and overriding a
-    screen's signature is a smaller and safer change than re-recording every
-    artifact that passes through it.
+    The smallest useful piece of a UI model, and the seam a fuller one would grow from. Two
+    institutions running the same vendor product have the same screens with different
+    branding, so this is where per-tenant differences want to attach — overriding a screen's
+    signature is smaller and safer than re-recording every artifact that passes through it.
 
-    Declared and enforced: a step may name the screen it expects, and replay
-    asserts it before acting (`FailureKind.WRONG_SCREEN`, naming where it actually
-    is). Not yet *derived*: synthesis emits no screens, so a recorded capability
-    declares none and makes no claim about where it is. Deriving one from a single
-    run was tried and named the member profile after the member's branch — data,
-    not a screen. Separating the two needs two runs with different inputs, which
-    is `cua learn-screens`, listed as the next thing to build in REPORT §7.
+    Declared and enforced: a step may name the screen it expects and replay asserts it before
+    acting (`FailureKind.WRONG_SCREEN`). Not yet *derived* — deriving one from a single run
+    named the member profile after the member's branch, which is data rather than a screen,
+    and separating the two needs two runs with different inputs.
     """
 
     name: str
@@ -462,8 +431,8 @@ class Capability(BaseModel):
     app: AppRef
     inputs: list[InputSpec] = Field(default_factory=list)
     outputs: list[OutputSpec] = Field(default_factory=list)
-    # The states this flow passes through. Empty is legitimate: a capability that
-    # declares no screens simply makes no claim about where it is.
+    # Empty is legitimate: a capability declaring no screens makes no claim about
+    # where it is.
     screens: list[Screen] = Field(default_factory=list)
     steps: list[Step] = Field(default_factory=list)
 
@@ -512,9 +481,8 @@ class Capability(BaseModel):
                     f"input {spec.name!r} is constrained against undeclared input {other!r}"
                 )
 
-        # An output must name a step that exists and that actually extracts —
-        # a `from_step` pointing at a click yields nothing and the caller's
-        # contract silently loses a field.
+        # `from_step` pointing at a click yields nothing, and the caller's contract
+        # silently loses a field.
         for out in self.outputs:
             step = by_id.get(out.from_step)
             if step is None:
@@ -530,12 +498,10 @@ class Capability(BaseModel):
             if step.screen is not None and step.screen not in screens:
                 problems.append(f"step {step.id} expects undeclared screen {step.screen!r}")
 
-            # `risk: risky` is the artifact's declaration that the step is not
-            # reversible, and `on_error: retry` is a request to run it twice. A
-            # file that says both is asking for a duplicate transfer, and the
-            # cheapest place to refuse it is before it is ever loaded — the engine
-            # also refuses at run time, but by then the artifact has been reviewed
-            # and approved with a contradiction in it.
+            # `risky` says the step is not reversible; `on_error: retry` asks to run
+            # it twice. A file saying both is asking for a duplicate transfer, and the
+            # cheapest place to refuse is before it loads — the engine refuses at run
+            # time too, but by then it has been reviewed and approved as it stands.
             if step.on_error is OnError.RETRY and step.risk is not Risk.SAFE:
                 problems.append(
                     f"step {step.id} is risky and declares on_error: retry; "
@@ -547,8 +513,7 @@ class Capability(BaseModel):
                     "(set `retries`)"
                 )
 
-        # Every {{placeholder}} anywhere in the artifact must name a declared
-        # input. An unknown one raises at render time, mid-run; here it is a
+        # An unknown {{placeholder}} raises at render time, mid-run. Here it is a
         # rejected file.
         for where, text in _templates(self):
             for name in _PLACEHOLDER.findall(text):

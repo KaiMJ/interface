@@ -1,17 +1,14 @@
 """The capability catalog.
 
-Files on disk: `artifacts/<capability_id>.v<n>.json`. No database. The catalog is
-read on every invocation and written once per discovery run; an index would be
-infrastructure in search of a problem at this size, and the brief is explicit that
-building scaling plumbing is not rewarded.
+Files on disk: `artifacts/<capability_id>.v<n>.json`. No database — read once per
+invocation, written once per discovery run, and an index would be infrastructure in
+search of a problem at this size.
 
-Filename versioning rather than an in-file-only version, because it means old
-versions are retained by construction and a diff between v2 and v3 is `git diff`
-rather than a feature we have to build.
+Filename versioning rather than in-file only, so old versions are retained by
+construction and a v2/v3 diff is `git diff` rather than a feature.
 
-This module is also the natural home for the stretch-goal capability interface:
-`list()` plus `Capability.inputs`/`outputs` is already a tool catalog an agent
-could discover and call by name.
+Also the natural home for the stretch-goal capability interface: `list()` plus
+`Capability.inputs`/`outputs` is already a tool catalog an agent can call by name.
 """
 
 from __future__ import annotations

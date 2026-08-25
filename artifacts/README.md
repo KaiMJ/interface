@@ -4,7 +4,7 @@ Saved capabilities. Written by discovery, read by replay, reviewed by a human.
 
 This directory is **generated**. Nothing here is hand-authored — a capability is
 what a discovery run learned, serialized. Hand-written stand-ins used by the smoke
-scripts live in [`backend/fixtures/`](../backend/fixtures/) and are prefixed
+scripts live in [`backend/scripts/smoke_capabilities/`](../backend/scripts/smoke_capabilities/) and are prefixed
 `fix_` so they stay distinct from anything the catalog holds.
 
 ```

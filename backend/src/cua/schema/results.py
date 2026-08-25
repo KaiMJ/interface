@@ -1,19 +1,12 @@
 """What a run returns.
 
-The result contract carries the error taxonomy, and the taxonomy is the point.
-Four terminal classes, never conflated:
+The result contract carries the error taxonomy, and the taxonomy is the point. Four
+terminal classes, never conflated:
 
   SUCCESS           checkpoint passed, declared outputs extracted
-  BUSINESS_OUTCOME  a legitimate answer the caller must branch on ("no such member")
+  BUSINESS_OUTCOME  a legitimate answer the caller branches on ("no such member")
   ESCALATED         stopped and handed to a human; may resume
-  FAILURE           something we do not understand — stop, keep evidence, surface it
-
-Plus RUNNING, which is not a result — it is what a partially-written run reads as
-while it is still going.
-
-Unknown states are hard failures by design. Under a vision-first perception model
-we cannot enumerate every screen; guessing in a banking application is worse than
-stopping.
+  FAILURE           something we do not understand
 """
 
 from __future__ import annotations
@@ -28,9 +21,8 @@ from .elements import SettledBy
 
 
 class RunStatus(str, Enum):
-    # Written to `run.json` before the first step and replaced when the run ends,
-    # so a run being watched in the console reads as in-flight rather than as
-    # whatever the terminal default happened to be.
+    # Written before the first step and replaced when the run ends, so a run being
+    # watched reads as in-flight rather than as whatever the default was.
     RUNNING = "running"
     SUCCESS = "success"
     BUSINESS_OUTCOME = "business_outcome"
@@ -70,7 +62,7 @@ class ResolutionTier(str, Enum):
     ANCHOR_TEXT = "anchor_text"
     ROLE_NAME = "role_name"
     RECORDED_BBOX = "recorded_bbox"
-    VLM_GATED = "vlm_gated"       # off on the replay path; see REPORT §3
+    VLM_GATED = "vlm_gated"       # off on the replay path; see REPORT §1
     NONE = "none"
 
 
@@ -103,19 +95,16 @@ class Phases(Frozen):
 
 
 class PolicyDecision(Frozen):
-    """What the guardrail decided about this step, recorded whether or not it
-    refused.
+    """What the guardrail decided about this step, recorded whether or not it refused.
 
-    The policy object is consulted before every action on both paths, and until
-    now its verdict was only visible when it raised. A run whose evidence shows
-    the allowlist config but never its decisions cannot answer the question an
-    auditor actually asks — not "what was this agent permitted to do" but "what
-    was it permitted to do *here*". Recording the allow is the whole point: a
-    denial leaves a mark by stopping the run, an allow leaves none.
+    The policy object is consulted before every action on both paths, and a verdict visible
+    only when it raises cannot answer the question an auditor actually asks — not "what was
+    this agent permitted to do" but "what was it permitted to do *here*". Recording the allow
+    is the whole point: a denial leaves a mark by stopping the run, an allow leaves none.
 
-    `promoted_from` is the interesting field. Policy may raise a step's declared
-    `safe` to `risky` from its intent, one-directionally, and that promotion is
-    the backstop against a mislabelled recording — invisible unless recorded.
+    `promoted_from` is the interesting field, since policy may raise a declared `safe` to
+    `risky` from its intent — the backstop against a mislabelled recording, invisible unless
+    recorded.
     """
 
     action: str                            # the primitive that was checked
@@ -172,11 +161,23 @@ class ModelTurn(Frozen):
     """
 
     call: str                              # the tool name: click | type | finish | escalate | ...
-    # What the model said alongside the call, and the call's arguments verbatim.
-    # `intent` below is the model's gloss on itself, written for the artifact;
-    # these two are what it actually emitted, which is what you want when the
-    # gloss and the behaviour disagree.
+    # What it said alongside the call, and the arguments verbatim. `intent` below is
+    # its gloss on itself; these are what it emitted, which is what you want when
+    # the two disagree.
     text: str = ""
+    # The chain of thought behind the call. Separate from `text` because they come
+    # from different places and only one of them is usually populated: a forced tool
+    # call leaves `content` empty, so a reasoning model's entire deliberation is here
+    # or nowhere. Recorded rather than streamed, so the console and the audit trail
+    # read the same bytes.
+    reasoning: str = ""
+    # What the model was shown to produce this call: the goal, the declared inputs,
+    # the candidate list off this frame, and the run's history so far. Recorded
+    # because "why did it click there" is not answerable from the answer alone —
+    # a mark chosen from a list that never contained the right element is a
+    # perception failure wearing a decision's clothes. The system prompt is
+    # identical every step and is written once per run instead.
+    prompt: str = ""
     arguments: dict[str, Any] = Field(default_factory=dict)
     intent: str = ""
     expect: str | None = None
@@ -185,6 +186,11 @@ class ModelTurn(Frozen):
     element_label: str | None = None       # …and what it said, measured not claimed
     anchor_proposed: str | None = None     # the model's own answer for a durable anchor
     anchor_recorded: str | None = None     # what survived falsification
+    # The same pair for the expectation. `expect` above is what the model proposed;
+    # this is what became a checkpoint, and None here beside a value there is a
+    # refutation — an assertion that held on this screen and would not have held on
+    # the next member's.
+    expect_recorded: str | None = None
     candidates_shown: int = 0
     candidates_truncated: int = 0
     latency_ms: int = 0
@@ -193,19 +199,15 @@ class ModelTurn(Frozen):
 
 
 class Evidence(Frozen):
-    """Pointers, not payloads. Keeps results small and keeps large binaries out of
-    anything that might get logged or sent to a model.
+    """Pointers, not payloads — keeping results small and large binaries out of anything
+    that might get logged or sent to a model.
 
-    Two frames per step, and conflating them is a real bug rather than an
-    aesthetic one. `screenshot` is the screen the step *acted on* — the one its
-    target was resolved against, and therefore the only frame on which the
-    resolved region means anything. `after` is what the action produced, which is
-    what a checkpoint was evaluated against.
-
-    Storing only the second (which is what happened when the post-action
-    observation overwrote the pre-action one) draws a step's target box onto a
-    screen that never contained the target, and makes consecutive steps
-    byte-identical — because one step's after-state is the next step's
+    Two frames per step, and conflating them is a real bug rather than an aesthetic one.
+    `screenshot` is the screen the step *acted on*, the one its target was resolved against
+    and therefore the only frame on which the resolved region means anything; `after` is what
+    the action produced, which is what the checkpoint was evaluated against. Storing only the
+    second draws a step's target box onto a screen that never contained the target, and makes
+    consecutive steps byte-identical, since one step's after-state is the next step's
     acted-on state.
     """
 
@@ -222,28 +224,25 @@ class StepResult(BaseModel):
     intent: str = ""
     status: StepStatus
     resolution: ResolutionTier = ResolutionTier.NONE
-    # How the frame this step was verified against was judged stable. Free drift
-    # signal, same as `resolution`: a capability that starts settling by text on
-    # every step is running against a surface that has begun to animate.
+    # A free drift signal, like `resolution`: a capability that starts settling by
+    # text on every step is running against a surface that has begun to animate.
     settled_by: SettledBy = SettledBy.UNSET
     duration_ms: int = 0
-    # How many times the step was executed. 1 on the ordinary path. Anything above
-    # it means either the artifact declared `on_error: retry` or a declared
-    # recovery cleared and the checkpoint still had not held — and in both cases
-    # the step was safe, because a risky step is never re-executed. Worth its own
-    # field rather than being buried in `note`: a capability whose replays start
-    # reporting two attempts is degrading before it is failing.
+    # 1 on the ordinary path. Above it means `on_error: retry` or a recovery that
+    # cleared while the checkpoint still did not hold — and in both cases the step
+    # was safe, because a risky one is never re-executed. Its own field rather than
+    # buried in `note`: two attempts is degrading before it is failing.
     attempts: int = 1
-    # On a checkpoint failure these two fields are the whole debugging story:
-    # what we asserted, and what the screen actually said.
+    # On a checkpoint failure, the whole debugging story: what we asserted, and
+    # what the screen said.
     expected: str | None = None
     observed: str | None = None
     recovery_applied: str | None = None
     # Anything the engine did that the artifact does not say: an interstitial
     # cleared before acting, a URL rebased onto this deployment, a retry and why.
     note: str | None = None
-    # Why this step was allowed to happen, how its target was found, and — on
-    # discovery — what the model was shown and chose. All three are decisions the
+    # Why the step was allowed, how its target was found, and — on discovery — what
+    # the model was shown and chose. All three are decisions the
     # system already made and used to throw away; keeping them is what turns the
     # console from a viewer of outcomes into something an operator can debug a
     # step with.

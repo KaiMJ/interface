@@ -1,17 +1,13 @@
 """Composition root.
 
-The only module that knows how the pieces fit together. Everything else takes its
-collaborators as constructor arguments, which is what makes the seams testable
-rather than merely described.
-
-Two builders, and the difference between them is the point:
+The only module that knows how the pieces fit. Everything else takes its collaborators
+as constructor arguments, which is what makes the seams testable rather than described.
 
     build_discovery()   real LLM client, resolver with allow_vlm=True
     build_replay()      NoLLM,           resolver with allow_vlm=False
 
-The replay engine is not *asked* to avoid the model. It is handed collaborators
-that raise if it tries. Determinism is a construction-time property, and a test
-can assert it by checking `llm.calls == 0` after a replay.
+Replay is not *asked* to avoid the model; it is handed collaborators that raise if it
+tries. A test asserts `llm.calls == 0`.
 """
 
 from __future__ import annotations
@@ -164,16 +160,12 @@ def build_replay(
 ) -> ReplayEngine:
     """Replay, built so it *cannot* consult a model.
 
-    The resolver is constructed without the VLM tier and no LLM client is passed
-    in at all. A test can assert determinism by construction rather than by
-    reading the code for the absence of a call.
-
-    `require_approved` is the unattended gate, and it is a constructor argument
-    rather than a call-site flag for the same reason `allow_vlm` is: which engine
-    you were handed decides what you may run. An operator driving the console or
-    the CLI is a reviewer at work and may replay a draft; the agent-facing
-    `/capabilities/{id}/invoke` may not, because a draft is a recording nobody has
-    signed off and the caller on that path is a machine.
+    The resolver is constructed without the VLM tier and no LLM client is passed in at all, so
+    a test can assert determinism by construction rather than by reading the code for the
+    absence of a call. `require_approved` is a constructor argument for the same reason
+    `allow_vlm` is: which engine you were handed decides what you may run. An operator at the
+    console or CLI is a reviewer at work and may replay a draft; the agent-facing invoke route
+    may not, because the caller on that path is a machine.
     """
     control = REGISTRY.create(run_id)
     session.control = control

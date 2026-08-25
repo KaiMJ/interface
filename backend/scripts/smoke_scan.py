@@ -38,7 +38,7 @@ from cua.schema import Capability, MultiplePolicy, RunStatus
 # CUA_TARGET_BASE_URL override. One answer, the same one every command uses.
 BASE_URL = entry_url(settings(), build_policy(settings()))
 
-FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
+CAPABILITIES = Path(__file__).resolve().parent / "smoke_capabilities"
 
 failures: list[str] = []
 
@@ -57,7 +57,7 @@ def bad(msg: str) -> None:
 
 
 def capability(base_url: str) -> Capability:
-    text = (FIXTURES / "find_transaction.json").read_text().replace(
+    text = (CAPABILITIES / "find_transaction.json").read_text().replace(
         "http://targetapp:8080", base_url
     )
     return Capability.model_validate_json(text)

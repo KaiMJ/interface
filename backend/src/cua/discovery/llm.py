@@ -1,24 +1,8 @@
 """LLM client, via LiteLLM.
 
-Thin on purpose. Two real jobs:
-
-  1. Keep the surface the loop depends on down to two methods, so the model is a
-     swappable component rather than an architectural commitment. LiteLLM gives
-     one call signature across xAI, Anthropic, OpenAI and a local endpoint, which
-     means "which model drives a UI best" stays an empirical question answered by
-     changing `CUA_MODEL` — not something baked into the agent loop.
-
-  2. Be the one place a model call can be counted. `LLMClient.calls` is what the
-     replay tests assert is zero. "Deterministic replay" is a claim; this is how it
-     becomes checkable rather than aspirational.
-
-Requirements on whatever model is configured: vision (the loop's entire input is a
-screenshot) and tool calling (its entire output is one structured action). A model
-missing either fails on the first turn, which is why `preflight()` exists.
-
-Credentials are never held on this object. LiteLLM reads the provider's env var
-directly — an API key that lives in a Python attribute is one that can end up in a
-traceback, a settings dump, or a serialized run record.
+Thin on purpose: two methods, so the model stays swappable rather than an architectural
+commitment, and "which model drives a UI best" stays an empirical question answered by
+changing `CUA_MODEL`.
 """
 
 from __future__ import annotations
@@ -35,6 +19,11 @@ class ToolCall:
     name: str
     input: dict[str, Any]
     text: str = ""          # the model's stated reasoning; recorded as step intent
+    # The chain of thought, when the model emits one. Distinct from `text`: with
+    # `tool_choice="required"` a reasoning model puts nothing in `content` and
+    # everything here, so reading only `text` records an empty string and the
+    # console shows a run that appears to have decided nothing.
+    reasoning: str = ""
     raw_id: str | None = None
 
 
@@ -126,6 +115,7 @@ class LLMClient:
                     name=call.function.name,
                     input=_json(call.function.arguments),
                     text=(choice.content or "").strip(),
+                    reasoning=_reasoning(choice),
                     raw_id=getattr(call, "id", None),
                 )
             # Prose instead of a tool call. Say so and try once more rather than
@@ -199,6 +189,28 @@ class LLMClient:
 
 class ModelUnusable(RuntimeError):
     """The configured model cannot do what discovery requires."""
+
+
+def _reasoning(choice: Any) -> str:
+    """The model's chain of thought, from wherever the provider put it.
+
+    Two shapes in the wild and no way to know which a given model uses: a flat
+    `reasoning_content` string, or `thinking_blocks` carrying the same thing in
+    parts. Both are read and the first that yields text wins, because the
+    alternative is a per-model branch in the one file that exists to keep models
+    interchangeable. Redacted blocks carry no readable text and are skipped: the
+    turn is still recorded, it just has nothing to show for its thinking.
+    """
+    flat = str(getattr(choice, "reasoning_content", "") or "").strip()
+    if flat:
+        return flat
+    blocks = getattr(choice, "thinking_blocks", None) or ()
+    parts = [
+        str(b.get("thinking", "")).strip()
+        for b in blocks
+        if isinstance(b, dict) and b.get("type") == "thinking"
+    ]
+    return "\n\n".join(p for p in parts if p)
 
 
 def _json(arguments: Any) -> dict[str, Any]:

@@ -1,18 +1,9 @@
 """`{{param}}` substitution.
 
-The one place a caller's inputs enter a recorded string. Anchors, checkpoint
-values and predicate terms are all templates, which is what makes a recording of
-"the row for member 12345" replayable as "the row for member 90001" without the
-model.
-
-Two rules, both deliberate:
-
-  - An unknown placeholder raises. Rendering `{{member_id}}` to the empty string
-    would turn "find the row containing 12345" into "find the row containing
-    nothing", which matches the first row on the page. A missing parameter is a
-    caller error and has to surface as one.
-  - Substituted values are never re-scanned for placeholders. A member's name
-    containing `{{` is data, not a template.
+The one place a caller's inputs enter a recorded string, which is what makes "the row for
+member 12345" replayable as "the row for member 90001" with no model. An unknown
+placeholder raises: rendering it to the empty string turns "find the row containing
+12345" into "find the row containing nothing".
 """
 
 from __future__ import annotations
@@ -53,28 +44,16 @@ def render(template: str | None, params: dict[str, Any] | None = None) -> str | 
 def unrender(text: str | None, params: dict[str, Any] | None = None) -> str | None:
     """The inverse of `render`: replace known values with their placeholders.
 
-    This is how a recording becomes reusable — "No member record found for ID
-    99999" is a fact about one run, and "... for ID {{member_id}}" is a fact about
-    the capability.
+    This is how a recording becomes reusable — "No member record found for ID 99999" is a fact
+    about one run, and "... for ID {{member_id}}" is a fact about the capability. Two rules
+    keep it from parameterizing what the caller never meant: **longest value first**, so an
+    input of `123` does not eat the leading digits of a recorded `12345`; and **only at token
+    boundaries**, since a bare `str.replace` turns the account number `9912345` into
+    `99{{member_id}}` and the artifact then navigates somewhere that exists for nobody.
 
-    Two rules keep it from parameterizing things the caller never meant:
-
-      - **Longest value first**, so an input of `123` does not eat the leading
-        digits of a recorded `12345` belonging to a different input.
-      - **Only at token boundaries.** A bare `str.replace` turns the account
-        number `9912345` into `99{{member_id}}` when the member id happens to be
-        `12345`, and the artifact then navigates somewhere that does not exist for
-        any other member. The boundary is alphanumeric-or-underscore on either
-        side, so `12345` still substitutes inside `ID 12345.` and `#12345` — the
-        punctuation an application puts around a value — and not inside a longer
-        run of digits or a word.
-
-    What this deliberately does not attempt is deciding whether a *correctly*
-    bounded match was meant. If a member id and a branch code are both `12345` on
-    the recording run, both become `{{member_id}}` and only a second run with
-    different inputs could tell them apart — the same limit `learn-outcome` works
-    around by comparing two runs, and the reason synthesis parameterizes by exact
-    match against *declared* inputs rather than guessing which numbers are ids.
+    What it does not attempt is deciding whether a correctly bounded match was *meant*: if a
+    member id and a branch code are both `12345` on the recording run, only a second run with
+    different inputs could tell them apart.
     """
     if text is None:
         return None

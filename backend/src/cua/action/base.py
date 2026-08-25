@@ -1,25 +1,10 @@
 """The action seam.
 
-Symmetric with perception: one narrow protocol, one set of primitives, no
-knowledge of what is on the other side. Everything above this layer speaks in
-normalized display coordinates.
-
-The primitive list is identical to `schema.Primitive` — the discovery agent's
-action space, the artifact's step vocabulary, and the driver's capabilities are
-the same set by construction. Anything the agent can do, an artifact can record;
-anything an artifact records, replay can execute.
-
-Why these are coroutines
-------------------------
-The runners are async because escalation parks a run on an event and waits, and
-because the control plane must keep answering the operator's console while a run
-sits parked. Playwright's sync API refuses to run inside a live event loop, so a
-synchronous driver would force the whole run onto a worker thread and the handoff
-into thread-safe signalling for no gain.
-
-Perception, by contrast, stays synchronous: it is CPU-bound work (OCR, a YOLO
-forward pass), and the engine hands it to a thread rather than pretending it is
-IO. Async where we wait, threads where we compute.
+One narrow protocol, symmetric with perception, speaking normalized display
+coordinates. The primitive list is identical to `schema.Primitive`: the agent's action
+space, the artifact's step vocabulary and the driver's capabilities are one set by
+construction. Async because escalation parks a run on an event, and the control plane
+must keep answering while it sits parked.
 """
 
 from __future__ import annotations

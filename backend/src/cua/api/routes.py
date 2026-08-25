@@ -40,9 +40,9 @@ class DiscoverRequest(BaseModel):
     # Which application to drive; selects its policy file. Defaults to the
     # deployment's configured app.
     app: str | None = None
-    # Concrete values for this run. Also the parameter declaration: any recorded
-    # literal matching one of these becomes a placeholder at synthesis time, which
-    # is how "who decided 12345 was a parameter?" gets a deterministic answer.
+    # Also the parameter declaration: any recorded literal matching one of these
+    # becomes a placeholder at synthesis. How "who decided 12345 was a parameter?"
+    # gets a deterministic answer.
     inputs: dict[str, Any] = {}
     capability_id: str | None = None
 
@@ -132,9 +132,8 @@ async def health(request: Request) -> dict[str, Any]:
     rt = _rt(request)
     return {
         "status": "ok",
-        # The run holding the display, and separately whether anything is. Arming
-        # a fault holds it too and is not a run; the console greys its buttons on
-        # the second and follows only the first.
+        # The run holding the display, and separately whether anything is: arming a
+        # fault holds it too and is not a run.
         "active_run": rt.active_run if rt.active_is_run else None,
         "session_busy": rt.active_run is not None,
         "default_app": rt.settings.default_app,
@@ -243,20 +242,18 @@ async def capability_history(
             "statuses": statuses,
             "resolution_tiers": tiers,
             "settled_by": settled,
-            # Not a quality score. It is the share of runs that ended on the path
-            # the capability was recorded for — a business outcome is a correct
-            # answer and deliberately does not count against it.
+            # Not a quality score: the share of runs that ended on the path the
+            # capability was recorded for. A business outcome is a correct answer and
+            # does not count against it.
             "success_rate": (statuses.get("success", 0) / total) if total else None,
             "median_duration_ms": _median(durations),
-            # What the runs actually spent their time on. Perception dominates by
-            # roughly two orders of magnitude over everything else the engine
-            # does, so "how much of this capability is OCR" is the only
-            # performance question worth putting on a dashboard.
+            # Perception dominates everything else by two orders of magnitude, so
+            # "how much of this capability is OCR" is the only performance question
+            # worth a dashboard.
             "observe_share": (observe_ms / step_ms) if step_ms else None,
             "observations_per_step": (observations / step_count) if step_count else None,
             # The reading that matters: portable resolutions decaying into the
-            # recorded box. Reported as a share so it is comparable across runs of
-            # different lengths.
+            # recorded box, as a share so runs of different lengths compare.
             "drift_share": (
                 tiers.get("recorded_bbox", 0) / sum(tiers.values()) if tiers else None
             ),
@@ -283,10 +280,9 @@ async def invoke(request: Request, capability_id: str, req: InvokeRequest) -> Re
         raise HTTPException(status_code=404, detail=str(e)) from e
 
     if cap.status is not Status.APPROVED:
-        # Refused here as well as in the engine, and the duplication is the point:
-        # this one gives the caller a clean 403 without opening a run directory for
-        # something that never touched the application, and the engine's is the one
-        # that cannot be bypassed by a future call site.
+        # Refused here *and* in the engine: this gives a clean 403 without opening a
+        # run directory for something that never touched the app, and the engine's is
+        # the one a future call site cannot bypass.
         raise HTTPException(
             status_code=403,
             detail=f"{cap.ref} is {cap.status.value}; unattended invocation needs approval",
@@ -297,10 +293,9 @@ async def invoke(request: Request, capability_id: str, req: InvokeRequest) -> Re
     # cannot execute an artifact under some other app's guardrails.
     _begin(rt, run_id)
     try:
-        # The one path that refuses a draft. Everywhere else a human is driving and
-        # replaying an unapproved recording is how it gets reviewed; here the
-        # caller is an agent, and an agent able to invoke a recording nobody has
-        # signed off is running unapproved automation against member accounts.
+        # The one path that refuses a draft. Elsewhere a human is driving and
+        # replaying an unapproved recording is how it gets reviewed; here the caller
+        # is an agent, and nobody is watching.
         result = await _replay(rt, run_id, cap, req.inputs, require_approved=True)
     finally:
         rt.end(run_id)
@@ -357,11 +352,9 @@ async def _discover(rt: Any, run_id: str, req: DiscoverRequest) -> DiscoveryResu
     )
 
     if result.status is RunStatus.SUCCESS:
-        # The loop has written its own terminal result by now, and the run is not
-        # actually finished: synthesis still has to turn the recording into an
-        # artifact, which takes a model call of its own. Without this the console
-        # shows `success` with no capability for several seconds and then grows
-        # one — a run that reports done before its deliverable exists.
+        # The loop has written its terminal result, but synthesis still has to turn
+        # the recording into an artifact. Without this the console shows `success`
+        # with no capability for several seconds — done before the deliverable exists.
         loop.evidence.result(
             result.model_copy(
                 update={
@@ -383,11 +376,9 @@ async def _discover(rt: Any, run_id: str, req: DiscoverRequest) -> DiscoveryResu
             loop.evidence.capability(cap)
             result.capability_ref = cap.ref
         except Exception as e:  # noqa: BLE001 - the run must still report
-            # The flow was driven successfully and only the contract could not be
-            # written. Reporting that as a successful discovery would leave a run
-            # claiming a capability nobody can call; reporting it as a failed run
-            # would deny that the model reached the goal. It is a failure of this
-            # run to produce its deliverable, and it says which part.
+            # The flow was driven and only the contract could not be written.
+            # `success` would claim a capability nobody can call; a failed run would
+            # deny the model reached the goal. This says which part failed.
             result.status = RunStatus.FAILURE
             result.failure = FailureDetail(
                 kind=FailureKind.INTERNAL,
@@ -503,12 +494,11 @@ async def get_run(request: Request, run_id: str) -> dict[str, Any]:
     rt = _rt(request)
     result = rt.runs.get(run_id)
     if result is None:
-        # Not in memory does not mean it never happened: evidence outlives the
-        # process, and a reviewer asking about yesterday's run should get it.
+        # Evidence outlives the process, and yesterday's run is still a fair ask.
         path = Path(rt.settings.evidence_dir) / run_id / "run.json"
         if not path.exists():
-            # …and not on disk either does not mean it does not exist: a run
-            # accepted a second ago is still starting a browser.
+            # …and not on disk either: a run accepted a second ago is still
+            # starting a browser.
             starting = rt.pending.get(run_id)
             if starting is None:
                 raise HTTPException(status_code=404, detail=f"no run {run_id}")
@@ -655,11 +645,13 @@ async def run_events(request: Request, run_id: str) -> Any:
     root = Path(_rt(request).settings.evidence_dir) / run_id
     steps = root / "steps.jsonl"
     run = root / "run.json"
+    thinking = root / "thinking.json"
 
     async def stream() -> Any:
         seen = 0
         idle = 0
         stamp = 0.0
+        thought = 0.0
         while idle < 600:  # ~5 minutes of silence ends the stream
             if await request.is_disconnected():
                 return
@@ -682,6 +674,19 @@ async def run_events(request: Request, run_id: str) -> Any:
                     stamp = changed
                     idle = 0
                     yield {"event": "run", "data": run.read_text()}
+            except (OSError, ValueError):
+                pass
+
+            # Which step the run is waiting on the model for. Not part of the
+            # audit trail — it describes work that has not happened yet — but read
+            # from a file like everything else, so no in-process bus appears here
+            # for one event. The console discards it once that step lands.
+            try:
+                pondered = thinking.stat().st_mtime
+                if pondered != thought:
+                    thought = pondered
+                    idle = 0
+                    yield {"event": "thinking", "data": thinking.read_text()}
             except (OSError, ValueError):
                 pass
 

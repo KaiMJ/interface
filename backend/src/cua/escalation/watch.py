@@ -1,28 +1,9 @@
 """Recording what the human did.
 
-§3.6 requires capturing the operator's actions, and this is the part that a
-headful-Playwright design cannot do: Playwright observes the events it issues, and
-a manual click is not one of them. Instrumenting the page with JS listeners would
-half-work — it would miss anything outside the page, it breaks on a surface with
-no DOM, and it puts the audit trail inside the thing being audited.
-
-Capturing at the X layer instead means the same code records a human operating a
-browser and a human operating a desktop application, and there is no hole in the
-audit trail exactly where a person touched regulated data.
-
-Implementation: an XRecord tap on the display for the duration of the
-intervention, emitting `HumanAction` records. Typed text is captured as a keystroke
-*count* and never as content — the operator may be entering a credential, and an
-audit log that records what someone typed into a password field is a worse
-liability than one that does not.
-
-Also captures a screenshot at handoff and at handback, so the run's evidence shows
-what the operator was given and what they left behind.
-
-XRecord needs two connections to the display: one blocks inside
-`record_enable_context` for the life of the tap, and the other is what can tell it
-to stop. That is not a quirk to work around — it is how the extension is meant to
-be used, and it is why the tap runs on its own thread.
+The part a headful-Playwright design cannot do: Playwright observes the events it
+issues, and a manual click is not one of them. Capturing at the X layer means the same
+code records a human operating a browser and a human operating a desktop app. Typed text
+is counted, never stored — the operator may be entering a credential.
 """
 
 from __future__ import annotations
@@ -66,7 +47,13 @@ class HumanActionWatcher:
             self.unavailable = f"XRecord unavailable: {e}"
             return
 
-        self._display = xdisplay.Display(self.display)
+        try:
+            self._display = xdisplay.Display(self.display)
+        except Exception as e:
+            # No X on this host — a headless deployment, or an ssh session. The
+            # handoff still happens; routes.py records this string in its place.
+            self.unavailable = f"no display {self.display}: {e}"
+            return
         if not self._display.has_extension("RECORD"):
             self.unavailable = "the X server has no RECORD extension"
             return

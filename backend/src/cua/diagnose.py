@@ -1,50 +1,12 @@
 """Diagnosing a run that stopped on a screen nobody had declared.
 
-The long tail of enterprise screens cannot be enumerated in advance. A capability
-declares the outcomes it can detect, an application declares the conditions it
-knows how to survive, and everything else arrives as `FAILURE` — which is the
-right answer (§3.3: guessing in a banking application is worse than stopping) and
-an expensive one, because every unforeseen screen costs an operator.
-
-What decides whether this system is usable at scale is not how few unknown screens
-there are. It is whether an unknown screen costs an escalation **once** or **every
-time**. This is the once.
-
-    a run fails ──► cua diagnose <run_id> ──► a typed proposal ──► a human
-                                                                  applies it
-                                                                     │
-                              policies/<app>.yaml ◄──────────────────┘
-                                     │
-                     every capability on that application, at every
-                     institution running it, now has an answer for it
-
-Three rules make it safe to point a model at this, and they are the whole design:
-
-**Healing is a proposal, never a repair.** This runs *after* the run is terminal,
-over evidence on disk, with no session open. Replay is untouched — it still
-constructs no model client and still stops rather than improvising. What the model
-produces is a patch a person reads and applies, gated by the same review that
-gates a recorded capability. A system that let a model edit its own guardrails
-mid-run would have no guardrails.
-
-**The detector is chosen, not written.** The model is shown the lines that were
-actually on the failing screen, numbered, and returns *an index*. It cannot
-propose a phrase the screen does not contain, because it never emits a phrase —
-which turns "the model might hallucinate a detector" from a risk to be mitigated
-into a sentence that cannot be expressed. Everything downstream verifies against
-the same list.
-
-**Then it is falsified.** A line that also appears in a successful run of the same
-capability discriminates nothing — it is chrome, and a detector built on it would
-report every success as that outcome. This is the rule `learn-outcome` already
-uses, applied to a proposal instead of to a demonstration, and it is why the two
-share `catalog.learn`'s comparison helpers rather than growing a second copy.
-
-What this deliberately does not do is propose an *action*. A recovery's handler
-comes from a human: the model may say "this looks like an interstitial and here is
-the line that identifies it", never "click at 0.55, 0.5". And a condition on a
-step that mutates is never proposed as a recovery, whatever the model thinks it
-is — see `_downgrade`.
+Undeclared screens arrive as `FAILURE` — the right answer, since guessing in a banking
+application is worse than stopping, and an expensive one. What decides whether that
+scales is not how few unknown screens there are but whether one costs an escalation
+**once** or **every time**; this is the once. The model picks a line by *index* rather
+than phrasing a detector, the choice is falsified against successful runs of the same
+capability, and the output is YAML for a person to apply — a model that could rewrite a
+guardrail is not a guardrail.
 """
 
 from __future__ import annotations
@@ -56,9 +18,8 @@ from typing import Any
 
 from .catalog.learn import all_lines, final_lines, normalized_line
 
-# What a diagnosis may conclude. Each maps to a different place the answer goes,
-# which is the test of whether the taxonomy is real — a classification that
-# produced the same patch as another one would be the same classification.
+# Each maps to a different place the answer goes — the test of whether the taxonomy
+# is real. Two that produced the same patch would be one classification.
 CLASSIFICATIONS = {
     "business_outcome": "a legitimate alternative answer the caller should branch on",
     "recoverable": "an interstitial or transient state the automation could clear itself",
@@ -68,9 +29,8 @@ CLASSIFICATIONS = {
     "our_bug": "nothing is wrong with the application; the failure is in this system",
 }
 
-# Where each one lands. `drift` and `our_bug` land nowhere: they are answers about
-# what to do next, not conditions to declare, and emitting a patch for them would
-# be inventing work.
+# `drift` and `our_bug` land nowhere: answers about what to do next, not conditions
+# to declare. A patch for them would be inventing work for a reviewer.
 _TARGET = {
     "business_outcome": "policy",      # detector shared by every flow on the app
     "recoverable": "policy",
@@ -133,13 +93,11 @@ class Diagnosis:
     name: str = ""
     description: str = ""
     detector: str = ""
-    # Where the patch belongs, or None when the classification is an answer about
-    # what to do rather than a condition to declare.
+    # None when the classification is an answer about what to do next.
     target: str | None = None
     patch: str = ""
-    # Why a proposal the model made was refused. Present *and* recorded, because a
-    # rejection is the more interesting half of the evidence: it is what shows the
-    # falsification actually runs.
+    # Recorded, not just returned: a rejection is the half of the evidence that
+    # shows the falsification runs.
     rejected: str | None = None
     lines_offered: int = 0
     model: str = ""
@@ -200,15 +158,9 @@ def load_run(evidence_dir: Path) -> RunEvidence:
 def reference_lines(evidence_root: Path, capability: str, exclude: str) -> list[str]:
     """Every line any *successful* run of the same capability has ever read.
 
-    The falsification side. Broad on purpose — a line has to be absent from all of
-    them to count as identifying, and `catalog.learn` records what happens when
-    this set is too narrow: comparing final frames alone taught the first attempt
-    that the search page's hint text meant "member not found", because the
-    successful run passed through that page on its way somewhere else.
-
-    An empty set is not a failure; it means nothing has succeeded here yet and the
-    proposal is correspondingly less checked. `Diagnosis.rejected` stays None and
-    the reviewer is the only filter, which is stated rather than hidden.
+    The falsification side, broad on purpose: a line must be absent from all of them
+    to count as identifying. An empty set means nothing has succeeded here yet, so
+    the proposal is correspondingly less checked and the reviewer is the only filter.
     """
     lines: list[str] = []
     for run in sorted(evidence_root.glob("*/run.json")):
@@ -228,12 +180,8 @@ def reference_lines(evidence_root: Path, capability: str, exclude: str) -> list[
 
 
 def prompt_for(run: RunEvidence, policy: Any) -> str:
-    """What the model is shown: the failure, the screen, and what is already known.
-
-    The declared conditions are included so it does not propose one the
-    application already handles — a duplicate detector is not harmless, it is a
-    second thing to keep in sync with the first.
-    """
+    """The failure, the screen, and what the app already handles — so it does not
+    propose a duplicate detector, which is a second thing to keep in sync."""
     known = [
         *(f"recovery: {r.name} — {r.detector_value!r}" for r in policy.recoveries),
         *(f"app error: {c.name} — {c.detector_value!r}" for c in policy.app_errors),
@@ -268,9 +216,8 @@ async def diagnose(
 ) -> Diagnosis:
     """One model call over one run's evidence, validated into a proposal.
 
-    Takes its collaborators rather than building them, so the whole of this is
-    testable against a scripted model with no browser, no display and no
-    application — which is also what makes the falsification rule assertable.
+    Takes its collaborators rather than building them, so this is testable against a
+    scripted model with no browser, no display and no application.
     """
     answer = await llm.structured(_SYSTEM, prompt_for(run, policy), _SCHEMA)
     classification = str(answer.get("classification", "our_bug"))
@@ -323,12 +270,9 @@ async def diagnose(
 def _downgrade(classification: str, run: RunEvidence) -> tuple[str, str]:
     """A condition met on a step that mutates is never auto-recoverable.
 
-    The model does not get a vote on this. `recoverable` means the automation
-    clears the condition and carries on unattended, and "carries on unattended"
-    past a step that may already have moved money is the one thing this system
-    exists to not do. The same read/write line that gates retry (§3) gates the
-    proposal, so a mislabelled recording cannot become a policy entry that lets
-    the next run through.
+    No vote for the model. `recoverable` means carrying on unattended, and doing
+    that past a step that may already have moved money is the one thing this system
+    exists not to do. The read/write line that gates retry gates the proposal too.
     """
     if classification == "recoverable" and run.step_risk != "safe":
         return "escalation", (
@@ -356,18 +300,14 @@ def _slug(name: str) -> str:
 
 
 def _patch(classification: str, name: str, description: str, detector: str) -> str:
-    """The proposal, as the YAML a reviewer pastes into `policies/<app>.yaml`.
+    """The proposal, as YAML a reviewer pastes into `policies/<app>.yaml`.
 
-    Text rather than a file rewrite, and that is deliberate. A policy file is the
-    most heavily commented artifact in this repository — every entry carries the
-    argument for why it is classified the way it is — and a program that rewrites
-    it with `yaml.safe_dump` deletes all of that. The unit of review here is a
-    diff a person applies, which is also what keeps a model from ever being the
-    thing that edits a guardrail.
+    Text rather than a file rewrite: a policy file carries the argument for every
+    entry it holds, and `yaml.safe_dump` deletes all of it. The unit of review is a
+    diff a person applies, which is what keeps a model from editing a guardrail.
 
-    A `recoverable` proposal is emitted with its `actions` list empty and a marked
-    TODO: the detector can be copied off a screen, but what to *do* about it
-    cannot, and a handler nobody wrote is not something to guess at.
+    A `recoverable` proposal ships with `actions` empty and a TODO — the detector is
+    copied off a screen, the handler cannot be, and guessing at one is not on.
     """
     key = {
         "business_outcome": "business_outcomes",

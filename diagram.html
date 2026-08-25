@@ -31,54 +31,22 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #16181c;
-    --surface: #1c1f24;
-    --surface-2: #22262c;
-    --ink: #e8eaed;
-    --ink-2: #b3bac1;
-    --ink-3: #838b94;
-    --rule: #333840;
-    --rule-2: #2a2f36;
-
-    --blue: #6cb0f5;
-    --green: #6bce74;
-    --red: #ff8787;
-    --orange: #ffb057;
-    --violet: #b197fc;
-
-    --blue-bg: #16283a;
-    --green-bg: #172a1b;
-    --red-bg: #34191b;
-    --orange-bg: #33240f;
-    --violet-bg: #241d3a;
-
+    --bg: #16181c; --surface: #1c1f24; --surface-2: #22262c;
+    --ink: #e8eaed; --ink-2: #b3bac1; --ink-3: #838b94;
+    --rule: #333840; --rule-2: #2a2f36;
+    --blue: #6cb0f5; --green: #6bce74; --red: #ff8787; --orange: #ffb057; --violet: #b197fc;
+    --blue-bg: #16283a; --green-bg: #172a1b; --red-bg: #34191b; --orange-bg: #33240f; --violet-bg: #241d3a;
     --code-bg: #14161a;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 1px 3px rgba(0, 0, 0, .2);
   }
 }
 
 :root[data-theme="dark"] {
-  --bg: #16181c;
-  --surface: #1c1f24;
-  --surface-2: #22262c;
-  --ink: #e8eaed;
-  --ink-2: #b3bac1;
-  --ink-3: #838b94;
-  --rule: #333840;
-  --rule-2: #2a2f36;
-
-  --blue: #6cb0f5;
-  --green: #6bce74;
-  --red: #ff8787;
-  --orange: #ffb057;
-  --violet: #b197fc;
-
-  --blue-bg: #16283a;
-  --green-bg: #172a1b;
-  --red-bg: #34191b;
-  --orange-bg: #33240f;
-  --violet-bg: #241d3a;
-
+  --bg: #16181c; --surface: #1c1f24; --surface-2: #22262c;
+  --ink: #e8eaed; --ink-2: #b3bac1; --ink-3: #838b94;
+  --rule: #333840; --rule-2: #2a2f36;
+  --blue: #6cb0f5; --green: #6bce74; --red: #ff8787; --orange: #ffb057; --violet: #b197fc;
+  --blue-bg: #16283a; --green-bg: #172a1b; --red-bg: #34191b; --orange-bg: #33240f; --violet-bg: #241d3a;
   --code-bg: #14161a;
   --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 1px 3px rgba(0, 0, 0, .2);
 }
@@ -92,937 +60,1015 @@ body {
   font-family: var(--sans);
   font-size: 15px;
   line-height: 1.55;
-  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
-.wrap { max-width: 1120px; margin: 0 auto; padding: 56px 24px 120px; }
+code, .mono { font-family: var(--mono); font-size: .87em; }
+code { background: var(--code-bg); padding: .1em .35em; border-radius: 4px; }
+b { font-weight: 600; }
+a { color: var(--blue); }
 
-/* ---------- masthead ---------- */
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px 64px; }
 
-header.top { border-bottom: 2px solid var(--ink); padding-bottom: 22px; margin-bottom: 12px; }
-header.top h1 { font-size: 30px; line-height: 1.15; margin: 0 0 10px; letter-spacing: -.02em; }
-header.top .sub { color: var(--ink-2); font-size: 16px; margin: 0; max-width: 74ch; }
-.thesis {
-  margin: 22px 0 0;
-  padding: 14px 18px;
-  border-left: 3px solid var(--violet);
-  background: var(--violet-bg);
-  color: var(--ink);
-  font-size: 15px;
-  border-radius: 0 6px 6px 0;
+/* ---------- masthead + tabs ---------- */
+
+header.top { padding: 40px 0 0; }
+h1 { font-size: 25px; line-height: 1.25; letter-spacing: -.02em; margin: 0 0 8px; font-weight: 650; }
+.lede { margin: 0; color: var(--ink-2); max-width: 62ch; }
+.lede a { text-decoration: none; border-bottom: 1px solid var(--rule); }
+
+.tabs {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; gap: 2px; flex-wrap: wrap;
+  margin: 24px 0 0; padding: 10px 0;
+  background: var(--bg); border-bottom: 1px solid var(--rule);
 }
-.thesis b { color: var(--violet); }
-
-.legend {
-  display: flex; flex-wrap: wrap; gap: 10px 22px;
-  margin: 26px 0 0; padding: 14px 18px;
-  border: 1px solid var(--rule); border-radius: 8px; background: var(--surface);
-  font-size: 13px; color: var(--ink-2);
+.tabs button {
+  font: inherit; font-size: 13.5px; cursor: pointer;
+  background: transparent; color: var(--ink-3);
+  border: 1px solid transparent; border-radius: 7px;
+  padding: 6px 12px; display: flex; align-items: baseline; gap: 8px;
 }
-.legend span { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
-
-.chip {
-  display: inline-block; padding: 2px 8px; border-radius: 999px;
-  font-family: var(--mono); font-size: 11px; font-weight: 600;
-  letter-spacing: .02em; white-space: nowrap;
+.tabs button:hover { color: var(--ink); background: var(--surface-2); }
+.tabs button[aria-selected="true"] {
+  color: var(--ink); background: var(--surface);
+  border-color: var(--rule); box-shadow: var(--shadow); font-weight: 600;
 }
-.chip.model  { background: var(--violet-bg); color: var(--violet); border: 1px solid var(--violet); }
-.chip.checked{ background: var(--green-bg); color: var(--violet); border: 1px dashed var(--violet); }
-.chip.nomodel{ background: var(--green-bg);  color: var(--green);  border: 1px solid var(--green); }
-.chip.drift  { background: var(--orange-bg); color: var(--orange); border: 1px solid var(--orange); }
-.chip.gap    { background: var(--red-bg);    color: var(--red);    border: 1px solid var(--red); }
+.tabs .n { font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+.tabs button[aria-selected="true"] .n { color: var(--blue); }
 
-/* ---------- phase banners ---------- */
-
-.phase {
-  margin: 54px 0 0; padding: 16px 20px; border-radius: 10px;
-  display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+.screen { display: none; padding-top: 26px; }
+.screen.on { display: block; }
+.q { font-size: 17px; font-weight: 600; margin: 0 0 3px; letter-spacing: -.01em; }
+.hint { margin: 0 0 20px; color: var(--ink-3); font-size: 13px; }
+.hint kbd {
+  font-family: var(--mono); font-size: 11px; border: 1px solid var(--rule);
+  border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; color: var(--ink-2);
 }
-.phase h2 { margin: 0; font-size: 19px; letter-spacing: -.01em; }
-.phase p  { margin: 0; font-size: 13.5px; color: var(--ink-2); }
-.phase.discovery { background: var(--violet-bg); border: 1px solid var(--violet); }
-.phase.discovery h2 { color: var(--violet); }
-.phase.replay { background: var(--green-bg); border: 1px solid var(--green); }
-.phase.replay h2 { color: var(--green); }
 
-/* ---------- stages ---------- */
+/* ---------- shared: cards, panels ---------- */
 
+.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; box-shadow: var(--shadow); }
+.panel { padding: 18px 20px; margin-top: 16px; min-height: 250px; }
+.panel .ph { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 10px; }
+.panel h4 { margin: 0; font-size: 15px; font-weight: 650; }
+.panel p { margin: 0 0 10px; color: var(--ink-2); }
+.panel p:last-child { margin-bottom: 0; }
+.where { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); white-space: nowrap; }
+.where b { color: var(--ink-2); font-weight: 500; }
+
+.pgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+.pblock { background: var(--surface-2); border-radius: 8px; padding: 11px 13px; }
+.pblock h5 {
+  margin: 0 0 6px; font-size: 10.5px; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--ink-3); font-weight: 650;
+}
+.pblock ul { margin: 0; padding-left: 16px; }
+.pblock li { margin: 3px 0; color: var(--ink-2); font-size: 13.5px; }
+@media (max-width: 720px) { .pgrid { grid-template-columns: 1fr; } }
+
+.ref { margin-top: 14px; font-size: 12.5px; color: var(--ink-3); }
+.ref a { color: var(--ink-2); }
+
+/* ---------- 1 · the arc ---------- */
+
+.lane { margin-bottom: 8px; }
+.lanehead {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+  font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--ink-3); font-weight: 650;
+}
+.lanehead .tail { flex: 1; height: 1px; background: var(--rule); }
+.lanehead .tag { text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 11.5px; }
+.tag.model { color: var(--violet); }
+.tag.nomodel { color: var(--green); }
+
+.flow { display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; }
+.node {
+  font: inherit; text-align: left; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 9px;
+  padding: 9px 12px; flex: 1 1 0; min-width: 124px; box-shadow: var(--shadow);
+}
+.node:hover { border-color: var(--ink-3); }
+.node[aria-pressed="true"] { border-color: var(--blue); background: var(--blue-bg); }
+.node .nn { font-family: var(--mono); font-size: 12.5px; font-weight: 600; }
+.node .nd { font-size: 12px; color: var(--ink-3); margin-top: 2px; }
+.node.has-model { border-color: var(--violet); border-left-width: 3px; }
+.node.has-model[aria-pressed="true"] { background: var(--violet-bg); }
+.node.has-model .nn { color: var(--violet); }
+.node.gate { flex: 0 1 auto; border-style: dashed; }
+.node.gate .nd { font-family: var(--mono); font-size: 11px; }
+.arrow { align-self: center; color: var(--ink-3); padding: 0 6px; font-size: 13px; }
+
+.seam {
+  display: flex; align-items: center; gap: 12px; margin: 14px 0;
+}
+.seam .bar { flex: 1; height: 1px; background: var(--rule); }
+.seam .chip {
+  font-family: var(--mono); font-size: 11.5px; color: var(--ink-2);
+  background: var(--surface-2); border: 1px solid var(--rule);
+  border-radius: 999px; padding: 3px 12px;
+}
+
+.rail { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 22px; }
+.chipbtn {
+  font: inherit; font-family: var(--mono); font-size: 12px; cursor: pointer;
+  background: var(--surface-2); color: var(--ink-2);
+  border: 1px solid var(--rule); border-radius: 999px; padding: 3px 11px;
+}
+.chipbtn:hover { color: var(--ink); border-color: var(--ink-3); }
+.chipbtn[aria-pressed="true"] { background: var(--blue-bg); color: var(--blue); border-color: var(--blue); }
+
+.mods { list-style: none; margin: 12px 0 0; padding: 0; }
+.mods li { display: flex; gap: 12px; padding: 4px 0; border-top: 1px solid var(--rule-2); font-size: 13.5px; }
+.mods li:first-child { border-top: 0; }
+.mods b { font-family: var(--mono); font-size: 12px; font-weight: 500; min-width: 148px; }
+.mods span { color: var(--ink-3); }
+.mods i { font-family: var(--mono); font-style: normal; color: var(--ink-3); font-size: 11.5px; margin-left: auto; }
+
+/* ---------- 2 + 3 · the spine ---------- */
+
+.spine { display: flex; gap: 5px; flex-wrap: wrap; }
 .stage {
-  position: relative;
-  margin: 0; padding: 22px 0 8px 62px;
-  border-left: 2px solid var(--rule);
+  font: inherit; text-align: left; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 9px;
+  padding: 8px 10px; flex: 1 1 0; min-width: 108px; box-shadow: var(--shadow);
+  display: flex; flex-direction: column; gap: 2px;
 }
-.stage:last-of-type { border-left-color: transparent; }
-.stage > .n {
-  position: absolute; left: -17px; top: 24px;
-  width: 32px; height: 32px; border-radius: 50%;
-  background: var(--surface); border: 2px solid var(--ink-3); color: var(--ink);
-  display: grid; place-items: center;
-  font-family: var(--mono); font-size: 13px; font-weight: 700;
+.stage:hover { border-color: var(--ink-3); }
+.stage[aria-pressed="true"] { border-color: var(--blue); background: var(--blue-bg); }
+.stage .sn { font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); }
+.stage[aria-pressed="true"] .sn { color: var(--blue); }
+.stage .st { font-size: 13px; font-weight: 550; }
+.stage .badge {
+  align-self: flex-start; margin-top: 3px; font-family: var(--mono); font-size: 10px;
+  border-radius: 4px; padding: 1px 5px; background: var(--surface-2); color: var(--ink-2);
 }
-.stage.is-model > .n { border-color: var(--violet); color: var(--violet); background: var(--violet-bg); }
-.stage.is-key > .n  { border-color: var(--blue);   color: var(--blue);   background: var(--blue-bg); }
+#spine2 .stage { cursor: default; pointer-events: none; }
+#spine2 .stage.visited { border-color: var(--green); }
+#spine2 .stage.visited .sn { color: var(--green); }
+#spine2 .stage.divert { border-color: var(--orange); background: var(--orange-bg); }
+#spine2 .stage.divert .sn { color: var(--orange); }
+#spine2 .stage.divert .badge { background: var(--orange); color: var(--surface); }
+#spine2 .stage.unvisited { opacity: .4; }
 
-.stage h3 { margin: 0 0 4px; font-size: 17px; letter-spacing: -.01em; }
-.stage h3 code { font-size: 14.5px; }
-.stage .lede { margin: 0 0 16px; color: var(--ink-2); font-size: 14px; max-width: 78ch; }
-
-code, kbd { font-family: var(--mono); font-size: .88em; }
-h3 code, .lede code, p code, li code, td code {
-  background: var(--surface-2); padding: 1px 5px; border-radius: 4px;
-  border: 1px solid var(--rule-2);
+/* ladder, inside the resolve panel */
+.ladder { margin-top: 14px; display: flex; flex-direction: column; gap: 5px; }
+.rung {
+  font: inherit; text-align: left; cursor: pointer; width: 100%;
+  background: var(--surface-2); border: 1px solid var(--rule); border-radius: 8px; padding: 8px 11px;
+  display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: start;
 }
+.rung:hover { border-color: var(--ink-3); }
+.rung .rn { font-family: var(--mono); font-size: 11px; color: var(--ink-3); padding-top: 2px; }
+.rung .rt { font-family: var(--mono); font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rung .rs { font-size: 13px; color: var(--ink-3); }
+.rung .rd { display: none; font-size: 13.5px; color: var(--ink-2); margin-top: 7px; }
+.rung[aria-expanded="true"] { border-color: var(--blue); }
+.rung[aria-expanded="true"] .rd { display: block; }
+.tagline { font-family: var(--sans); font-size: 10.5px; font-weight: 500; border-radius: 999px; padding: 1px 8px; }
+.tag-portable { background: var(--green-bg); color: var(--green); }
+.tag-drift { background: var(--orange-bg); color: var(--orange); }
+.tag-off { background: var(--red-bg); color: var(--red); }
 
-/* ---------- the transformation box ---------- */
+/* ---------- 3 · forks ---------- */
 
-.xform {
-  border: 1px solid var(--rule); border-radius: 10px;
-  background: var(--surface); box-shadow: var(--shadow);
-  overflow: hidden; margin: 0 0 14px;
+.picker { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 14px; }
+.picker button {
+  font: inherit; font-size: 13px; cursor: pointer;
+  background: var(--surface); color: var(--ink-2);
+  border: 1px solid var(--rule); border-radius: 999px; padding: 4px 13px;
 }
-.xform > .row { display: flex; flex-wrap: wrap; }
-.xform .side { flex: 1 1 320px; min-width: 0; }
-.xform .side + .side { border-left: 1px solid var(--rule); }
-@media (max-width: 760px) {
-  .xform .side + .side { border-left: 0; border-top: 1px solid var(--rule); }
+.picker button:hover { border-color: var(--ink-3); color: var(--ink); }
+.picker button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+.trace { display: flex; flex-direction: column; }
+.tr { display: grid; grid-template-columns: 22px 1fr; gap: 10px; padding: 5px 0; border-top: 1px solid var(--rule-2); }
+.tr:first-child { border-top: 0; }
+.tr .ti { font-family: var(--mono); font-size: 11px; color: var(--ink-3); padding-top: 2px; }
+.tr .tx { font-size: 13.5px; color: var(--ink-2); }
+.tr.hi .tx { color: var(--ink); }
+.tr.hi .ti { color: var(--orange); font-weight: 700; }
+
+.exit { border-radius: 10px; padding: 13px 16px; margin-top: 14px; border: 1px solid; }
+.exit .ec { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .07em; font-weight: 650; }
+.exit .et { font-size: 13.5px; margin-top: 4px; }
+.exit .ecaller { font-family: var(--mono); font-size: 11.5px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--rule); color: var(--ink-2); }
+.exit.success { background: var(--green-bg); border-color: var(--green); }
+.exit.success .ec { color: var(--green); }
+.exit.business_outcome { background: var(--blue-bg); border-color: var(--blue); }
+.exit.business_outcome .ec { color: var(--blue); }
+.exit.escalated { background: var(--violet-bg); border-color: var(--violet); }
+.exit.escalated .ec { color: var(--violet); }
+.exit.failure { background: var(--red-bg); border-color: var(--red); }
+.exit.failure .ec { color: var(--red); }
+
+.order { display: flex; flex-direction: column; gap: 4px; margin-top: 16px; }
+.ostep {
+  font: inherit; text-align: left; cursor: pointer; width: 100%;
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 7px 11px;
+  display: grid; grid-template-columns: 20px 1fr; gap: 10px;
 }
-.xform .cap {
-  font-family: var(--mono); font-size: 10.5px; font-weight: 700;
-  letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3);
-  padding: 9px 14px 7px; border-bottom: 1px solid var(--rule-2);
-  background: var(--surface-2);
-  display: flex; justify-content: space-between; gap: 10px; align-items: center;
+.ostep:hover { border-color: var(--ink-3); }
+.ostep[aria-expanded="true"] { border-color: var(--blue); }
+.ostep .on { font-family: var(--mono); font-size: 11px; color: var(--ink-3); padding-top: 2px; }
+.ostep .ot { font-size: 13.5px; font-weight: 550; }
+.ostep .ob { display: none; font-size: 13px; color: var(--ink-2); margin-top: 6px; }
+.ostep[aria-expanded="true"] .ob { display: block; }
+
+/* ---------- 4 · the artifact ---------- */
+
+.artifact { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .artifact { grid-template-columns: 1fr; } }
+pre.json {
+  margin: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px;
+  padding: 15px 16px; overflow-x: auto; font-family: var(--mono);
+  font-size: 11.5px; line-height: 1.85; box-shadow: var(--shadow);
 }
-.xform .cap .who { color: var(--blue); text-transform: none; letter-spacing: 0; font-size: 11px; }
+.json .k { color: var(--blue); }
+.json .s { color: var(--green); }
+.json .n { color: var(--orange); }
+.json .c { color: var(--ink-3); font-style: italic; }
+.fld { cursor: pointer; border-radius: 3px; border-bottom: 1px dashed var(--rule); }
+.fld:hover { background: var(--surface-2); border-bottom-color: var(--ink-3); }
+.fld[aria-pressed="true"] { background: var(--blue-bg); border-bottom-color: var(--blue); }
+.fpanel { margin-top: 0; }
+.fk { font-family: var(--mono); font-size: 13px; font-weight: 650; margin-bottom: 6px; }
+.fw { font-size: 13.5px; color: var(--ink-2); }
+.fpanel dl { margin: 12px 0 0; display: grid; grid-template-columns: 62px 1fr; gap: 4px 12px; font-size: 13px; }
+.fpanel dt { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); font-weight: 650; padding-top: 3px; }
+.fpanel dd { margin: 0; color: var(--ink-2); }
 
-pre {
-  margin: 0; padding: 13px 15px;
-  background: var(--code-bg);
-  font-family: var(--mono); font-size: 12.2px; line-height: 1.62;
-  color: var(--ink);
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+/* ---------- 5 · when stuck ---------- */
+
+.fsm { display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; }
+.fnode { flex: 1 1 0; min-width: 150px; border: 1px solid var(--rule); border-radius: 9px; padding: 10px 13px; background: var(--surface); box-shadow: var(--shadow); }
+.fnode .fn { font-family: var(--mono); font-size: 12.5px; font-weight: 650; }
+.fnode .fd { font-size: 12px; color: var(--ink-3); margin-top: 2px; }
+.fnode.automation { border-color: var(--blue); } .fnode.automation .fn { color: var(--blue); }
+.fnode.nobody { border-color: var(--orange); } .fnode.nobody .fn { color: var(--orange); }
+.fnode.human { border-color: var(--violet); } .fnode.human .fn { color: var(--violet); }
+
+.edges { display: flex; flex-direction: column; gap: 4px; margin-top: 14px; }
+.edge {
+  font: inherit; text-align: left; cursor: pointer; width: 100%;
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 7px 11px;
 }
-pre .c { color: var(--ink-3); font-style: italic; }
-pre .k { color: var(--violet); }
-pre .s { color: var(--green); }
-pre .num { color: var(--orange); }
-pre .hi { background: var(--orange-bg); border-radius: 3px; padding: 0 2px; }
-pre .em { color: var(--red); font-weight: 600; }
+.edge:hover { border-color: var(--ink-3); }
+.edge[aria-expanded="true"] { border-color: var(--blue); }
+.edge .el { font-family: var(--mono); font-size: 12.5px; font-weight: 600; }
+.edge .ed { display: none; font-size: 13px; color: var(--ink-2); margin-top: 5px; }
+.edge[aria-expanded="true"] .ed { display: block; }
 
-.arrow {
-  text-align: center; color: var(--ink-3);
-  font-family: var(--mono); font-size: 12px;
-  margin: -4px 0 10px; padding: 0;
+.loop { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+.lstep {
+  font: inherit; text-align: left; cursor: pointer;
+  flex: 1 1 0; min-width: 128px; background: var(--surface);
+  border: 1px solid var(--rule); border-radius: 9px; padding: 9px 11px; box-shadow: var(--shadow);
 }
-.arrow b { color: var(--ink-2); font-weight: 600; }
+.lstep:hover { border-color: var(--ink-3); }
+.lstep[aria-pressed="true"] { border-color: var(--blue); background: var(--blue-bg); }
+.lstep.guard { border-style: dashed; }
+.lstep .ln { font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); }
+.lstep.guard .ln { color: var(--red); }
+.lstep .lt { font-size: 12.5px; font-weight: 550; margin-top: 2px; }
 
-/* ---------- notes ---------- */
-
-.note {
-  border-left: 3px solid var(--blue); background: var(--blue-bg);
-  padding: 11px 15px; border-radius: 0 6px 6px 0; margin: 0 0 14px;
-  font-size: 13.5px; color: var(--ink);
-}
-.note.warn { border-left-color: var(--orange); background: var(--orange-bg); }
-.note.stop { border-left-color: var(--red);    background: var(--red-bg); }
-.note.good { border-left-color: var(--green);  background: var(--green-bg); }
-.note strong { font-weight: 650; }
-.note :last-child { margin-bottom: 0; }
-.note p { margin: 0 0 7px; }
-
-/* ---------- ladders / ordered lists ---------- */
-
-.ladder { border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; margin: 0 0 14px; background: var(--surface); }
-.ladder .rung { display: flex; gap: 14px; padding: 11px 15px; border-bottom: 1px solid var(--rule-2); align-items: flex-start; }
-.ladder .rung:last-child { border-bottom: 0; }
-.ladder .tag {
-  flex: 0 0 auto; min-width: 132px;
-  font-family: var(--mono); font-size: 12px; font-weight: 650;
-}
-.ladder .body { flex: 1 1 auto; min-width: 0; font-size: 13.5px; color: var(--ink-2); }
-.ladder .body b { color: var(--ink); font-weight: 620; }
-.rung.g .tag { color: var(--green); }  .rung.g { background: var(--green-bg); }
-.rung.b .tag { color: var(--blue); }   .rung.b { background: var(--blue-bg); }
-.rung.o .tag { color: var(--orange); } .rung.o { background: var(--orange-bg); }
-.rung.r .tag { color: var(--red); }    .rung.r { background: var(--red-bg); }
-.rung.v .tag { color: var(--violet); } .rung.v { background: var(--violet-bg); }
-
-/* ---------- tables ---------- */
-
-.tbl-scroll { overflow-x: auto; margin: 0 0 14px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); }
-table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
-th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--rule-2); vertical-align: top; }
-th { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-3); background: var(--surface-2); font-weight: 700; white-space: nowrap; }
-tr:last-child td { border-bottom: 0; }
+.sub { margin: 26px 0 10px; font-size: 13px; font-weight: 650; color: var(--ink-2); }
 
 /* ---------- footer ---------- */
 
-.footer { margin-top: 64px; padding-top: 22px; border-top: 2px solid var(--ink); }
-.footer h2 { font-size: 18px; margin: 0 0 10px; }
-.footer p { color: var(--ink-2); font-size: 14px; max-width: 80ch; }
-.pillrow { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; }
-.pill {
-  font-family: var(--mono); font-size: 11.5px;
-  border: 1px solid var(--rule); border-radius: 999px;
-  padding: 4px 11px; color: var(--ink-2); background: var(--surface);
-}
+footer { margin-top: 44px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--ink-3); font-size: 12.5px; }
+footer p { margin: 0 0 6px; max-width: 78ch; }
 </style>
 
 <div class="wrap">
 
 <header class="top">
   <h1>A goal becomes a click, and comes back as a typed result</h1>
-  <p class="sub">
-    The whole pipeline, in the order it runs, with the actual data at every boundary.
-    One worked example throughout — the real recording in <code>evidence/discover-e3d4f6b7</code>
-    and the real replay in <code>evidence/replay-dd1bbee1</code>. Every value on this page is
-    copied out of the repository, not illustrative.
+  <p class="lede">
+    The mechanism, in five pictures. <a href="REPORT.md">REPORT.md</a> argues the decisions and is
+    authoritative where the two disagree; this page only shows where a run goes and which file it is in.
   </p>
-
-  <p class="thesis">
-    <b>The thesis:</b> a model is present at exactly three points, and they are not the same kind
-    of thing. Once it <b>asserts</b> — choosing one action per turn (stage&nbsp;5). Twice it only
-    <b>proposes</b>, and code then tries to refute what it said: the anchor for a step
-    (stage&nbsp;6) and the capability's contract (stage&nbsp;8c). A proposal that fails the check
-    is dropped, and the deterministic answer is used instead.
-  </p>
-  <p class="thesis" style="border-left-color:var(--green);background:var(--green-bg)">
-    <b style="color:var(--green)">Everywhere else — including the entire production execution
-    path — there is no model, and structurally cannot be.</b>
-    <code>ReplayEngine.__init__</code> takes no LLM parameter at all, so it holds no reference to
-    one, and its resolver is built <code>allow_vlm=False</code>, which raises if the tier is
-    reached. Determinism is a property you can check by reading a constructor.
-  </p>
-
-  <div class="legend">
-    <span><span class="chip model">MODEL ASSERTS</span> the model's word is taken</span>
-    <span><span class="chip checked">MODEL PROPOSES</span> …and code tries to refute it</span>
-    <span><span class="chip nomodel">NO MODEL</span> deterministic, by construction</span>
-    <span><span class="chip drift">DRIFT SIGNAL</span> emitted for free, per step</span>
-    <span><span class="chip gap">NOT BUILT</span> declared but not derived</span>
-  </div>
+  <nav class="tabs" id="tabs" role="tablist"></nav>
 </header>
 
+<main>
 
-<!-- ================================================================= -->
-<div class="phase discovery">
-  <h2>Discovery — run once, supervised, and it can stop and ask</h2>
-  <p>5 model calls · 48 s · <code>xai/grok-4.3</code> · produced <code>cap_get_savings_balance@v1</code></p>
+<!-- ============ 1 · the arc ============ -->
+<section class="screen" data-screen="arc" role="tabpanel">
+  <p class="q">How does a goal become a capability an agent can call?</p>
+  <p class="hint">A model runs once, in one node. Click any node.</p>
+
+  <div class="lane">
+    <div class="lanehead">record once <span class="tag model">the model is here, and only here</span><span class="tail"></span></div>
+    <div class="flow" id="flowA"></div>
+  </div>
+
+  <div class="seam">
+    <div class="bar"></div>
+    <button class="node gate" data-node="review" aria-pressed="false">
+      <div class="nn">review → approve</div>
+      <div class="nd">artifacts/&lt;id&gt;.v2.json · a human, once per version</div>
+    </button>
+    <div class="bar"></div>
+  </div>
+
+  <div class="lane">
+    <div class="lanehead">replay many <span class="tag nomodel">no model client is constructed</span><span class="tail"></span></div>
+    <div class="flow" id="flowB"></div>
+  </div>
+
+  <div class="card panel" id="arcPanel"></div>
+
+  <p class="sub">Package boundaries — what each one is forbidden to know</p>
+  <div class="rail" id="rail"></div>
+  <div class="card panel" id="railPanel" style="min-height:170px"></div>
+</section>
+
+<!-- ============ 2 · the step ============ -->
+<section class="screen" data-screen="step" role="tabpanel">
+  <p class="q">What happens inside one step?</p>
+  <p class="hint">Seven stages, this order, every step, both paths. Click a stage · <kbd>←</kbd> <kbd>→</kbd></p>
+
+  <div class="spine" id="spine"></div>
+  <div class="card panel" id="stagePanel"></div>
+</section>
+
+<!-- ============ 3 · the forks ============ -->
+<section class="screen" data-screen="forks" role="tabpanel">
+  <p class="q">How does a step end?</p>
+  <p class="hint">Four exits from the same seven boxes. Orange is where this run diverged.</p>
+
+  <div class="picker" id="picker"></div>
+  <div class="spine" id="spine2"></div>
+  <div class="card panel" id="tracePanel" style="min-height:0"></div>
+  <div id="exit"></div>
+
+  <p class="sub">Which exit you get is decided here, in this order — one function, one place</p>
+  <div class="order" id="order"></div>
+</section>
+
+<!-- ============ 4 · the artifact ============ -->
+<section class="screen" data-screen="artifact" role="tabpanel">
+  <p class="q">What does the recording actually contain?</p>
+  <p class="hint">Discovery writes it, a human approves it, an agent calls it, replay executes it. Click any dashed field.</p>
+
+  <div class="artifact">
+    <pre class="json" id="artifactJson"></pre>
+    <div class="card panel fpanel" id="fieldPanel"></div>
+  </div>
+</section>
+
+<!-- ============ 5 · when stuck ============ -->
+<section class="screen" data-screen="stuck" role="tabpanel">
+  <p class="q">What happens when it cannot proceed?</p>
+  <p class="hint">Control is a token with exactly one holder. Click a transition.</p>
+
+  <div class="fsm">
+    <div class="fnode automation"><div class="fn">AUTOMATION</div><div class="fd">the engine may issue input</div></div>
+    <div class="arrow">→</div>
+    <div class="fnode nobody"><div class="fn">NOBODY</div><div class="fd">parked, published, nobody connected</div></div>
+    <div class="arrow">→</div>
+    <div class="fnode human"><div class="fn">HUMAN</div><div class="fd">the operator drives the same session</div></div>
+  </div>
+  <div class="edges" id="edges"></div>
+
+  <p class="sub">And when the screen was never declared at all — <code>cua diagnose</code></p>
+  <div class="loop" id="loop"></div>
+  <div class="card panel" id="loopPanel" style="min-height:150px"></div>
+</section>
+
+</main>
+
+<footer>
+  <p>Every <span class="mono">file:line</span> on this page is generated from the source it cites
+  (<code>make diagram</code> → <code>scripts/anchors.py</code>), so a refactor cannot leave it quietly wrong.</p>
+  <p>Not covered here: the discovery prompt, the perception pipeline's internals, the console, and the
+  target application — see <a href="README.md">README.md</a>. <code>diagram.png</code> is the sketch drawn
+  before any code, kept stale on purpose because REPORT §1 argues five things against it.</p>
+</footer>
+
 </div>
 
-<!-- 1 -->
-<section class="stage">
-  <div class="n">1</div>
-  <h3>The ask — <code>DiscoveryLoop.run(goal, start_url, inputs)</code></h3>
-  <p class="lede">
-    A goal in English plus the concrete values this run will use. The inputs are not just
-    "what to type": they are the <em>parameter declaration</em>. Any literal in the recording
-    that matches one of them becomes a placeholder at stage 8b, which is how
-    "who decided <code>12345</code> was a parameter?" gets a deterministic answer.
-  </p>
-  <div class="xform">
-    <div class="cap">input</div>
-<pre>goal   = <span class="s">"open the profile for member 12345 and read the current
-          balance of their Primary Savings account"</span>
-inputs = { <span class="k">"member_id"</span>: <span class="s">"12345"</span>,
-           <span class="k">"account_nickname"</span>: <span class="s">"Primary Savings"</span> }</pre>
-  </div>
-  <div class="note">
-    <p>The entry navigation is <strong>recorded, not merely performed</strong> — it becomes step 1
-    of the artifact. Without it a capability begins wherever the browser happened to be, and a
-    second invocation in the same session starts on the previous run's member profile.</p>
-  </div>
-</section>
+<script>
+"use strict";
 
-<div class="arrow">↓ &nbsp; <b>loop until</b> finish / escalate / stuck / budget</div>
+/* @generated:anchors — scripts/anchors.py; do not edit by hand */
+const SRC = {
+  "replay/engine.py": {"lines":1559,"at":{"_clear_the_way":578,"_check_policy":1178,"_wait_until_ready":497,"_resolve":989,"_run_act":640,"_run_find_and_act":721,"_await_effect":899}},
+  "replay/outcomes.py": {"lines":184,"at":{"classify":38,"conditions":132}},
+  "replay/contract.py": {"lines":185,"at":{"validate_inputs":39,"extract_outputs":88,"check_constraints":170}},
+  "replay/scan.py": {"lines":216,"at":{"scan":77}},
+  "replay/tenant.py": {"lines":47,"at":{"rebase":16}},
+  "resolve/resolver.py": {"lines":435,"at":{"resolve_traced":82,"_by_anchor_text":119,"_by_role_name":186,"_by_recorded_bbox":234,"_by_vlm":252,"_narrow":390}},
+  "resolve/verify.py": {"lines":371,"at":{"verify_target":52,"verify_effect":149}},
+  "escalation/control.py": {"lines":161,"at":{"assert_automation":45,"park":57,"take_control":83,"release":100,"escalate":71}},
+  "escalation/watch.py": {"lines":171,"at":{"start":41,"stop":88}},
+  "runtime/wiring.py": {"lines":279,"at":{"build_discovery":247,"build_replay":154}},
+  "runtime/session.py": {"lines":180},
+  "discovery/loop.py": {"lines":882,"at":{"run":141,"_step":303,"_act":491,"_is_stuck":821}},
+  "discovery/synthesize.py": {"lines":440,"at":{"synthesize":257,"declare":164,"_falsify":219,"parameterize":95}},
+  "discovery/actions.py": {"lines":703,"at":{"tool_definitions":316,"to_step":379}},
+  "discovery/llm.py": {"lines":275},
+  "discovery/prompts.py": {"lines":196},
+  "policy/policy.py": {"lines":419,"at":{"decide":259,"check_url":250}},
+  "policy/redact.py": {"lines":52},
+  "catalog/store.py": {"lines":195,"at":{"save":46,"approve":96,"tool_manifest":114}},
+  "catalog/learn.py": {"lines":132},
+  "diagnose.py": {"lines":340,"at":{"diagnose":211,"reference_lines":158,"_downgrade":270}},
+  "evidence/writer.py": {"lines":121,"at":{"frame":29,"step":78}},
+  "evidence/log.py": {"lines":59},
+  "schema/artifact.py": {"lines":575},
+  "schema/results.py": {"lines":323},
+  "schema/common.py": {"lines":123},
+  "schema/elements.py": {"lines":82},
+  "schema/intervention.py": {"lines":113},
+  "perception/base.py": {"lines":216},
+  "perception/ocr.py": {"lines":186},
+  "perception/merge.py": {"lines":131},
+  "perception/index.py": {"lines":119},
+  "perception/detect.py": {"lines":124},
+  "perception/screen.py": {"lines":104},
+  "perception/som.py": {"lines":96},
+  "action/browser.py": {"lines":215},
+  "action/base.py": {"lines":63},
+  "action/offline.py": {"lines":60},
+  "action/desktop.py": {"lines":37},
+  "resolve/normalize.py": {"lines":137},
+  "resolve/template.py": {"lines":76},
+  "api/routes.py": {"lines":1011},
+  "api/main.py": {"lines":153},
+  "cli.py": {"lines":475},
+  "config.py": {"lines":130},
+  "calibration.py": {"lines":85}
+};
+/* @end:anchors */
 
-<!-- 2 -->
-<section class="stage">
-  <div class="n">2</div>
-  <h3>Pixels — <code>XDisplayScreen.capture()</code> then <code>Perceiver.settle()</code></h3>
-  <p class="lede">
-    <code>mss.grab(monitors[1])</code> photographs the <em>whole X display</em>, not the browser
-    viewport — the same image an operator sees over VNC, in the same coordinate space the input
-    layer clicks in. One coordinate system, so there is no translation bug to have.
-  </p>
-  <div class="xform"><div class="row">
-    <div class="side">
-      <div class="cap">out — geometry + content hash</div>
-<pre>viewport   1440 × 900
-frame_hash <span class="s">"3c75a7e6d36123ea"</span>
-           <span class="c"># sha256 of the raw BGRA buffer,</span>
-           <span class="c"># not the PNG: encoders may vary
-           # their output for identical input,
-           # which would never converge</span></pre>
+const at = (rel, sym) => `${rel}:${SRC[rel].at[sym]}`;
+const lines = (rel) => SRC[rel].lines;
+
+/* ============================ data ============================ */
+
+const ARC_A = [
+  { id: "goal", n: "goal", d: "English + one example input",
+    p: "<p>A sentence and one example of every parameter. The example is what synthesis parameterizes against, and what <code>learn-outcome</code> later replays as its reference run.</p>",
+    where: [["cli.py", null]],
+    raises: [] },
+
+  { id: "discover", n: "discover", d: "observe → decide → act", model: true,
+    p: "<p>The model is shown the frame as a <b>numbered overlay</b> and returns a mark index — never a coordinate, and never free-form code. Its action vocabulary is the artifact's step vocabulary, so a recording can only express what replay can execute.</p><p>Five exits: done, stuck, budget spent, policy denied, escalated to a human.</p>",
+    where: [["discovery/loop.py", "run"], ["discovery/actions.py", "tool_definitions"], ["perception/som.py", null]],
+    raises: ["stuck: no progress across N turns", "the same policy check replay runs"] },
+
+  { id: "synth", n: "synthesize", d: "transcript → artifact",
+    p: "<p>Prune the turns that did not stick, substitute the example values back out into <code>{{param}}</code>, type the outputs from what was actually read, and <b>falsify</b> every declared outcome against the evidence before writing it.</p>",
+    where: [["discovery/synthesize.py", "synthesize"], ["discovery/synthesize.py", "_falsify"]],
+    raises: ["a declaration the evidence does not support is dropped, not saved"] },
+
+  { id: "draft", n: "draft v(n+1)", d: "status: draft",
+    p: "<p>Written as the next version, never over the last one — <code>save</code> refuses an existing <code>(id, version)</code>. Re-recording a flow leaves whatever production is calling untouched.</p>",
+    where: [["catalog/store.py", "save"]],
+    raises: ["refuses to overwrite an approved version"] },
+];
+
+const ARC_B = [
+  { id: "manifest", n: "manifest", d: "approved only",
+    p: "<p>Approved capabilities, rendered as JSON-schema tool definitions. This is the entire surface the calling agent can see — an unapproved recording is not merely discouraged, it is not in the list, and the invoke path refuses it besides.</p>",
+    where: [["catalog/store.py", "tool_manifest"], ["api/routes.py", null]],
+    raises: ["a call to an unapproved capability is refused"] },
+
+  { id: "invoke", n: "invoke", d: "typed params in",
+    p: "<p>Parameters are checked against their declared types and constraints <b>before anything is touched</b> — so a type error is a rejected call, not a run that gets four steps in and types <code>None</code> into an amount field.</p>",
+    where: [["replay/contract.py", "validate_inputs"]],
+    raises: ["<code>CONTRACT_VIOLATION</code>, before the browser opens"] },
+
+  { id: "replay", n: "replay", d: "seven stages per step",
+    p: "<p>The same perceiver, driver, policy and evidence writer as discovery — differing in exactly one collaborator. Replay is handed an <code>LLMClient</code> whose every method raises, and a resolver constructed with <code>allow_vlm=False</code>.</p><p><code>unset XAI_API_KEY</code> and replay behaves identically; a test asserts <code>llm.calls == 0</code>.</p>",
+    where: [["runtime/wiring.py", "build_replay"], ["runtime/wiring.py", "build_discovery"], ["replay/engine.py", null]],
+    raises: ["screen 2 — one per stage"] },
+
+  { id: "result", n: "result", d: "typed, or a named exit",
+    p: "<p>Declared outputs are read, normalized, coerced to their declared type and checked against their declared bounds. Or one of the three other exits on screen 3.</p>",
+    where: [["replay/contract.py", "extract_outputs"], ["replay/contract.py", "check_constraints"]],
+    raises: ["<code>CONTRACT_VIOLATION</code> if a read value is outside its bounds"] },
+];
+
+const GATE = {
+  id: "review", n: "review → approve", d: "a human, once per version",
+  p: "<p>A person reads the steps, the targets, the risk labels and the output bounds, then stamps who approved what and when. This is the gate the whole shape of the artifact exists to serve: a raw model transcript cannot be reviewed.</p>",
+  where: [["catalog/store.py", "approve"]],
+  raises: [] };
+
+const PACKAGES = [
+  { name: "schema/", knows: "typed contracts", forbid: "anything — it imports nothing",
+    mods: [["artifact.py", "steps, targets, the contract"], ["results.py", "ReplayResult, StepResult, FailureKind"],
+           ["common.py", "Risk, Primitive, ValueType, MatchMode"], ["elements.py", "Element, Bbox, Observation"],
+           ["intervention.py", "Controller, InterventionRequest"]] },
+  { name: "perception/", knows: "pixels → Element", forbid: "what a capability is",
+    mods: [["base.py", "capture, detect, read, merge, settle"], ["ocr.py", "PP-OCR under ONNX Runtime or torch"],
+           ["detect.py", "OmniParser control detection"], ["merge.py", "controls + text → one element list"],
+           ["index.py", "R-tree spatial index, for relations"], ["som.py", "the numbered overlay"],
+           ["screen.py", "X display capture; recorded-frame replay"]] },
+  { name: "action/", knows: "Point → input event", forbid: "what an element means",
+    mods: [["browser.py", "Playwright as an input engine, never a locator"], ["offline.py", "recorded frames, no browser"],
+           ["desktop.py", "the documented seam for a native surface"], ["base.py", "the Driver protocol both satisfy"]] },
+  { name: "resolve/", knows: "Target + Observation → coordinate", forbid: "how the coordinate is used",
+    mods: [["resolver.py", "the ladder, and the trace of every rung"], ["verify.py", "pre-click and post-act checks"],
+           ["template.py", "{{param}} render, and its inverse"], ["normalize.py", "recorded normalizers"]] },
+  { name: "replay/", knows: "artifact → result", forbid: "that a model exists",
+    mods: [["engine.py", "the step lifecycle and the taxonomy"], ["outcomes.py", "one classifier, one ordering"],
+           ["contract.py", "inputs in, typed outputs out"], ["scan.py", "find_and_act: a predicate over a list"],
+           ["tenant.py", "rebase a recorded URL onto this install"]] },
+  { name: "discovery/", knows: "goal → recording", forbid: "how replay executes",
+    mods: [["loop.py", "observe → decide → act, with the exits"], ["actions.py", "the tool schema"],
+           ["synthesize.py", "transcript → artifact, with falsification"], ["prompts.py", "what the model is told"],
+           ["llm.py", "the one place a model call can be counted"]] },
+  { name: "policy/", knows: "what is permitted", forbid: "which path is asking",
+    mods: [["policy.py", "allowlist, risk, recoveries, outcomes, sign-on"], ["redact.py", "declared values, and the pattern seam"]] },
+  { name: "escalation/", knows: "who holds control", forbid: "why the run stopped",
+    mods: [["control.py", "the token: one holder, and NOBODY is a state"], ["watch.py", "X-layer capture of what the human did"]] },
+  { name: "catalog/", knows: "versions and approval", forbid: "how a capability runs",
+    mods: [["store.py", "versioned artifacts; the agent-facing manifest"], ["learn.py", "learn an outcome from two runs' difference"]] },
+  { name: "evidence/", knows: "what happened, on disk", forbid: "what any of it means",
+    mods: [["writer.py", "per-run frames, observations, step log"], ["log.py", "structured, redacted, append-before-acting"]] },
+  { name: "runtime/", knows: "how to build the two runners", forbid: "nothing — it is the composition root",
+    mods: [["wiring.py", "both runners, differing in one collaborator"], ["session.py", "the browser and display that outlive a run"]] },
+  { name: "api/ · cli.py", knows: "the control plane", forbid: "any policy of its own",
+    mods: [["routes.py", "runs, catalog, interventions, SSE"], ["main.py", "app factory, one-display admission"],
+           ["cli.py", "discover, replay, learn-outcome, diagnose"]] },
+  { name: "diagnose.py", knows: "terminal evidence → a proposal", forbid: "anything live; it never holds a session",
+    mods: [["diagnose.py", "one model call, falsified, emitted as YAML"]] },
+];
+
+const STAGES = [
+  { id: "clear", n: "1", t: "clear the way", fn: "_clear_the_way", file: "replay/engine.py", sym: "_clear_the_way",
+    does: "Observe, and check the frame against the application's declared conditions <em>before</em> anything acts on it. A recoverable interstitial is dismissed here and the step then acts on the page it was recorded against.",
+    raises: ["<code>RECOVERY_EXHAUSTED</code> past <code>max_per_run</code>"],
+    records: ["<code>recovery_applied</code>", "a note: <em>cleared 'maintenance_notice' before acting</em>", "<code>phases.observe_ms</code>"],
+    ref: "REPORT §3" },
+
+  { id: "policy", n: "2", t: "check policy", fn: "_check_policy", file: "replay/engine.py", sym: "_check_policy",
+    does: "Allowlist and risk, on the step's declared intent. Returns a disposition: allow, confirm, or a hard denial. The identical call runs on the discovery path.",
+    raises: ["<code>POLICY_DENIED</code> — a hard stop, never a skip", "<code>confirm</code> → parks for a human (screen 5)"],
+    records: ["<code>policy</code>: the whole decision, allow as well as deny — which rule, and whether a step the recording called <code>safe</code> was <b>promoted</b> to risky"],
+    ref: "REPORT §6" },
+
+  { id: "wait", n: "3", t: "wait until ready", fn: "_wait_until_ready", file: "replay/engine.py", sym: "_wait_until_ready",
+    does: "Poll until the screen this step needs is actually in front of us: assert the declared screen, then trial-resolve the target. No policy gate needed — everything polled here is a read.",
+    raises: ["<code>WRONG_SCREEN</code> — immediately, without waiting, on positively recognising a <em>different</em> declared screen", "the underlying failure once the deadline passes"],
+    records: ["a note: <em>waited 3,412ms for this step's screen to arrive</em>"],
+    ref: "REPORT §3" },
+
+  { id: "resolve", n: "4", t: "resolve", fn: "_resolve", file: "replay/engine.py", sym: "_resolve",
+    does: "Walk the ladder below to turn a semantic target into a coordinate, then check the geometry the capability was recorded at against this deployment's display.",
+    raises: ["<code>RESOLUTION_EXHAUSTED</code> — no tier located it; it never falls back to clicking the recorded box as a guess", "<code>INTERNAL</code> if the recording's aspect ratio differs from this display's"],
+    records: ["<code>resolution</code>: the tier that won", "<code>resolution_trace</code>: every rung and <b>why each missed</b> — gone, versus matched three elements, are different fixes"],
+    ladder: true, ref: "REPORT §3, §4" },
+
+  { id: "verify_t", n: "5", t: "verify target", fn: "verify_target", file: "resolve/verify.py", sym: "verify_target",
+    does: "Read the region we are about to act on, confirm it still says what the recording said and that nothing undeclared is stacked on top of it — then, on a write, refuse to proceed if the anchor matched more than one real candidate.",
+    raises: ["<code>TARGET_MISMATCH</code> — with the region, so the console can draw it over the frame", "<code>UNEXPECTED_OVERLAY</code>", "escalation on an ambiguous <b>write</b>; a read notes it and proceeds"],
+    records: ["<code>expected</code> beside <code>observed</code>", "<code>region</code>: where on screen it looked"],
+    ref: "REPORT §3" },
+
+  { id: "execute", n: "6", t: "execute", fn: "_run_act / _run_find_and_act", file: "replay/engine.py", sym: "_run_act",
+    does: "One primitive: navigate, click, type, key, scroll, extract, wait, assert — or <code>find_and_act</code>, a fixed loop of (observe scope, evaluate predicate, advance) with no model in it.",
+    raises: ["<code>EXTRACTION_FAILED</code>", "<code>AMBIGUOUS_MATCH</code> / <code>SCAN_INCONCLUSIVE</code> from the scan loop", "<code>POLICY_DENIED</code> — the URL is re-checked <em>after</em> the action, because a click can navigate"],
+    records: ["<code>phases.act_ms</code>", "the frame the step acted on, and separately the one it produced"],
+    ref: "REPORT §2" },
+
+  { id: "verify_e", n: "7", t: "verify effect", fn: "_await_effect", file: "replay/engine.py", sym: "_await_effect",
+    does: "Settle a fresh frame, then classify it — polling the step's checkpoint to its full deadline before any re-execution, so a step whose action did land and was merely obscured is never run twice. Re-execution is gated on <code>risk</code>.",
+    raises: ["<code>CHECKPOINT_FAILED</code>", "<code>APP_ERROR</code>", "a business outcome or an escalation — which are not failures at all"],
+    records: ["<code>settled_by</code>: <code>pixels</code> on a static screen, <code>text</code> when something animates", "<code>attempts</code>", "<code>status</code>: <code>ok</code> or <code>recovered</code>"],
+    ref: "REPORT §3" },
+];
+
+const RUNGS = [
+  { n: "1", t: "anchor_text", tag: "portable", tagl: "survives rebranding", sym: "_by_anchor_text",
+    s: "Visible text at or near the target, then a spatial relation from it.",
+    d: "<p>May contain <code>{{param}}</code> — \"the row for member {{member_id}}\". <b>Relation is what makes vision-first targeting work at all:</b> there is no <code>for=</code> to follow, so a field is an empty box beside a label and a balance is the cell right of \"Available Balance\".</p><p>Matching is <code>contains</code> by default — it has to be, a balance lives inside <code>\"Available Balance: $18,204.55\"</code> — so an element whose <em>whole</em> label is the anchor beats one that merely contains it.</p>" },
+  { n: "2", t: "role + name", tag: null, tagl: null, sym: "_by_role_name",
+    s: "Semantic match against detected elements. Name compared exactly.",
+    d: "<p>Less portable, still semantic: it matched something the frame actually says, so it is <b>not</b> recorded as a drift event. No substring inflation to strip here — more than one match is more than one real candidate.</p>" },
+  { n: "3", t: "recorded_bbox", tag: "drift", tagl: "logs a drift event", sym: "_by_recorded_bbox",
+    s: "The position the recording found it at.",
+    d: "<p>Always sets <code>drift=True</code>. Aggregated across runs this is the cheapest early-warning signal in the system, and it says <em>which</em> tenant has begun to drift, per capability, before anything fails.</p><p>Reaching here does not mean the step proceeds — stage 5 still reads the region first.</p>" },
+  { n: "4", t: "vlm_gated", tag: "off", tagl: "raises on replay", sym: "_by_vlm",
+    s: "Named in the enum. Unreachable by construction.",
+    d: "<p>Discovery never needs it: the model picks from enumerated marks, so it is never asked \"where is this thing\". On replay the resolver is constructed with <code>allow_vlm=False</code> and raises rather than reaching it.</p><p>Naming a tier and leaving it unreachable is what makes \"replay never calls a model\" a property of construction.</p>" },
+];
+
+const SCENARIOS = [
+  { id: "happy", label: "happy path", exit: "success",
+    path: { clear: "ok", policy: "allow", wait: "ready", resolve: "anchor_text", verify_t: "ok", execute: "ok", verify_e: "held" },
+    trace: [
+      ["1", "No declared condition on the frame."],
+      ["2", "Allowlist passes; step is <b>safe</b>, disposition <b>allow</b>."],
+      ["3", "The declared screen is already here. No polling."],
+      ["4", "Resolved on <b>anchor_text</b> — the portable tier."],
+      ["5", "The region still reads what the recording said. One candidate."],
+      ["6", "<code>extract</code> reads the balance beside the account."],
+      ["7", "Checkpoint holds on the first settled frame."],
+    ],
+    exitText: "Every checkpoint held, the capability's own success condition held, and every declared output was read, coerced to its declared type and checked against its declared bounds.",
+    caller: "outputs: { balance: 18204.55 } · exit 0" },
+
+  { id: "not_found", label: "member 99999", exit: "business_outcome", divert: "verify_e",
+    path: { clear: "ok", policy: "allow", wait: "ready", resolve: "anchor_text", verify_t: "ok", execute: "ok", verify_e: "outcome" },
+    trace: [
+      ["1–5", "Nothing declared, allowlist passes, screen ready, resolved, region checks out."],
+      ["6", "The search is submitted."],
+      ["7", "The classifier runs <b>business outcomes first</b>. <code>member_not_found</code> matches — the app's own wording, taught by demonstration rather than guessed.", true],
+    ],
+    exitText: "A legitimate answer, not a crash. Had the checkpoint been evaluated first, this would have been reported as a failed assertion instead of the answer the caller asked for.",
+    caller: "outcome: { name: member_not_found, fields: { member_id: \"99999\" } } · exit 0" },
+
+  { id: "ambiguous", label: "ambiguous anchor on a write", exit: "escalated", divert: "verify_t",
+    path: { clear: "ok", policy: "allow", wait: "ready", resolve: "anchor_text", verify_t: "ambiguous", execute: "skip", verify_e: "skip" },
+    trace: [
+      ["1–3", "Clean frame, allowlist passes, screen ready."],
+      ["4", "<b>anchor_text</b> matched three elements. Narrowing to whole-label matches leaves three — three rows whose button reads exactly \"View\"."],
+      ["5", "The step is a <b>write</b>. Three real candidates, and the recorded position is not evidence either, because which row is where is a function of the data. It parks.", true],
+      ["6–7", "Not reached."],
+    ],
+    exitText: "A distinct result class, not a failure. The run parks on an event and publishes an intervention request; the browser, the display, the session and the half-filled form all survive. Screen 5.",
+    caller: "status: escalated · intervention: { reason: ambiguous_target, candidates: 3 } · exit 0" },
+
+  { id: "app_error", label: "application error", exit: "failure", divert: "verify_e",
+    path: { clear: "ok", policy: "allow", wait: "ready", resolve: "anchor_text", verify_t: "ok", execute: "ok", verify_e: "app_error" },
+    trace: [
+      ["1–5", "Clean frame, allowed, ready, resolved, region checks out."],
+      ["6", "The click lands."],
+      ["7", "The frame matches a condition the app policy declares with <b>no handler</b>, filed under <code>app_errors</code> — nobody at this layer can clear it.", true],
+    ],
+    exitText: "Named, not guessed. The alternative ordering reports this as \"the checkpoint did not hold\", which describes the symptom and sends an operator looking for a layout problem that is not there.",
+    caller: "failure: { kind: APP_ERROR, condition: \"core_unavailable\", step: 3 } · exit 1" },
+];
+
+const ORDER = [
+  { n: "1", t: "declared business outcomes",
+    b: "From the <b>artifact</b>, detector optionally inherited from app policy by name. Move it below the checkpoint and <b>\"no such member\" is reported as a failed assertion</b> rather than as the answer the caller asked for — an ordering bug, not a logic one." },
+  { n: "2", t: "declared recoverable conditions",
+    b: "From <b>policy</b>: apply the handler, re-observe, re-execute if the step is safe, counting against <code>max_per_run</code>. Also evaluated before the step acts (stage 1) — check it only afterwards and <b>a dialog that does not move the page eats the click</b>." },
+  { n: "3", t: "declared conditions with no handler",
+    b: "From <b>policy</b>, split by who can clear it: <code>app_errors</code> stop the run, <code>escalations</code> park it for a human. Below the checkpoint, both <b>arrive as \"the checkpoint did not hold\"</b>." },
+  { n: "4", t: "the step's checkpoint",
+    b: "The expected path — and every checkpoint in a saved artifact has already passed once, on the run that wrote it. Per step rather than only at the end: drop the per-step ones and <b>a wrong click at step 3 surfaces as a plausible wrong output at step 9</b>." },
+  { n: "5", t: "anything else",
+    b: "A hard failure, naming what was expected and what was observed. We cannot enumerate every screen an enterprise app can produce, and <b>guessing at an unrecognised state in a banking application is worse than stopping</b>. <code>cua diagnose</code> is how a screen that lands here stops landing here." },
+];
+
+const FIELDS = {
+  id: { k: "id · version · status", w: "Identity and review state. <code>draft → approved → deprecated</code>; <code>save</code> refuses to overwrite an existing <code>(id, version)</code>, so re-recording produces v(n+1) in draft and leaves what production is calling untouched.",
+        writes: "discovery, then a reviewer", reads: "the catalog, the manifest, every caller", breaks: "an agent could call an unreviewed recording" },
+  app: { k: "app", w: "Which application this drives, its vendor, and a <b>pattern</b> for the installs it is valid against. Replay defaults its guardrails to this.",
+         writes: "discovery, from the app's policy file", reads: "replay, to select guardrails", breaks: "an artifact recorded at one institution runs against another's install and reports success about the wrong credit union's member" },
+  inputs: { k: "inputs", w: "The typed parameters a caller supplies. <code>sensitive: true</code> is a <em>declaration</em>, not a pattern guess — which is why redaction of it cannot miss.",
+            writes: "the caller declares them; synthesis types them", reads: "validation, before anything is touched", breaks: "a type error becomes a run that gets four steps in and types \"None\" into an amount field" },
+  outputs: { k: "outputs", w: "What the caller gets back: the step that produced it, the normalizers to apply, and <b>constraints</b>. A checkpoint says where we are; only a bound says whether the characters read off the screen can be right.",
+             writes: "synthesis; bounds authored at review", reads: "replay, after the last step", breaks: "<code>18204.55</code> misread as <code>1820455</code> coerces to a valid float, passes every assertion, and is quoted to a member" },
+  steps: { k: "steps", w: "The ordered flow. Each step is one primitive from the vocabulary the discovery model was given, so a recording can only express what replay can execute.",
+           writes: "discovery, one per accepted turn", reads: "the replay engine", breaks: "the alternative shape — a raw transcript — needs inference to execute and cannot be reviewed" },
+  risk: { k: "risk", w: "<code>safe</code> or <code>risky</code>: the declaration of <b>reversibility</b>. It gates retry, gates re-execution after a recovery, decides whether a session expiry can restart the run, and decides whether ambiguity escalates.",
+          writes: "the discovery model, per action", reads: "policy, which may promote safe → risky but never the reverse", breaks: "the one field four separate safety rules depend on" },
+  target: { k: "target", w: "How to find the control: anchor text with a spatial relation, a role and name, and the recorded box — the four tiers of the ladder on screen 2, most portable first, in one object.",
+            writes: "discovery, from the element the chosen mark measurably was", reads: "the resolver", breaks: "a bare coordinate cannot be judged reversible, cannot be reviewed, and cannot survive a rebrand" },
+  checkpoint: { k: "checkpoint", w: "What must become true for this step to have worked. Polled to the step's deadline, never slept on.",
+                writes: "discovery — every action carries an <code>expect</code>", reads: "the classifier, after every step", breaks: "a wrong click at step 3 becomes a plausible wrong output at step 9" },
+  success: { k: "success", w: "The capability's own final assertion, separate from the last step's checkpoint: a flow can execute every step correctly and still not have achieved what it was recorded to achieve.",
+             writes: "synthesis", reads: "replay, after the last step", breaks: "a run that went through the motions reports success" },
+  outcomes: { k: "business_outcomes", w: "The legitimate alternative answers this flow can return. A bare <code>{name}</code> <b>inherits its detector from app policy</b> — the app owns the wording, the capability owns whether its caller may receive it.",
+              writes: "<code>learn-outcome</code> by demonstration, or <code>diagnose</code> by proposal", reads: "the classifier checks it first; the agent branches on it", breaks: "an inherited name the app does not declare fails at run start — otherwise an unresolved detector never errors, it simply never matches" },
+  recording: { k: "recording", w: "Provenance: which run, which model, and the <b>viewport</b> it was recorded at. Audit trail, except the viewport, which replay checks at the first frame.",
+               writes: "discovery", reads: "a reviewer, and the geometry check", breaks: "a display of a different shape reflows the app, and recorded boxes stop meaning what they meant" },
+};
+
+const EDGES = [
+  ["AUTOMATION → NOBODY", "park", "escalation/control.py",
+   "Control is surrendered <em>before</em> the request is published, so there is no window in which an operator can see an intervention and start clicking while the automation still believes it may act. It does not wait — everything an operator can observe has happened by the time it returns."],
+  ["NOBODY → HUMAN", "take_control", "escalation/control.py",
+   "Refuses if the run has not actually stopped, so control cannot be taken out from under a live automation. Flips the token and starts the X-layer watcher. Typed text is captured as a <b>keystroke count, never as content</b> — the operator may be entering a credential, and an audit log of what someone typed into a password field is a worse liability than no log. Capture is best-effort and never blocks the transfer; a gap in the evidence is reported, not hidden."],
+  ["HUMAN → NOBODY → AUTOMATION", "release", "escalation/control.py",
+   "<b>NOBODY first, then AUTOMATION</b> — the operator has let go before the run is woken, so the two are never both live even for the length of one await. A handback frame is taken and what the operator did is written to the run's evidence. <code>outcome: abort</code> ends the run as <b>escalated</b> instead: a distinct result class, not a failure."],
+  ["the round trip", "escalate", "escalation/control.py",
+   "Park, then wait on an <code>asyncio.Event</code>. <b>Never times out</b>: a run abandoned mid-intervention is a real state an operator has to clean up, not something to paper over by resuming on a screen nobody looked at. The run is parked, not unwound — browser, display, cookies, page, half-filled form and evidence directory all persist, and the operator connects over noVNC to the same display the resolver was reading. On resume the engine <b>re-observes</b> rather than trusting the frame it parked on, because the operator may have advanced the application several screens. Past <code>max_escalations_per_step</code> it stops with the condition named."],
+  ["the enforcement point", "assert_automation", "escalation/control.py",
+   "Called before every input event, and it lives in the <b>driver</b> — so an escalation path that forgot to yield still cannot inject input while a human holds the token."],
+];
+
+const LOOP = [
+  { n: "01", t: "a run stops", d: "<p>An undeclared screen is a hard failure. Correct, and expensive — the question is whether it costs an escalation <b>once</b> or <b>every time</b>.</p>", where: null },
+  { n: "02", t: "cua diagnose &lt;run&gt;", d: "<p>Reads that run's evidence off disk after the run is terminal. No session, no browser, nothing live — replay is untouched and still constructs no model client.</p>", where: ["diagnose.py", "diagnose"] },
+  { n: "03", t: "the model picks a line", guard: true, d: "<p>Shown the failing screen's lines <b>numbered</b>, it returns an <b>index</b>. A detector it invented is not something the interface can express.</p>", where: ["diagnose.py", "diagnose"] },
+  { n: "04", t: "falsified", guard: true, d: "<p>The chosen line is checked against every successful run of the same capability. A line both runs read is chrome, and a detector on it would report every success as that condition.</p>", where: ["diagnose.py", "reference_lines"] },
+  { n: "05", t: "YAML a human applies", guard: true, d: "<p>A proposal, never a repair. A condition met on a step that <b>mutates</b> is downgraded from recoverable to a person's problem, whatever the model concluded.</p><p>It lands in <b>policy</b>, not the artifact: the application owns the wording, so one reviewed diff answers for every capability on that app, at every institution running it, including the ones recorded next year.</p>", where: ["diagnose.py", "_downgrade"] },
+];
+
+const SCREENS = [
+  ["arc", "1", "The arc"], ["step", "2", "One step"], ["forks", "3", "The forks"],
+  ["artifact", "4", "The artifact"], ["stuck", "5", "When stuck"],
+];
+
+/* ============================ render ============================ */
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const where = (list) => list.map(([rel, sym]) =>
+  `<b>${esc(sym ? at(rel, sym) : rel)}</b>`).join(" · ");
+
+/* --- tabs --- */
+$("tabs").innerHTML = SCREENS.map(([id, n, t]) =>
+  `<button role="tab" data-screen="${id}" aria-selected="false"><span class="n">${n}</span>${t}</button>`).join("");
+
+function showScreen(id) {
+  const known = SCREENS.some(([s]) => s === id) ? id : SCREENS[0][0];
+  document.querySelectorAll(".screen").forEach((s) => s.classList.toggle("on", s.dataset.screen === known));
+  document.querySelectorAll("#tabs button").forEach((b) =>
+    b.setAttribute("aria-selected", String(b.dataset.screen === known)));
+  state.screen = known;
+  setHash();
+}
+$("tabs").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-screen]");
+  if (b) { showScreen(b.dataset.screen); window.scrollTo({ top: 0, behavior: "smooth" }); }
+});
+
+/* --- 1 · the arc --- */
+const ARC = [...ARC_A, GATE, ...ARC_B];
+
+const nodeHTML = (n) =>
+  `<button class="node${n.model ? " has-model" : ""}" data-node="${n.id}" aria-pressed="false">
+     <div class="nn">${esc(n.n)}</div><div class="nd">${esc(n.d)}</div>
+   </button>`;
+const join = (nodes) => nodes.map(nodeHTML).join('<div class="arrow">→</div>');
+
+$("flowA").innerHTML = join(ARC_A);
+$("flowB").innerHTML = join(ARC_B);
+document.querySelector(".seam .node").addEventListener("click", () => showNode("review"));
+
+function showNode(id) {
+  const n = ARC.find((x) => x.id === id) || ARC[0];
+  document.querySelectorAll(".node").forEach((b) =>
+    b.setAttribute("aria-pressed", String(b.dataset.node === n.id)));
+  $("arcPanel").innerHTML = `
+    <div class="ph"><h4>${esc(n.n)}</h4><span class="where">${where(n.where)}</span></div>
+    ${n.p}
+    ${n.raises.length ? `<div class="pgrid"><div class="pblock"><h5>can raise</h5><ul>${
+      n.raises.map((r) => `<li>${r}</li>`).join("")}</ul></div></div>` : ""}`;
+  state.node = n.id;
+  setHash();
+}
+document.querySelectorAll(".flow").forEach((f) => f.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-node]");
+  if (b) showNode(b.dataset.node);
+}));
+
+$("rail").innerHTML = PACKAGES.map((p, i) =>
+  `<button class="chipbtn" data-pkg="${i}" aria-pressed="false">${esc(p.name)}</button>`).join("");
+
+function showPkg(i) {
+  const p = PACKAGES[i] || PACKAGES[0];
+  document.querySelectorAll("[data-pkg]").forEach((b) =>
+    b.setAttribute("aria-pressed", String(Number(b.dataset.pkg) === i)));
+  $("railPanel").innerHTML = `
+    <div class="ph"><h4>${esc(p.name)} — knows ${esc(p.knows)}</h4>
+      <span class="where">may not know ${esc(p.forbid)}</span></div>
+    <ul class="mods">${p.mods.map(([m, d]) => {
+      const rel = p.name.includes("/") ? p.name.split(" ")[0] + m : m;
+      const n = SRC[rel] ? `<i>${lines(rel)} lines</i>` : "";
+      return `<li><b>${esc(m)}</b><span>${esc(d)}</span>${n}</li>`;
+    }).join("")}</ul>`;
+  state.pkg = i;
+  setHash();
+}
+$("rail").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-pkg]");
+  if (b) showPkg(Number(b.dataset.pkg));
+});
+
+/* --- 2 + 3 · the spine --- */
+function spineHTML(interactive) {
+  return STAGES.map((s) => `
+    <button class="stage" data-stage="${s.id}" ${interactive ? 'aria-pressed="false"' : 'tabindex="-1"'}>
+      <span class="sn">${s.n}</span><span class="st">${esc(s.t)}</span>
+    </button>`).join("");
+}
+$("spine").innerHTML = spineHTML(true);
+$("spine2").innerHTML = spineHTML(false);
+
+function showStage(id) {
+  const s = STAGES.find((x) => x.id === id) || STAGES[0];
+  document.querySelectorAll("#spine .stage").forEach((b) =>
+    b.setAttribute("aria-pressed", String(b.dataset.stage === s.id)));
+  $("stagePanel").innerHTML = `
+    <div class="ph"><h4>${s.n} · ${esc(s.t)}</h4>
+      <span class="where">${esc(s.fn)} — <b>${esc(at(s.file, s.sym))}</b></span></div>
+    <p>${s.does}</p>
+    <div class="pgrid">
+      <div class="pblock"><h5>can raise</h5><ul>${s.raises.map((r) => `<li>${r}</li>`).join("")}</ul></div>
+      <div class="pblock"><h5>records on the step</h5><ul>${s.records.map((r) => `<li>${r}</li>`).join("")}</ul></div>
     </div>
-    <div class="side">
-      <div class="cap">settle — two tests, in order</div>
-<pre><span class="c"># 1. cheapest correct answer</span>
-hash == previous  → <span class="s">settled_by = "pixels"</span>
+    ${s.ladder ? `<div class="ladder">${RUNGS.map((r) => `
+      <button class="rung" aria-expanded="false">
+        <div class="rn">${r.n}</div>
+        <div>
+          <div class="rt">${esc(r.t)}${r.tag ? `<span class="tagline tag-${r.tag}">${esc(r.tagl)}</span>` : ""}
+            <span class="where" style="margin-left:auto">${esc(at("resolve/resolver.py", r.sym))}</span></div>
+          <div class="rs">${esc(r.s)}</div>
+          <div class="rd">${r.d}</div>
+        </div>
+      </button>`).join("")}</div>` : ""}
+    <p class="ref">Why, and what the alternative costs: <a href="REPORT.md">${esc(s.ref)}</a></p>`;
+  state.stage = s.id;
+  setHash();
+}
+$("spine").addEventListener("click", (e) => {
+  const b = e.target.closest(".stage");
+  if (b) showStage(b.dataset.stage);
+});
+$("stagePanel").addEventListener("click", (e) => {
+  const r = e.target.closest(".rung");
+  if (r) r.setAttribute("aria-expanded", String(r.getAttribute("aria-expanded") !== "true"));
+});
 
-<span class="c"># 2. only if that never converges</span>
-two observations whose readable
-text + boxes match (quantised to
-0.5% of frame — OCR edges wobble)
-                  → <span class="s">settled_by = "text"</span>
+/* --- 3 · forks --- */
+$("picker").innerHTML = SCENARIOS.map((s) =>
+  `<button data-sc="${s.id}" aria-pressed="false">${esc(s.label)}</button>`).join("");
 
-else → <span class="em">Unsettled</span>  <span class="c">(terminal)</span></pre>
-    </div>
-  </div></div>
-  <div class="note warn">
-    <p><span class="chip drift">DRIFT SIGNAL</span> &nbsp; <code>settled_by</code> is recorded on every
-    step result. The text fallback exists because a caret, spinner, carousel or live clock means
-    <strong>no two frames are ever byte-identical</strong> — on such a surface the pixel test alone
-    fails every single step. A capability that starts settling by <code>text</code> is telling you
-    the surface began to animate. Our worked run: <code>pixels</code> on all five steps.</p>
-  </div>
-</section>
+const BADGE = {
+  recovered: "recovered", polled: "polled", outcome: "outcome",
+  app_error: "app error", ambiguous: "ambiguous",
+};
 
-<div class="arrow">↓ &nbsp; one settled PNG</div>
+function showScenario(id) {
+  const sc = SCENARIOS.find((x) => x.id === id) || SCENARIOS[0];
+  document.querySelectorAll("#picker button").forEach((b) =>
+    b.setAttribute("aria-pressed", String(b.dataset.sc === sc.id)));
 
-<!-- 3 -->
-<section class="stage is-key">
-  <div class="n">3</div>
-  <h3>Pixels become meaning — <code>merge(controls, texts)</code></h3>
-  <p class="lede">
-    Detection knows <em>where</em> the controls are. OCR knows <em>what</em> the words are.
-    Neither alone is enough: a bare box cannot be targeted semantically, and a bare text line is
-    not necessarily clickable. This is the hop that makes everything above it surface-agnostic.
-  </p>
-  <div class="xform"><div class="row">
-    <div class="side">
-      <div class="cap">in — two independent readings</div>
-<pre>OmniParser  → boxes, no words
-PP-OCR/ONNX → words + boxes, no
-              idea what is clickable
+  document.querySelectorAll("#spine2 .stage").forEach((b) => {
+    const v = sc.path[b.dataset.stage];
+    b.className = "stage " + (v === "skip" ? "unvisited" : b.dataset.stage === sc.divert ? "divert" : "visited");
+    b.querySelector(".badge")?.remove();
+    if (BADGE[v]) b.insertAdjacentHTML("beforeend", `<span class="badge">${esc(BADGE[v])}</span>`);
+  });
 
-<span class="c"># measured, dense member page:
-# 146 elements = 7 detector boxes
-#              + 139 OCR lines.
-# enterprise back-office screens are
-# dense text with few icons — the
-# merge step is where the value is.</span></pre>
-    </div>
-    <div class="side">
-      <div class="cap">out — <span class="who">real elements, step-03.json</span></div>
-<pre>e11 text   ocr        1.00 <span class="s">"Member ID or Name"</span>
-e12 button omniparser 0.89 <span class="s">"12345"</span>
-e13 button omniparser 0.92 <span class="s">"Search"</span>
-e14 text   ocr        0.99 <span class="s">"Try 12345, 22841, …"</span>
+  $("tracePanel").innerHTML = `<div class="trace">${sc.trace.map(([i, tx, hi]) =>
+    `<div class="tr${hi ? " hi" : ""}"><div class="ti">${esc(i)}</div><div class="tx">${tx}</div></div>`).join("")}</div>`;
 
-<span class="c"># e13 carries text ONLY because merge
-# gave it the OCR line. The detector
-# emitted an anonymous box.</span></pre>
-    </div>
-  </div></div>
+  $("exit").innerHTML = `
+    <div class="exit ${sc.exit}">
+      <div class="ec">${esc(sc.exit.replace("_", " "))}</div>
+      <div class="et">${sc.exitText}</div>
+      <div class="ecaller">${esc(sc.caller)}</div>
+    </div>`;
+  state.scenario = sc.id;
+  setHash();
+}
+$("picker").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-sc]");
+  if (b) showScenario(b.dataset.sc);
+});
 
-  <div class="ladder">
-    <div class="rung g"><div class="tag">rule 1</div><div class="body">
-      Text inside a control becomes its <b>name/text</b>, and goes to the <b>smallest</b>
-      containing control — a button inside a card is contained by both.</div></div>
-    <div class="rung r"><div class="tag">rule 2</div><div class="body">
-      Control inside the <b>text</b> is also a label. Measured: detector box 29×16 vs OCR line
-      41×23 on the same "View" button — containment only 0.49. Without this rule
-      <b>every button on the page is anonymous</b>. A size guard stops an icon claiming a whole row.</div></div>
-    <div class="rung o"><div class="tag">rule 3</div><div class="body">
-      A control larger than 15% of the frame is a <b>container</b> and absorbs nothing. Measured:
-      a 21%-of-frame detection on the sign-on screen swallowed both field labels and left
-      "User ID" unaddressable.</div></div>
-    <div class="rung b"><div class="tag">rule 4</div><div class="body">
-      Text with no enclosing control survives as <code>role="text"</code>. Not clickable — but it
-      is <b>exactly what anchors and checkpoints match against</b>.</div></div>
-  </div>
+$("order").innerHTML = ORDER.map((o) => `
+  <button class="ostep" aria-expanded="false">
+    <div class="on">${o.n}</div>
+    <div><div class="ot">${esc(o.t)}</div><div class="ob">${o.b}</div></div>
+  </button>`).join("") +
+  `<p class="ref">One function — <span class="mono">${esc(at("replay/outcomes.py", "classify"))}</span> —
+   so the ordering cannot be re-litigated per call site. <a href="REPORT.md">REPORT §3</a></p>`;
+$("order").addEventListener("click", (e) => {
+  const b = e.target.closest(".ostep");
+  if (b) b.setAttribute("aria-expanded", String(b.getAttribute("aria-expanded") !== "true"));
+});
 
-  <div class="note">
-    <p>Then: NMS dedupe (highest confidence first) → re-infer <code>role</code> now the box has
-    words → reassign ids <code>e0, e1, …</code> in <strong>reading order</strong>, top-to-bottom
-    then left-to-right. Ids are stable <em>within</em> one observation and meaningless across them.
-    Nothing may persist them.</p>
-  </div>
-</section>
+/* --- 4 · the artifact --- */
+const F = (key, text) => `<span class="fld" data-fld="${key}" aria-pressed="false">${text}</span>`;
+$("artifactJson").innerHTML = [
+  `{`,
+  `  ${F("id", '<span class="k">"id"</span>: <span class="s">"cap_get_savings_balance"</span>, <span class="k">"version"</span>: <span class="n">2</span>, <span class="k">"status"</span>: <span class="s">"approved"</span>')},`,
+  `  ${F("app", '<span class="k">"app"</span>: { <span class="k">"name"</span>: <span class="s">"targetapp"</span>,')}`,
+  `           ${F("app", '<span class="k">"base_url_pattern"</span>: <span class="s">"^http://targetapp:8080(/.*)?$"</span> }')},`,
+  ``,
+  `  ${F("inputs", '<span class="k">"inputs"</span>:  [{ <span class="k">"name"</span>: <span class="s">"member_id"</span>, <span class="k">"type"</span>: <span class="s">"string"</span>, <span class="k">"example"</span>: <span class="s">"12345"</span>,')}`,
+  `                ${F("inputs", '<span class="k">"sensitive"</span>: false, <span class="k">"constraints"</span>: { <span class="k">"pattern"</span>: <span class="s">"^[0-9]{5}$"</span> } }]')},`,
+  `  ${F("outputs", '<span class="k">"outputs"</span>: [{ <span class="k">"name"</span>: <span class="s">"balance"</span>, <span class="k">"type"</span>: <span class="s">"number"</span>, <span class="k">"from_step"</span>: <span class="n">4</span>,')}`,
+  `                ${F("outputs", '<span class="k">"normalize"</span>: [<span class="s">"collapse_ws"</span>, <span class="s">"strip_currency"</span>],')}`,
+  `                ${F("outputs", '<span class="k">"constraints"</span>: { <span class="k">"max"</span>: <span class="n">1e8</span> } }]')},`,
+  ``,
+  `  ${F("steps", '<span class="k">"steps"</span>: [{ <span class="k">"kind"</span>: <span class="s">"act"</span>, <span class="k">"id"</span>: <span class="n">4</span>, <span class="k">"action"</span>: <span class="s">"extract"</span>,')}`,
+  `              ${F("risk", '<span class="k">"risk"</span>: <span class="s">"safe"</span>')}, ${F("steps", '<span class="k">"extract_as"</span>: <span class="s">"balance"</span>,')}`,
+  `              ${F("target", '<span class="k">"target"</span>: { <span class="k">"intent"</span>: <span class="s">"read the balance beside the account"</span>,')}`,
+  `                          ${F("target", '<span class="k">"anchor_text"</span>: <span class="s">"{{account_nickname}}"</span>,   <span class="c">// tier 1</span>')}`,
+  `                          ${F("target", '<span class="k">"relation"</span>: <span class="s">"right_of"</span>, <span class="k">"relation_index"</span>: <span class="n">1</span>,')}`,
+  `                          ${F("target", '<span class="k">"role"</span>: <span class="s">null</span>, <span class="k">"name"</span>: <span class="s">null</span>,                <span class="c">// tier 2</span>')}`,
+  `                          ${F("target", '<span class="k">"bbox"</span>: { <span class="k">"x"</span>: <span class="n">0.44</span>, <span class="k">"y"</span>: <span class="n">0.31</span>, ... } },  <span class="c">// tier 3</span>')}`,
+  `              ${F("checkpoint", '<span class="k">"checkpoint"</span>: { <span class="k">"kind"</span>: <span class="s">"text_present"</span>, <span class="k">"value"</span>: <span class="s">"Available Balance"</span> } }]')},`,
+  ``,
+  `  ${F("success", '<span class="k">"success"</span>: { <span class="k">"kind"</span>: <span class="s">"text_present"</span>, <span class="k">"value"</span>: <span class="s">"{{account_nickname}}"</span> }')},`,
+  `  ${F("outcomes", '<span class="k">"business_outcomes"</span>: [{ <span class="k">"name"</span>: <span class="s">"member_not_found"</span> }],  <span class="c">// inherited</span>')}`,
+  `  ${F("recording", '<span class="k">"recording"</span>: { <span class="k">"run_id"</span>: <span class="s">"discover-e3d4f6b7"</span>, <span class="k">"model"</span>: <span class="s">"xai/grok-4"</span>,')}`,
+  `                  ${F("recording", '<span class="k">"viewport"</span>: { <span class="k">"width"</span>: <span class="n">1440</span>, <span class="k">"height"</span>: <span class="n">900</span> } }')}`,
+  `}`,
+].join("\n");
 
-<div class="arrow">↓ &nbsp; <code>Observation { elements[], viewport, url?, frame_hash, settled_by }</code></div>
+function showField(key) {
+  const f = FIELDS[key] ? key : "id";
+  const d = FIELDS[f];
+  document.querySelectorAll(".fld").forEach((s) =>
+    s.setAttribute("aria-pressed", String(s.dataset.fld === f)));
+  $("fieldPanel").innerHTML = `
+    <div class="fk">${esc(d.k)}</div>
+    <div class="fw">${d.w}</div>
+    <dl>
+      <dt>writes</dt><dd>${d.writes}</dd>
+      <dt>reads</dt><dd>${d.reads}</dd>
+      <dt>without</dt><dd>${d.breaks}</dd>
+    </dl>`;
+  state.field = f;
+  setHash();
+}
+$("artifactJson").addEventListener("click", (e) => {
+  const s = e.target.closest(".fld");
+  if (s) showField(s.dataset.fld);
+});
 
-<!-- 4 -->
-<section class="stage">
-  <div class="n">4</div>
-  <h3>What the model is shown — <code>annotate()</code> + <code>candidate_digest()</code></h3>
-  <p class="lede">
-    The screenshot with numbered boxes drawn on it, plus a compact list of those numbers.
-    The model replies with a <em>number</em>, never a coordinate.
-  </p>
-  <div class="xform"><div class="row">
-    <div class="side">
-      <div class="cap">out — the candidate list</div>
-<pre>[ { <span class="k">"mark"</span>: <span class="num">11</span>, <span class="k">"role"</span>: <span class="s">"text"</span>,
-    <span class="k">"box"</span>: [.096, .118, .155, .031],
-    <span class="k">"text"</span>: <span class="s">"Member ID or Name"</span> },
-  { <span class="k">"mark"</span>: <span class="num">13</span>, <span class="k">"role"</span>: <span class="s">"button"</span>,
-    <span class="k">"box"</span>: [.253, .118, .051, .031],
-    <span class="k">"text"</span>: <span class="s">"Search"</span> }, … ]</pre>
-    </div>
-    <div class="side">
-      <div class="cap">the budget, and what it costs</div>
-<pre>MAX_CANDIDATES = <span class="num">80</span>
+/* --- 5 · when stuck --- */
+$("edges").innerHTML = EDGES.map(([label, sym, rel, d]) => `
+  <button class="edge" aria-expanded="false">
+    <div class="el">${esc(label)} <span class="where">${esc(sym)}() — ${esc(at(rel, sym))}</span></div>
+    <div class="ed">${d}</div>
+  </button>`).join("");
+$("edges").addEventListener("click", (e) => {
+  const b = e.target.closest(".edge");
+  if (b) b.setAttribute("aria-expanded", String(b.getAttribute("aria-expanded") !== "true"));
+});
 
-<span class="c"># that same page has 146 elements,
-# so 66 are TRUNCATED. Ordering is
-# reading order, so truncation drops
-# the bottom of the page rather than
-# an arbitrary slice — and the count
-# is passed to the model, so
-# scrolling stays available to it.</span></pre>
-    </div>
-  </div></div>
-</section>
+$("loop").innerHTML = LOOP.map((l, i) => `
+  <button class="lstep${l.guard ? " guard" : ""}" data-loop="${i}" aria-pressed="false">
+    <div class="ln">${l.n}${l.guard ? " · guard" : ""}</div>
+    <div class="lt">${l.t}</div>
+  </button>`).join("");
 
-<div class="arrow">↓ &nbsp; annotated PNG + candidates + goal + history</div>
+function showLoop(i) {
+  const l = LOOP[i] || LOOP[0];
+  document.querySelectorAll("[data-loop]").forEach((b) =>
+    b.setAttribute("aria-pressed", String(Number(b.dataset.loop) === i)));
+  $("loopPanel").innerHTML = `
+    <div class="ph"><h4>${l.n} · ${l.t}</h4>
+      <span class="where">${l.where ? esc(at(l.where[0], l.where[1])) : ""}</span></div>
+    ${l.d}`;
+  state.loop = i;
+  setHash();
+}
+$("loop").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-loop]");
+  if (b) showLoop(Number(b.dataset.loop));
+});
 
-<!-- 5 -->
-<section class="stage is-model">
-  <div class="n">5</div>
-  <h3>The model decides <span class="chip model">MODEL</span></h3>
-  <p class="lede">
-    <strong>One call, one tool call back.</strong> The action space handed to the model
-    <em>is</em> the artifact's step vocabulary — it cannot express anything replay cannot execute.
-    That is what makes recordings replayable by construction rather than by post-hoc inference
-    over a transcript.
-  </p>
-  <div class="xform"><div class="row">
-    <div class="side">
-      <div class="cap">in — the turn</div>
-<pre><span class="k">system</span>: role, the app's `surface` line
-        from policy, allowed actions,
-        the rules, the trust boundary
-<span class="k">user</span>:   goal, declared parameters,
-        history, candidate list,
-        how many were truncated
-<span class="k">image</span>:  the annotated overlay</pre>
-    </div>
-    <div class="side">
-      <div class="cap">out — <span class="who">exactly one tool call</span></div>
-<pre>{ <span class="k">"name"</span>: <span class="s">"click"</span>,
-  <span class="k">"input"</span>: {
-    <span class="k">"mark"</span>:   <span class="num">13</span>,          <span class="c">← a NUMBER</span>
-    <span class="k">"intent"</span>: <span class="s">"click the Search button
-                after entering member
-                ID 12345"</span>,
-    <span class="k">"expect"</span>: <span class="s">"Member Profile"</span>,
-    <span class="k">"anchor"</span>: <span class="s">"Search"</span>,   <span class="c">← optional,
-                          and checked</span>
-    <span class="k">"risk"</span>:   <span class="s">"safe"</span> } }</pre>
-    </div>
-  </div></div>
-  <div class="note">
-    <p><strong>None of the extra fields is decoration.</strong> <code>intent</code> is what the
-    policy layer classifies for risk — <code>click(0.42, 0.71)</code> cannot be judged reversible or
-    not — and it is what a human reviewer reads. <code>expect</code> is checked immediately at
-    stage 7. <code>anchor</code> is the model's answer to <em>"the shortest text on this element
-    that will still identify it next month"</em>, and it is checked at stage 6 before it is
-    believed.</p>
-    <p>Page text is declared <strong>untrusted input</strong> in the system prompt. That is a
-    mitigation, not a defence: the allowlist bounds the blast radius, it does not stop the model
-    being misled inside it.</p>
-  </div>
-</section>
+/* ============================ url state ============================ */
 
-<div class="arrow">↓ &nbsp; <b>the single most important hop on this page</b></div>
+const state = { screen: "arc", node: "discover", pkg: 4, stage: "clear", scenario: "happy", field: "id", loop: 2 };
 
-<!-- 6 -->
-<section class="stage is-key">
-  <div class="n">6</div>
-  <h3>Mark + measured element → typed step — <code>to_step()</code></h3>
-  <p class="lede">
-    The model supplied a number. The <em>element behind that number</em> supplies role, name, text
-    and box. So <code>Target</code> is written from <strong>measured data</strong>, never from the
-    model's description of what it thought it was clicking. This is the join that makes the
-    artifact trustworthy.
-  </p>
-  <div class="xform"><div class="row">
-    <div class="side">
-      <div class="cap">in — two sources, fused</div>
-<pre><span class="c"># from the MODEL</span>
-intent = <span class="s">"click the Search button …"</span>
-expect = <span class="s">"Member Profile"</span>
-risk   = <span class="s">"safe"</span>
+function setHash() {
+  const h = `#${state.screen}/${state.node}/${state.pkg}/${state.stage}/${state.scenario}/${state.field}/${state.loop}`;
+  history.replaceState(null, "", h);
+}
 
-<span class="c"># from the ELEMENT at mark 13</span>
-role = <span class="s">"button"</span>
-name = <span class="s">"Search"</span>
-text = <span class="s">"Search"</span>
-bbox = {x .2534, y .1184,
-        w .0512, h .0314}</pre>
-    </div>
-    <div class="side">
-      <div class="cap">out — <span class="who">artifact step 3, verbatim</span></div>
-<pre>{ <span class="k">"kind"</span>: <span class="s">"act"</span>, <span class="k">"id"</span>: <span class="num">3</span>, <span class="k">"action"</span>: <span class="s">"click"</span>,
-  <span class="k">"risk"</span>: <span class="s">"safe"</span>,
-  <span class="k">"target"</span>: {
-    <span class="k">"intent"</span>:      <span class="s">"click the Search button …"</span>,
-    <span class="k">"target_desc"</span>: <span class="s">"Search"</span>,
-    <span class="k">"anchor_text"</span>: <span class="s">"Search"</span>,   <span class="c">← tier 1</span>
-    <span class="k">"anchor_match"</span>: <span class="s">"contains"</span>,
-    <span class="k">"role"</span>: <span class="s">"button"</span>,        <span class="c">← tier 2</span>
-    <span class="k">"name"</span>: <span class="s">"Search"</span>,
-    <span class="k">"bbox"</span>: { … },           <span class="c">← tier 3</span>
-    <span class="k">"relation"</span>: <span class="s">"self"</span> } }</pre>
-    </div>
-  </div></div>
+function readHash() {
+  const p = location.hash.replace(/^#/, "").split("/");
+  if (p[0]) state.screen = p[0];
+  if (p[1]) state.node = p[1];
+  if (p[2]) state.pkg = Number(p[2]) || 0;
+  if (p[3]) state.stage = p[3];
+  if (p[4]) state.scenario = p[4];
+  if (p[5]) state.field = p[5];
+  if (p[6]) state.loop = Number(p[6]) || 0;
+}
 
-  <div class="note good">
-    <p><strong>Two cases rewrite the anchor to a <em>neighbour</em></strong>, and both were found by
-    reading a recorded artifact:</p>
-    <p>· <strong>an empty control</strong> — a form field has no text, so anchoring on it is
-    anchoring on nothing and replay falls straight through to the recorded box.<br>
-    · <strong>a value</strong> — anchoring an extraction on the value it read is self-defeating:
-    <code>$18,204.55</code> identifies this balance only until the balance changes, which for a
-    balance is the whole point.</p>
-    <p>Which neighbour is <strong>measured, not guessed</strong>, and ranked: (1) text the caller
-    declared as an input, (2) text appearing exactly once on screen, (3) nearest — only as a
-    fallback, because nearest is <em>wrong</em> in a grid: the cell left of a balance is its status,
-    and "Active" is on every row. Step 5 of our artifact is the result:
-    <code>anchor_text: "{{account_nickname}}", relation: right_of, index: 1</code>.</p>
-  </div>
+/* keyboard: ← → walks whatever the current screen is a list of */
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+  if (/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || "")) return;
+  const d = e.key === "ArrowRight" ? 1 : -1;
+  const step = (list, cur, show, key = "id") => {
+    const i = list.findIndex((x) => (key ? x[key] : x) === cur);
+    show(list[(i + d + list.length) % list.length][key] ?? (i + d + list.length) % list.length);
+  };
+  if (state.screen === "step") step(STAGES, state.stage, showStage);
+  else if (state.screen === "forks") step(SCENARIOS, state.scenario, showScenario);
+  else if (state.screen === "arc") step(ARC, state.node, showNode);
+  else if (state.screen === "stuck") showLoop((state.loop + d + LOOP.length) % LOOP.length);
+  else return;
+  e.preventDefault();
+});
 
-  <h3 style="margin-top:30px">…and a third case: the element's text is <em>part</em> durable
-  <span class="chip checked">MODEL PROPOSES</span></h3>
-  <p class="lede">
-    <code>"Search"</code> is entirely durable, so it becomes the anchor untouched. But an element's
-    text is often part durable and part volatile, and <strong>only the durable part belongs in a
-    recording</strong>. This is the <code>_falsify</code> pattern from stage 8d, applied one level
-    down — the model may propose a shorter anchor, and code then tries to refute it.
-  </p>
-
-  <div class="note stop">
-    <p><strong>The failure this prevents, proven before it was fixed.</strong> A dropdown option on
-    the transfer form reads <code>29883 - Checking - $4,820.19</code>. Taking the full text as the
-    anchor, then parameterizing, produced:</p>
-<pre style="background:transparent;padding:8px 0 0;font-size:12px">anchor_text: <span class="s">"{{from_account}} - Checking - <span class="em">$4,820.19</span>"</span>   match: contains</pre>
-    <p style="margin-top:7px">That artifact <strong>dies on its own second run</strong> — a transfer
-    changes the balance, and the anchor never matches again. The shipped read capability never
-    exhibited it, because that flow only ever clicks buttons with short stable text
-    (<code>"Search"</code>, <code>"View"</code>). A latent bug that one recorded flow hid.</p>
-  </div>
-
-  <div class="ladder">
-    <div class="rung g"><div class="tag">1 · a FACT</div><div class="body">
-      A value the caller <b>declared as an input</b> that appears in the element's text. Not a
-      judgment — the caller <em>named</em> it as the thing that varies per invocation, which is
-      exactly what "identifies this record" means. Free, offline, and it covers the common case.
-      Here: <code>29883</code>.</div></div>
-    <div class="rung v"><div class="tag">2 · a JUDGMENT</div><div class="body">
-      What the <b>model proposed</b>. Used only when the durable part is not one of the declared
-      inputs — <i>"the row for merchant PACIFIC WIRELESS"</i> — where the code has nothing to go on
-      and the model has read the screen.</div></div>
-    <div class="rung o"><div class="tag">both face</div><div class="body">
-      <code>_identifies()</code> — the candidate must be text <b>actually on the chosen element</b>,
-      and re-resolving it against <b>that same frame</b> must land back on <b>that same element</b>
-      with <code>candidates == 1</code> and <code>tier is ANCHOR_TEXT</code>. A proposal that picks
-      out a different element, or three of them, is <em>worse</em> than the full string — and is
-      dropped.</div></div>
-  </div>
-
-  <div class="note">
-    <p><strong>Why fact beats judgment, and it is not a preference.</strong> Asked for an anchor on
-    <code>29883 - Checking - $4,820.19</code>, a model may answer <code>$4,820.19</code>. That text
-    <em>is</em> on the element, <em>is</em> unique on the frame, and <strong>passes every check
-    here</strong> — because "will this still be true next month?" is not answerable from one
-    observation. The declared input <code>29883</code> <em>is</em> answerable. So it wins, and the
-    model is never consulted.</p>
-  </div>
-
-  <div class="tbl-scroll">
-    <table>
-      <thead><tr><th>the model proposed</th><th>outcome</th><th>anchor recorded</th></tr></thead>
-      <tbody>
-        <tr><td><em>nothing</em></td><td>fact applies</td><td><code>29883</code></td></tr>
-        <tr><td><code>"29883"</code></td><td>agrees with the fact</td><td><code>29883</code></td></tr>
-        <tr><td><code>"Acct 29883"</code> — hallucinated, not on the element</td><td><strong>dropped</strong></td><td><code>29883</code></td></tr>
-        <tr><td><code>"Checking"</code> — matches three rows</td><td><strong>dropped</strong>, ambiguous</td><td><code>29883</code></td></tr>
-        <tr><td><code>"$4,820.19"</code> — the volatile half</td><td>passes every check, but <strong>fact wins</strong></td><td><code>29883</code></td></tr>
-        <tr><td><code>"PACIFIC WIRELESS"</code>, no declared id present</td><td>accepted — the model is the only source</td><td><code>PACIFIC WIRELESS</code></td></tr>
-        <tr><td><em>anything</em>, on <code>"View"</code></td><td>already stable, left alone</td><td><code>View</code></td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="note warn">
-    <p><strong>The residual limit, stated rather than papered over.</strong> When the durable part is
-    <em>not</em> a declared input <em>and</em> the model picks the volatile half, this accepts it.
-    <strong>Nothing in one observation can tell those two apart.</strong> What catches it is the
-    reviewer — the artifact shows <code>anchor_text</code> beside the full <code>target_desc</code>,
-    so the substitution is visible in a diff — and then the resolution-tier drift signal in
-    production, as that anchor decays into <code>recorded_bbox</code>.</p>
-  </div>
-</section>
-
-<div class="arrow">↓ &nbsp; <b>before the primitive runs</b> — the same guardrail replay uses</div>
-
-<!-- 6b -->
-<section class="stage">
-  <div class="n" style="border-color:var(--orange);color:var(--orange);background:var(--orange-bg)">!</div>
-  <h3>The guardrail gate — <code>policy.check_action(primitive, risk, intent)</code></h3>
-  <p class="lede">
-    The <strong>same policy object replay uses</strong>, on the same primitive, called before the
-    action rather than after it. A guardrail that only guards the LLM is not a guardrail — and one
-    that only guards replay is not either.
-  </p>
-  <div class="ladder">
-    <div class="rung r"><div class="tag">denied</div><div class="body">
-      Primitive not in the allowlist, URL outside the permitted patterns, or
-      <code>risky_disposition: block</code> → <code>PolicyDenied</code>. The step is refused and
-      recorded as refused; the model is told and tries something else.</div></div>
-    <div class="rung o"><div class="tag">confirm → PARK</div><div class="body">
-      <b>A risky action is risky whoever is driving.</b> The recording session parks on the same
-      <code>RunControl</code> token replay uses, raises an <code>InterventionRequest</code> with
-      <code>mode="discovery"</code>, and hands the <b>live browser</b> to a human. Abort ends the
-      run <code>ESCALATED</code>; resume writes the approval into the history and proceeds.</div></div>
-    <div class="rung g"><div class="tag">allow</div><div class="body">Execute.</div></div>
-  </div>
-  <div class="note stop">
-    <p><strong>This was a real asymmetry until recently.</strong> The loop called
-    <code>check_action(...)</code> and <em>discarded the return value</em> — it reacted only to
-    <code>PolicyDenied</code>. So under <code>risky_disposition: confirm</code>, replay parked for a
-    human and <strong>discovery executed the risky step unattended</strong>. Recording a transfer
-    would have sailed straight through "Confirm Transfer", the one control in the app that moves
-    money. The method returned a disposition that one of its two callers threw away.</p>
-    <p>The alternative — letting a recording session submit a transfer because a human is
-    <em>notionally</em> watching a VNC window — is a guardrail that binds only the path needing it
-    least.</p>
-  </div>
-  <div class="note">
-    <p>The model's own <code>escalate</code> tool now parks the same way
-    (<code>AGENT_REQUESTED</code>) instead of merely ending the run: a human can unstick it on the
-    live session and <strong>the recording continues</strong>. On resume the model is told what
-    happened and that <em>"the screen may have moved; look again before acting"</em> — without that
-    line its next action is reasoned from a state it never saw.</p>
-    <p>A loop built with <code>control=None</code> (the offline tests) treats a park as a
-    <strong>refusal, not permission</strong>. The safe reading of "nobody can be asked" is not
-    "proceed anyway".</p>
-  </div>
-</section>
-
-<div class="arrow">↓ &nbsp; execute the primitive, re-observe</div>
-
-<!-- 7 -->
-<section class="stage">
-  <div class="n">7</div>
-  <h3>Was the model right? — the <code>expect</code> check <span class="chip nomodel">NO MODEL</span></h3>
-  <p class="lede">
-    Verified immediately against the next frame, deterministically. This is why
-    <strong>every checkpoint in a saved artifact has already passed once</strong> — on the run that
-    wrote it.
-  </p>
-  <div class="ladder">
-    <div class="rung r">
-      <div class="tag">unmet · unchanged</div>
-      <div class="body"><b>DISCARD the step.</b> Nothing happened, so there is nothing worth
-      replaying. The model is told what the screen actually reads, so its next attempt differs.</div>
-    </div>
-    <div class="rung o">
-      <div class="tag">unmet · changed</div>
-      <div class="body"><b>KEEP the step, DROP its checkpoint</b>, and note it for the reviewer.
-      Dropping the step would leave the recording missing a state transition the flow actually
-      made — replay would then start on a screen it never reaches.</div>
-    </div>
-    <div class="rung g">
-      <div class="tag">met</div>
-      <div class="body"><b>KEEP with the checkpoint.</b> The expected path.</div>
-    </div>
-  </div>
-  <div class="note warn">
-    <p><strong>The middle branch fired on the real run.</strong> Step 3 of the shipped artifact
-    carries, verbatim:</p>
-<pre style="background:transparent;padding:8px 0 0;font-size:12px">"note": <span class="s">"recorded without a checkpoint: the run expected 'Member Profile'
-         here and the screen showed something else. Review before approving."</span></pre>
-    <p style="margin-top:7px">The model predicted the profile would appear after clicking Search;
-    the search-results list appeared instead. The click was real and the screen did change, so the
-    step is kept — <strong>and the assertion it could not verify is not written into the
-    artifact.</strong> An unverifiable claim has no business in a contract.</p>
-  </div>
-</section>
-
-<div class="arrow">↓ &nbsp; 5 verified steps, 5 model calls</div>
-
-<!-- 8 -->
-<section class="stage is-key">
-  <div class="n">8</div>
-  <h3>Recording becomes a contract — <code>synthesize()</code></h3>
-  <p class="lede">
-    Four passes. Three are deterministic code; exactly one consults the model, and everything it
-    proposes is then <em>refuted</em> by code before it survives.
-  </p>
-
-  <div class="ladder">
-    <div class="rung g"><div class="tag">a · prune</div><div class="body">
-      Drop steps that did not advance state — a second read of a value already read under the same
-      name, a navigate immediately superseded by another. <b>Conservative on purpose</b>: anything
-      more aggressive is deciding after the fact that a step the run verified was unnecessary.
-      Step ids are left alone here — they are what ties an extraction to its output.</div></div>
-
-    <div class="rung g"><div class="tag">b · parameterize</div><div class="body">
-      Substitute declared input values with placeholders, <b>longest match first</b> so an input of
-      <code>123</code> does not corrupt a recorded <code>12345</code> belonging to a different
-      input. An input appearing nowhere in the recording is <b>not declared</b> — telling a calling
-      agent it can steer something it cannot is worse than silence.</div></div>
-
-    <div class="rung v"><div class="tag">c · declare <span class="chip model">MODEL</span></div><div class="body">
-      The model writes the <code>description</code>, proposes a <code>success_text</code>, and —
-      this one is forward-looking by design — proposes <b>business outcomes for screens this run
-      never visited</b>. Describing them is the job, not a mistake.</div></div>
-
-    <div class="rung r"><div class="tag">d · _falsify</div><div class="body">
-      <b>Code refutes what the model proposed.</b> An outcome detector cannot be confirmed — the run
-      never saw that screen — but it can be <em>refuted</em>: a phrase visible while the flow
-      <b>succeeded</b> cannot be what distinguishes it having gone another way.</div></div>
-  </div>
-
-  <div class="xform"><div class="row">
-    <div class="side">
-      <div class="cap">b · parameterize — real substitution</div>
-<pre><span class="c"># before</span>
-value: <span class="s">"12345"</span>
-intent: <span class="s">"type the member ID 12345 …"</span>
-checkpoint.value: <span class="s">"12345"</span>
-
-<span class="c"># after</span>
-value: <span class="s">"<span class="hi">{{member_id}}</span>"</span>
-intent: <span class="s">"type the member ID
-         <span class="hi">{{member_id}}</span> …"</span>
-checkpoint.value: <span class="s">"<span class="hi">{{member_id}}</span>"</span></pre>
-    </div>
-    <div class="side">
-      <div class="cap">d · _falsify — <span class="who">real synthesis.json</span></div>
-<pre>proposed <span class="num">2</span>, kept <span class="em">0</span>:
-
-<span class="s">"member_not_found"</span>
-  detector_text: <span class="s">"Search Results"</span>
-  <span class="em">REJECTED</span> — on a frame the
-  successful run passed through
-
-<span class="s">"account_not_found"</span>
-  detector_text: <span class="s">"Accounts"</span>
-  <span class="em">REJECTED</span> — same reason</pre>
-    </div>
-  </div></div>
-
-  <div class="note stop">
-    <p><strong>Both proposals were wrong, and code caught both.</strong> <code>"Accounts"</code> is a
-    column header on every screen in the app — had it survived, <em>every successful run</em> would
-    have been classified as <code>account_not_found</code>. The rejections are kept in
-    <code>synthesis.json</code> rather than discarded: what was proposed and thrown away is part of
-    judging whether the rest is trustworthy.</p>
-    <p>So <code>cap_get_savings_balance@v1</code> shipped with <strong>zero</strong> business
-    outcomes. The real one was added later by <code>cua learn-outcome</code>, which replays the
-    capability twice — once with the recorded inputs, once with <code>member_id=99999</code> — and
-    takes the detector from the <em>difference</em>: <code>"No member matches the search criteria
-    entered."</code>, the app's own wording, copied off the screen that produces it. That is
-    <code>@v2</code>.</p>
-  </div>
-
-  <div class="note">
-    <p>The result round-trips through its own schema before anyone is told it exists, and a
-    <code>model_validator</code> rejects an artifact whose internal references do not resolve:
-    duplicate step ids, an output reading from a step that does not extract, a
-    <code>{{placeholder}}</code> naming no declared input, an undeclared <code>screen</code>, an
-    uncompilable <code>base_url_pattern</code>. Each is otherwise an artifact that loads fine,
-    passes review, and dies halfway through a run against a member's account.</p>
-  </div>
-</section>
-
-<div class="arrow">↓ &nbsp; <code>artifacts/cap_get_savings_balance.v2.json</code> — the model's job is over</div>
-
-<!-- ================================================================= -->
-<div class="phase replay">
-  <h2>Replay — run many times, unattended, by an AI agent</h2>
-  <p>No model is constructed on this path. <code>unset XAI_API_KEY</code> and it behaves identically.</p>
-</div>
-
-<!-- 9 -->
-<section class="stage is-key">
-  <div class="n">9</div>
-  <h3>The capability executes <span class="chip nomodel">NO MODEL</span></h3>
-  <p class="lede">
-    <code>ReplayEngine.__init__(perceiver, driver, resolver, policy, evidence, control, …)</code>
-    — there is <strong>no <code>llm</code> parameter</strong>. It cannot call a model because it
-    holds no reference to one. The resolver it is handed is built <code>allow_vlm=False</code>,
-    whose VLM method raises <code>RuntimeError</code> rather than degrading quietly.
-  </p>
-
-  <div class="xform">
-    <div class="cap">in — the caller's invocation</div>
-<pre>replay(<span class="k">cap</span>=cap_get_savings_balance@v2,
-       <span class="k">inputs</span>={ <span class="s">"member_id"</span>: <span class="s">"12345"</span>, <span class="s">"account_nickname"</span>: <span class="s">"Primary Savings"</span> })
-
-<span class="c"># validated BEFORE anything is touched: type coercion, pattern,
-# min/max, choices, not_equal_to. A bad call is a rejected call, not a
-# run that gets four steps in and types "None" into an amount field.</span></pre>
-  </div>
-
-  <p class="lede" style="margin-top:18px"><strong>Per step, in this order:</strong></p>
-  <div class="ladder">
-    <div class="rung o"><div class="tag">verify permission</div><div class="body">
-      Policy: is this action allowed? this URL? is it risky, and does the app say
-      <code>allow</code> / <code>confirm</code> / <code>block</code>? Policy can <b>promote</b>
-      safe→risky from the declared intent, one-directionally — a recording that mislabels a submit
-      as safe is the expensive failure. <b>Identical to the discovery gate above</b>: same policy
-      object, same <code>RunControl</code>, same live session handed to the same operator.</div></div>
-    <div class="rung b"><div class="tag">settle + observe</div><div class="body">
-      Two hash-equal frames, or stable text. Same perceiver the recording used — if replay saw the
-      screen through a different pipeline, every checkpoint written at record time would be a guess.</div></div>
-    <div class="rung b"><div class="tag">check screen</div><div class="body">
-      Is this the state the step expects? → <code>WRONG_SCREEN</code>, naming where it actually is.
-      <span class="chip gap">NOT BUILT</span> <code>Screen</code> is declared and enforced but never
-      <em>derived</em>, so recorded capabilities declare none and make no claim about where they are.</div></div>
-    <div class="rung g"><div class="tag">resolve</div><div class="body">
-      <b>The ladder</b>, most portable first — see below.</div></div>
-    <div class="rung o"><div class="tag">verify target</div><div class="body">
-      Does the region <b>say</b> what the recording said it said? Is anything stacked on top of it?
-      Nearly free — the observation already exists.</div></div>
-    <div class="rung v"><div class="tag">EXECUTE</div><div class="body">The primitive.</div></div>
-    <div class="rung g"><div class="tag">verify effect</div><div class="body">
-      Poll the checkpoint until <b>its own</b> declared timeout. There is no <code>sleep()</code> on
-      this path with exactly one exception: a recovery the policy explicitly declares as a wait.
-      "Not true yet" and "not true" are the same picture, so they get the same loop.</div></div>
-  </div>
-
-  <div class="xform">
-    <div class="cap">resolve — the ladder, and what fired on the real run</div>
-<pre><span class="num">1</span>  anchor_text     visible text at/near the target; may contain {{param}},
-                   which is what makes data-dependent targeting possible.
-                   Survives rebranding and relayout.        <span class="s">← all 4 targeted
-                                                                 steps used this</span>
-<span class="num">2</span>  role + name     semantic match. role is a HINT that narrows candidates,
-                   never the sole key — a bad guess costs precision, not
-                   correctness.
-<span class="num">3</span>  recorded_bbox   the position from the recording. Correct until something
-                   above it changes height. <span class="em">Using it logs a drift event.</span>
-<span class="em">x</span>  vlm (gated)     <span class="em">in the enum, and RAISES.</span> Discovery never needs it —
-                   the model picks from marks, so it is never asked
-                   "where is this thing". Unreachable by construction is
-                   what makes "no model in replay" checkable.
-
-<span class="c"># no tier matched → Unresolvable, terminal. It does NOT fall back to the
-# recorded box as a last-ditch guess: a step that cannot find its target has
-# not failed to be precise, it has failed to know where it is.</span></pre>
-  </div>
-
-  <div class="note warn">
-    <p><span class="chip drift">DRIFT SIGNAL</span> &nbsp; The tier that succeeded is recorded on
-    every step result. Aggregated across runs, <strong>anchors decaying into
-    <code>recorded_bbox</code> means the application moved</strong> — an early warning that costs
-    nothing and arrives long before a hard failure.</p>
-  </div>
-
-  <p class="lede" style="margin-top:22px"><strong><code>classify()</code> — one function, called
-  after every step. The order is load-bearing.</strong></p>
-  <div class="ladder">
-    <div class="rung g"><div class="tag">1 · outcomes</div><div class="body">
-      <b>[ARTIFACT]</b> &nbsp; First, always. If the checkpoint ran first, "no such member" would be
-      reported as a failed assertion instead of the <b>answer the caller asked for</b>.
-      → <code>BUSINESS_OUTCOME</code>, clean stop.</div></div>
-    <div class="rung b"><div class="tag">2 · recoveries</div><div class="body">
-      <b>[POLICY]</b> &nbsp; Apply the handler, re-observe, retry. Bounded by
-      <code>max_per_run</code>: dismissing the same modal eleven times means the dismissal is
-      <b>not working</b>, and that is a hard failure, not eleven successful recoveries.</div></div>
-    <div class="rung o"><div class="tag">3 · declared</div><div class="body">
-      <b>[POLICY]</b> &nbsp; <code>app_errors</code> and <code>escalations</code>, split by
-      <b>who can clear it</b>. Before the checkpoint on purpose — both would otherwise arrive as
-      "the checkpoint did not hold", which describes the symptom and hides the cause.</div></div>
-    <div class="rung g"><div class="tag">4 · checkpoint</div><div class="body">
-      <b>[ARTIFACT]</b> &nbsp; The expected path. → <code>OK</code>.</div></div>
-    <div class="rung r"><div class="tag">5 · anything else</div><div class="body">
-      <b>HARD FAILURE.</b> Not a gap: under vision-first perception we cannot enumerate every screen
-      an enterprise app can produce, and guessing at an unknown state in a banking application is
-      worse than stopping.</div></div>
-  </div>
-
-  <div class="note">
-    <p><strong>Where each detector lives is the multi-tenant argument in miniature.</strong>
-    Business outcomes belong to the <em>capability</em> — they are answers one flow can return.
-    Recoveries, app errors, escalations and the sign-on recipe belong to the <em>app policy</em> —
-    a session interstitial interrupts every flow on the app, and copying it into each artifact
-    would guarantee they drift apart. Session expiry is deliberately an <strong>escalation, not a
-    recovery</strong>: re-authenticating mid-flow means the automation holds credentials and
-    silently resumes a run whose context may no longer be valid.</p>
-  </div>
-</section>
-
-<div class="arrow">↓ &nbsp; typed, and the caller can branch on it</div>
-
-<!-- 10 -->
-<section class="stage">
-  <div class="n">10</div>
-  <h3>What comes back — <code>ReplayResult</code></h3>
-  <p class="lede">
-    Four terminal classes, never conflated, plus <code>RUNNING</code> written before step 1 so a
-    live run is not displayed as failed while it is still going.
-  </p>
-  <div class="xform">
-    <div class="cap">out — <span class="who">evidence/replay-dd1bbee1/run.json, verbatim</span></div>
-<pre>{ <span class="k">"run_id"</span>: <span class="s">"replay-dd1bbee1"</span>,
-  <span class="k">"capability"</span>: <span class="s">"cap_get_savings_balance@v2"</span>,
-  <span class="k">"app"</span>: <span class="s">"targetapp"</span>,
-  <span class="k">"status"</span>: <span class="s">"success"</span>,
-  <span class="k">"inputs"</span>:  { <span class="k">"member_id"</span>: <span class="s">"12345"</span>, <span class="k">"account_nickname"</span>: <span class="s">"Primary Savings"</span> },
-  <span class="k">"outputs"</span>: { <span class="k">"primary_savings_balance"</span>: <span class="num">18204.55</span> },   <span class="c">← typed NUMBER,
-                                                        normalised from
-                                                        "$18,204.55"</span>
-  <span class="k">"outcome"</span>: <span class="k">null</span>, <span class="k">"failure"</span>: <span class="k">null</span>,
-  <span class="k">"duration_ms"</span>: <span class="num">21612</span>,
-  <span class="k">"steps"</span>: [
-    { <span class="k">"id"</span>: <span class="num">1</span>, <span class="k">"status"</span>: <span class="s">"ok"</span>, <span class="k">"resolution"</span>: <span class="s">"none"</span>,        <span class="k">"settled_by"</span>: <span class="s">"pixels"</span> },
-    { <span class="k">"id"</span>: <span class="num">2</span>, <span class="k">"status"</span>: <span class="s">"ok"</span>, <span class="k">"resolution"</span>: <span class="s">"anchor_text"</span>, <span class="k">"settled_by"</span>: <span class="s">"pixels"</span> },
-    { <span class="k">"id"</span>: <span class="num">3</span>, <span class="k">"status"</span>: <span class="s">"ok"</span>, <span class="k">"resolution"</span>: <span class="s">"anchor_text"</span>, <span class="k">"settled_by"</span>: <span class="s">"pixels"</span> },
-    { <span class="k">"id"</span>: <span class="num">4</span>, <span class="k">"status"</span>: <span class="s">"ok"</span>, <span class="k">"resolution"</span>: <span class="s">"anchor_text"</span>, <span class="k">"settled_by"</span>: <span class="s">"pixels"</span> },
-    { <span class="k">"id"</span>: <span class="num">5</span>, <span class="k">"status"</span>: <span class="s">"ok"</span>, <span class="k">"resolution"</span>: <span class="s">"anchor_text"</span>, <span class="k">"settled_by"</span>: <span class="s">"pixels"</span> } ] }</pre>
-  </div>
-
-  <div class="tbl-scroll">
-    <table>
-      <thead><tr><th>status</th><th>means</th><th>the caller does</th><th>CLI</th><th>API</th></tr></thead>
-      <tbody>
-        <tr><td><code>success</code></td><td>checkpoint held, declared outputs extracted</td><td>uses <code>outputs</code></td><td>0</td><td>200</td></tr>
-        <tr><td><code>business_outcome</code></td><td>a legitimate answer — "no such member", "permission denied"</td><td>branches on <code>outcome.name</code></td><td><strong>0</strong></td><td><strong>200</strong></td></tr>
-        <tr><td><code>escalated</code></td><td>stopped, handed to a human, may resume</td><td>waits, or gives up</td><td>2</td><td>200</td></tr>
-        <tr><td><code>failure</code></td><td>something we do not understand</td><td>pages someone, with evidence</td><td>1</td><td>500</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="note good">
-    <p><strong>The same artifact, a different input, a different class.</strong>
-    <code>member_id=99999</code> → <code>evidence/replay-5fc26609</code> returns
-    <code>{"status": "business_outcome", "outcome": {"name": "member_not_found", "step_id": 3}}</code>
-    and <strong>exit code 0</strong>. Conflating that with a crash is the mistake the brief names
-    outright — "no such member" is an answer the caller needs, not a failure.</p>
-  </div>
-</section>
-
-
-<!-- ================================================================= -->
-<div class="footer">
-  <h2>What this page does not cover</h2>
-  <p>
-    This is the pipeline — one path, one example, the data at each hop. The
-    <strong>subsystem detail</strong> lives in the nine reference panels appended below the sketch
-    in <code>diagram.excalidraw</code>: the merge thresholds with the measurements that set them,
-    the full artifact schema field by field, the escalation state machine and X-layer capture, the
-    three ways an undeclared popup is caught, and the known gaps. <code>REPORT.md</code> carries the
-    argument; <code>evidence/README.md</code> says which run shows what.
-  </p>
-  <div class="pillrow">
-    <span class="pill">discovery/loop.py</span>
-    <span class="pill">discovery/actions.py</span>
-    <span class="pill">discovery/synthesize.py</span>
-    <span class="pill">perception/base.py</span>
-    <span class="pill">perception/merge.py</span>
-    <span class="pill">resolve/resolver.py</span>
-    <span class="pill">resolve/verify.py</span>
-    <span class="pill">replay/engine.py</span>
-    <span class="pill">replay/outcomes.py</span>
-  </div>
-</div>
-
-</div>
+readHash();
+showNode(state.node);
+showPkg(state.pkg);
+showStage(state.stage);
+showScenario(state.scenario);
+showField(state.field);
+showLoop(state.loop);
+showScreen(state.screen);
+</script>

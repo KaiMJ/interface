@@ -1,66 +1,30 @@
 """Deterministic replay. The production execution path.
 
-This is what an AI agent actually invokes. No model is in the decision loop — the
-engine is constructed with `NoLLM` and a resolver that cannot use the VLM tier, so
-determinism is a structural property rather than a promise.
+What an AI agent invokes. No model in the decision loop — the engine is constructed with
+`NoLLM` and a resolver that cannot reach the VLM tier, so determinism is structural
+rather than promised.
 
-Per-step lifecycle, in order:
+Per-step lifecycle:
 
-    ┌─ clear the way ─────┐   is a declared app condition already on screen? A
-    │                     │   modal that is up *before* the click swallows it.
-    ├─ verify permission ─┤   policy: is this capability allowed to do this, to
-    │                     │   this URL, at this risk level?
+    ┌─ clear the way ─────┐   a declared condition already on screen? a modal that
+    │                     │   is up *before* the click swallows it
+    ├─ verify permission ─┤   policy: this action, this URL, this risk level
     ├─ resolve ───────────┤   Target -> coordinate, via the resolver ladder
     ├─ verify target ─────┤   does the region say what the recording said?
-    │                     │   is anything stacked on top of it?
     ├─ execute ───────────┤   the primitive
     └─ verify effect ─────┘   did the declared checkpoint become true?
 
-Between resolve and verify-target the engine settles the frame — two consecutive
-hash-equal observations — so nothing is resolved against a page that is still
-laying out.
+Detector order at each step is where the taxonomy is enforced; see `replay/outcomes.py`.
+Waiting is polling at both ends of a step — "not there" and "not there yet" are the same
+picture — and there is no `sleep()` here outside a recovery policy declares as a wait.
 
-Detector evaluation order at each step is deliberate and is where the error
-taxonomy is actually enforced:
-
-    1. business outcomes   a declared, legitimate answer ends the run cleanly with
-                           BUSINESS_OUTCOME. Checked first, because "no such
-                           member" is an answer and must not be reported as a
-                           checkpoint failure.
-    2. recoverable         a declared app-level condition; apply the handler,
-                           re-observe, and re-execute the step if it is safe to,
-                           counting against max_per_run.
-    3. step checkpoint     the expected path.
-    4. anything else       hard failure. Unknown states are not guessed at.
-
-Waiting is the same loop. A checkpoint that is not true yet is indistinguishable
-from one that is not true at all until the clock runs out, so the engine polls the
-step's checkpoint until its declared timeout and there is no `sleep()` anywhere on
-this path — except inside a recovery the policy explicitly declares as a wait.
-
-Retry, and why it is narrow
----------------------------
-A step runs more than once in exactly two situations, and never blindly:
-
-    on_error: retry     the artifact declared the step repeatable and gave a
-                        budget (`retries`). For a transient load this is what the
-                        caller wants.
-    a recovery fired    an interstitial was dismissed and the checkpoint still did
-                        not hold by its deadline, which is the signature of an
-                        action the modal ate. The recording could not have declared
-                        a handler for a dialog the app grew afterwards, so this one
-                        attempt is granted by the engine rather than by the artifact.
-
-Both are gated on the same question, and it is one the system already answers:
-**is the step safe?** `risk` is the declaration of reversibility — that is what it
-is *for* — so a step policy considers safe may be executed twice, and a risky one
-may not, ever, automatically. Re-clicking a submit whose checkpoint we could not
-read is how one transfer becomes two, and no retry budget is worth that.
-
-The order matters too. The checkpoint is polled to its full deadline *before* any
-re-execution, so a step whose action did land and was merely obscured is never run
-a second time. Re-execution is what happens when the evidence says nothing
-happened.
+A step is executed twice in exactly two situations: `on_error: retry`, where the
+recording declared it repeatable with a budget, and a recovery that fired while the
+checkpoint still did not hold, which is the signature of an action a modal ate. Both are
+gated on `risk`, already the declaration of reversibility, because re-clicking a submit
+whose checkpoint we could not read is how one transfer becomes two — and the checkpoint
+is polled to its full deadline *before* any re-execution, so a step whose action landed
+and was merely obscured is never run twice.
 """
 
 from __future__ import annotations
@@ -73,7 +37,7 @@ from typing import Any
 from uuid import uuid4
 
 from ..clock import monotonic_ms, now_iso
-from ..perception import Unsettled
+from ..perception import Unsettled, cell_in_column, column_span
 from ..policy import PolicyDenied
 from ..resolve import (
     Resolution,
@@ -122,23 +86,18 @@ from .outcomes import (
     conditions,
     effective_outcomes,
 )
-from .scan import Scanner, Untestable, cell_in_column, column_span
+from .scan import Scanner, Untestable
 from .tenant import rebase
 
-# One re-execution after a declared recovery cleared and the checkpoint still did
-# not hold. Not configurable: a second one would mean the first re-execution also
-# ran into the interstitial, and at that point the recovery is not working — which
-# `Recovery.max_per_run` already calls a hard failure.
+# One re-execution after a recovery cleared and the checkpoint still did not hold.
+# Not configurable: a second would mean the first also ran into the interstitial, and
+# at that point the recovery is not working — which `max_per_run` already calls a
+# hard failure.
 _RECOVERY_RETRIES = 1
 
-# How many times a run may re-authenticate and start over, and how many times one
-# step may park for a human, both live in app policy (`max_restarts`,
-# `max_escalations_per_step`) — they are judgements about an application, not
-# about this mechanism. These are the defaults policy applies when a file says
-# nothing, kept here only so the reason survives next to the code that enforces
-# them: a session that dies twice inside ninety seconds is not a transient, and an
-# operator who resumes without clearing the condition would otherwise be handed
-# the same intervention forever.
+# `max_restarts` and `max_escalations_per_step` live in app policy — judgements about
+# an application, not about this mechanism. Their defaults and the reasons for them
+# are there.
 
 
 class _Terminal(Exception):
@@ -165,15 +124,11 @@ class _Failed(_Terminal):
 class _Restart(_Terminal):
     """Re-authenticated. The session is good again but the flow lost its place.
 
-    Signing back in lands on the application's landing page, not on the screen the
-    run was three steps into — which is the real reason a mid-flow session expiry
-    is not simply "log in again and carry on", and a stronger reason than the one
-    this system used to give (that the automation would hold a credential; it
-    already holds one, and types it at session start).
-
-    So the only honest recovery is to start the capability over, and that is only
-    available while nothing irreversible has happened. `_re_authenticate` is where
-    that is decided; this exception is how the decision reaches `replay()`.
+    Signing back in lands on the landing page, several screens from where the run
+    was — which is the real reason a mid-flow expiry is not "log in and carry on".
+    (Not that the automation would hold a credential: it already holds one and types
+    it at session start.) So the only honest recovery is to start the capability
+    over, available exactly while nothing irreversible has happened.
     """
 
     def __init__(self, condition: str) -> None:
@@ -198,33 +153,25 @@ class RunContext:
     steps: list[StepResult] = field(default_factory=list)
     recovery_counts: dict[str, int] = field(default_factory=dict)
     frames: int = 0
-    # What the current step decided, accumulated as it goes. Held here rather than
-    # returned up the call chain because a step that ends the run — a business
-    # outcome, an escalation, a hard failure — unwinds through an exception, and
-    # the step whose evidence matters most is exactly the one that did not return
-    # normally. Reset per step by `_run_step`.
+    # What the current step decided. Held here rather than returned up the chain
+    # because a step that ends the run unwinds through an exception, and the step
+    # whose evidence matters most is the one that did not return normally.
     policy_decision: PolicyDecision | None = None
     resolution_trace: ResolutionTrace | None = None
     recovery_applied: str | None = None
-    # How many times the current step has been executed, and whether a recovery
-    # fired during the attempt in flight. The second is per-attempt rather than
-    # per-step because it is what grants the extra attempt: a recovery on attempt
-    # one must not also justify a third execution on attempt two.
+    # Per-attempt rather than per-step, because the recovery flag is what grants the
+    # extra attempt: one on attempt one must not also justify a third execution.
     attempt: int = 1
     recovered_this_attempt: bool = False
     escalations: int = 0
     notes: list[str] = field(default_factory=list)
-    # Per *run*, not per step, and never reset: whether anything irreversible has
-    # already happened. It is what decides whether a session that dies mid-flow
-    # can be signed back into and re-run, or has to wait for a person — see
-    # `_re_authenticate`.
+    # Per *run*, never reset: has anything irreversible happened? Decides whether a
+    # dead session can be signed back into and re-run, or must wait for a person.
     mutated: bool = False
     restarts: int = 0
-    # The recording's geometry is checked against this deployment's once, on the
-    # first frame — the earliest point at which the answer is knowable.
+    # Geometry is checked once, on the first frame — the earliest it is knowable.
     viewport_checked: bool = False
-    # Where this step's wall clock went. Reset per step by `_run_step`; folded
-    # into the step record at the end of `_attempt`.
+    # Where this step's wall clock went; folded into the step record at the end.
     observe_ms: float = 0.0
     observations: int = 0
     resolve_ms: float = 0.0
@@ -262,25 +209,19 @@ class ReplayEngine:
         self.settle_poll_ms = settle_poll_ms
         self.step_timeout_ms = step_timeout_ms
         self.vnc_url = vnc_url
-        # This deployment's install of the application. A recorded URL names the
-        # institution the capability was recorded at, which on replay is a fact
-        # about the past rather than about where this run should act — see
-        # `replay/tenant.py`.
+        # This deployment's install. A recorded URL names where the capability was
+        # recorded, which on replay is a fact about the past — see `tenant.py`.
         self.entry_url = entry_url
-        # How to get this session back into an authenticated state. A callable,
-        # not a credential: the engine holds a closure over the session's own
-        # sign-on, so the secret stays where it already lived and this class has
-        # no field anyone could serialize. None means the deployment supplied no
-        # recipe, and a session that dies mid-flow then has to wait for a human.
+        # A callable, not a credential: a closure over the session's own sign-on, so
+        # the secret stays where it lived and this class has no field to serialize.
+        # None means no recipe, and a dead session then waits for a human.
         self.sign_on = sign_on
-        # Off by default so the demo path can replay a fresh recording. A real
-        # deployment turns it on, and then a draft can only be run by a human
-        # watching it.
+        # Off by default so the demo can replay a fresh recording; the agent-facing
+        # `/invoke` turns it on.
         self.require_approved = require_approved
         self.scanner = Scanner(perceiver, driver, resolver)
-        # Working frames, not evidence. Every settle poll writes one and only the
-        # frame a step actually acted on is worth keeping; leaving the rest in the
-        # evidence directory would bury the four files a reviewer wants.
+        # Working frames, not evidence. Every settle poll writes one, and leaving
+        # them all in the evidence directory would bury the four a reviewer wants.
         self._scratch = Path(tempfile.mkdtemp(prefix="cua-frames-"))
 
     # -----------------------------------------------------------------------
@@ -303,10 +244,9 @@ class ReplayEngine:
             run_id=run_id,
             capability=cap.ref,
             app=cap.app.name,
-            # Not FAILURE. This object is written to evidence before every step so
-            # a run can be watched while it happens, and a partially-written run
-            # that reads `failure` is a run the console reports as broken until it
-            # finishes. The terminal status is set once, below.
+            # Not FAILURE: this is written to evidence before every step so a run
+            # can be watched, and a partial run reading `failure` is one the console
+            # calls broken until it finishes. The terminal status is set once, below.
             status=RunStatus.RUNNING,
             inputs={},
             started_at=started,
@@ -315,11 +255,9 @@ class ReplayEngine:
 
         try:
             params = validate_inputs(cap, inputs, self.require_approved)
-            # Every inherited detector resolves against this app's policy, checked
-            # before anything is touched. An outcome that silently resolved to
-            # nothing would not fail — it would simply never match, and the
-            # capability would report "no such member" as a checkpoint failure
-            # while its contract went on advertising the outcome.
+            # Inherited detectors resolve before anything is touched. One that
+            # silently resolved to nothing would not fail — it would never match, and
+            # the contract would go on advertising an outcome that cannot happen.
             effective_outcomes(cap, self.policy)
         except UndeclaredOutcome as e:
             result.status = RunStatus.FAILURE
@@ -331,8 +269,8 @@ class ReplayEngine:
             return self._finish(result, started, clock)
 
         ctx = RunContext(params=params, sensitive=sensitive)
-        # What is recorded is what the caller sent, minus anything they declared
-        # sensitive. Redaction happens before the first write, not before the last.
+        # What the caller sent, minus what they declared sensitive. Redaction runs
+        # before the first write, not the last.
         result.inputs = dict(self.evidence.redactor.redact_mapping(params, sensitive))
         self.evidence.result(result)
 
@@ -345,13 +283,9 @@ class ReplayEngine:
                         self.evidence.result(result)
                     break
                 except _Restart as e:
-                    # Re-authenticated mid-flow. The session is good and the place
-                    # in the flow is gone, so the capability starts over.
-                    #
-                    # Once. A second expiry inside one run is not a transient
-                    # condition — it is a session that will not stay up, and
-                    # retrying it forever is how an automation spends a night
-                    # signing in. The steps already taken stay in the log: a run
+                    # The session is good, its place in the flow is gone, so the
+                    # capability starts over. Once: a second expiry is a session that
+                    # will not stay up. Steps already taken stay in the log — a run
                     # that ran step 2 twice should say so.
                     if ctx.restarts >= self.policy.max_restarts:
                         raise _Failed(
@@ -425,9 +359,8 @@ class ReplayEngine:
         ctx.notes = []
         ctx.observe_ms = ctx.resolve_ms = ctx.act_ms = ctx.verify_ms = 0.0
         ctx.observations = 0
-        # A step's frames are its own. Carried over, the previous step's
-        # after-frame would attach to this one and the console would show a
-        # picture from before the step it is labelled with.
+        # A step's frames are its own: carried over, the previous step's after-frame
+        # would attach here and the console would show the wrong picture.
         ctx.evidence = Evidence()
         try:
             result = await self._attempt(cap, step, ctx, began, intent)
@@ -454,17 +387,12 @@ class ReplayEngine:
             resolution, result_obs, verdict = await self._once(cap, step, ctx, intent)
 
             if verdict.kind is Classification.APP_ERROR:
-                # The application said it failed. Whether that is worth another go
-                # is the same question as any other re-execution, so it is asked
-                # here rather than settled three frames down: a step the artifact
-                # declared repeatable gets its declared budget, and everything
-                # else stops with the kind that names the cause.
-                #
-                # Note the two mechanisms this deliberately leaves distinct. A
-                # *recovery* is the app's operator saying "this condition is
-                # transient on this application"; `on_error: retry` is the
-                # recording saying "this step is repeatable". Either can justify
-                # another attempt; neither implies the other.
+                # Whether that is worth another go is the same question as any
+                # other re-execution, asked here rather than three frames down.
+                # Two mechanisms, deliberately distinct: a *recovery* is the app's
+                # operator saying "this condition is transient here"; `on_error:
+                # retry` is the recording saying "this step is repeatable". Either
+                # justifies another attempt; neither implies the other.
                 again = self._retry_reason(step, ctx)
                 if again is None:
                     raise _Failed(
@@ -494,9 +422,8 @@ class ReplayEngine:
                     expected=verdict.expected,
                     observed=verdict.observed,
                 )
-                # Reached only when `on_error: escalate` and a human resolved it:
-                # the step counts as satisfied by the operator. See
-                # `escalation/control.py` for why it is not re-run.
+                # Only when `on_error: escalate` and a human resolved it — the step
+                # counts as satisfied. `escalation/control.py` says why not re-run.
                 break
 
             ctx.attempt += 1
@@ -505,10 +432,9 @@ class ReplayEngine:
 
         return StepResult(
             step_id=step.id,
-            # A step that needed a declared recovery still succeeded, but not in
-            # the same way as one that did not — and a capability whose replays
-            # increasingly report `recovered` is telling you the app grew an
-            # interstitial, which is worth seeing before it becomes a failure.
+            # A step that needed a recovery still succeeded, but not the same way. A
+            # capability increasingly reporting `recovered` says the app grew an
+            # interstitial — worth seeing before it becomes a failure.
             status=StepStatus.RECOVERED if ctx.recovery_applied else StepStatus.OK,
             intent=intent,
             resolution=resolution.tier if resolution else ResolutionTier.NONE,
@@ -530,19 +456,15 @@ class ReplayEngine:
     ) -> tuple[Resolution | None, Observation, Classified]:
         """One execution of the step: clear, check, resolve, act, verify."""
 
-        # The frame this step acts on — and the frame a declared interstitial is
-        # detected on, *before* it can swallow the click. This is a real check,
-        # not a comment: an already-open modal is dismissed here, and the step
-        # then acts on the page it was recorded against.
+        # The frame this step acts on, and the frame an interstitial is detected on
+        # *before* it can swallow the click.
         obs = await self._clear_the_way(cap, step, ctx)
         self._check_viewport(cap, ctx, obs)
 
-        # Policy classifies the *declared* intent — the human-readable description
-        # of what the step does — and never the step's value. A navigate to
-        # `/transfer/review` is not a transfer, and matching risk patterns against
-        # a URL would stop the run before every page whose path contains a verb.
-        # First, and without waiting on anything: a denied step should not spend a
-        # step timeout discovering that it was never going to be allowed to run.
+        # Policy classifies the *declared intent*, never the step's value: a navigate
+        # to `/transfer/review` is not a transfer, and matching risk patterns against
+        # a URL would stop before every page whose path contains a verb. First, and
+        # before any waiting — a denied step should not spend a timeout finding out.
         disposition = self._check_policy(cap, step, _declared_intent(step), ctx)
         if disposition == "confirm":
             await self._escalate(
@@ -560,10 +482,9 @@ class ReplayEngine:
         else:
             resolution = await self._run_act(cap, step, ctx, obs)
 
-        # From here on this run has done something it cannot take back, which is
-        # what stops a later session expiry from being recoverable by starting
-        # over. Policy's verdict rather than the artifact's own field, so a step
-        # promoted to risky from its intent counts too.
+        # From here the run has done something it cannot take back, which is what
+        # stops a later expiry being recoverable. Policy's verdict rather than the
+        # artifact's field, so a promoted step counts too.
         decided = ctx.policy_decision
         if decided is not None and decided.effective_risk != Risk.SAFE.value:
             ctx.mutated = True
@@ -576,25 +497,18 @@ class ReplayEngine:
     async def _wait_until_ready(
         self, cap: Capability, step: Any, ctx: RunContext, obs: Observation
     ) -> Observation:
-        """Poll until the screen this step needs is actually in front of us.
+        """Poll until the screen this step needs is in front of us.
 
-        The same discipline `_await_effect` applies to the far end of a step,
-        applied to the near end. It was missing, and the asymmetry was visible the
-        first time a page took four seconds to render: the engine polled a
-        checkpoint for fifteen seconds when it was *leaving* a screen and gave a
-        target one attempt when it was arriving at one. "The row is not there" and
-        "the row is not there yet" are the same picture, and only one of them is a
-        reason to stop.
+        `_await_effect`'s discipline applied to the near end of a step. It was missing, and the
+        asymmetry showed the first time a page took four seconds: the engine polled a checkpoint
+        for fifteen seconds when *leaving* a screen and gave the target one attempt when arriving.
+        "The row is not there" and "not there yet" are the same picture — and it is widest where
+        least visible, since a step recorded without a checkpoint imposes no wait, so the previous
+        step's latency lands here as `target_mismatch`, which reads as drift and is not.
 
-        The gap is widest exactly where it is least visible: a step recorded
-        without a checkpoint imposes no wait at all, so all of the previous step's
-        latency lands on this one as `target_mismatch` — which reads as UI drift
-        and is not.
-
-        **This needs no risk gate, and that is the point of doing it here.**
-        Everything polled is a read — the screen assertion and the resolver ladder
-        execute nothing. Retrying after an action is the direction that can double
-        a transfer, and that one is gated on `risk` in `_retry_reason`.
+        No risk gate, which is the point of doing it here: everything polled is a read. Retrying
+        *after* an action is the direction that doubles a transfer, and is gated in
+        `_retry_reason`.
         """
         deadline = monotonic_ms() + _timeout_of(step, self.step_timeout_ms)
         began = monotonic_ms()
@@ -602,24 +516,20 @@ class ReplayEngine:
 
         while True:
             try:
-                # Are we even looking at the screen this step was recorded on? A
-                # flow that has gone somewhere else fails with the name of where
-                # it actually is, rather than three lines later with "the target
-                # was not found" — which sends an operator hunting for a layout
+                # Are we on the screen this step was recorded on? A flow that went
+                # elsewhere fails naming where it actually is, rather than with "the
+                # target was not found" — which sends an operator hunting a layout
                 # change that never happened.
                 self._check_screen(cap, step, obs)
                 if isinstance(step, ActStep) and step.target is not None:
-                    # Resolved here only to find out whether it *can* be. The
-                    # ladder is pure computation over an observation we already
-                    # have, so doing it twice costs nothing and keeps the
-                    # execution path below unchanged.
+                    # Resolved only to find out whether it *can* be. Pure
+                    # computation over an observation we already have.
                     self._resolve(cap, step, ctx, obs)
             except _Failed as e:
-                # One thing is not worth waiting on: a screen we positively
-                # recognise as a *different* declared screen. Mid-navigation looks
-                # like a page we cannot name; being definitely on the sign-on
-                # screen is not a transient, and burning a step timeout before
-                # saying so delays the answer without improving it.
+                # Not worth waiting on: a screen we positively recognise as a
+                # *different* declared one. Mid-navigation looks like a page we
+                # cannot name; being definitely on the sign-on screen is not
+                # transient.
                 if e.failure.kind is FailureKind.WRONG_SCREEN and e.failure.observed in {
                     s.name for s in cap.screens
                 }:
@@ -627,10 +537,9 @@ class ReplayEngine:
                 if monotonic_ms() >= deadline:
                     raise
                 polls += 1
-                # `_clear_the_way` rather than a bare observe: an interstitial that
-                # arrives *while* we are waiting is the same interstitial, and it
-                # would otherwise sit on top of the target for the rest of the
-                # deadline and then be reported as a target that never appeared.
+                # `_clear_the_way`, not a bare observe: an interstitial arriving
+                # *while* we wait would otherwise sit on the target for the rest of
+                # the deadline and be reported as a target that never appeared.
                 obs = await self._clear_the_way(cap, step, ctx)
                 continue
 
@@ -655,9 +564,8 @@ class ReplayEngine:
             return None
 
         # Granted by the engine: a recovery fired and the checkpoint still did not
-        # hold, which is the signature of an action the interstitial ate. The
-        # recording cannot have declared a budget for a dialog the app grew after
-        # it was written, so this attempt does not come out of one.
+        # hold — the signature of an action the interstitial ate. The recording
+        # cannot have budgeted for a dialog the app grew later.
         if ctx.recovered_this_attempt and ctx.attempt <= _RECOVERY_RETRIES:
             return f"re-running after the {ctx.recovery_applied!r} recovery cleared"
 
@@ -672,47 +580,29 @@ class ReplayEngine:
     ) -> Observation:
         """Observe, and handle any declared condition already on the screen.
 
-        Before the step acts, not after. An interstitial that is up when the click
-        is issued absorbs it, and the recorded coordinate still resolves to the
-        right place underneath — which is the whole reason the demo app's modal
-        does not move the page. Detecting it only during effect verification costs
-        the step's full timeout and then reports a checkpoint failure, which is the
-        symptom rather than the cause.
+        Before the step acts, not after: an interstitial that is up when the click is issued
+        absorbs it, while the recorded coordinate still resolves to the right place underneath.
 
-        Deliberately narrow: **only recoverable conditions**. The distinction is
-        obstruction versus state. A maintenance modal is something *on top of* the
-        page this step was recorded against, it has a declared handler, and
-        clearing it puts us back where the recording was — that is an obstruction.
-        A session-expiry screen or an application error is not obstructing the
-        right page; it *is* a different page, and the machinery that already names
-        that is the step's own screen assertion and the effect classification after
-        the previous step. Duplicating those here would give the same state two
-        detectors and, sooner or later, two different answers.
+        **Only recoverable conditions** — obstruction, not state. A maintenance modal sits on top
+        of the recorded page and clearing it puts us back where the recording was; a session
+        expiry or an app error *is* a different page, which the screen assertion and the previous
+        step's classification already name, and two detectors for one state eventually give two
+        answers. Business outcomes are answers a step produces, so they belong after it.
 
-        Business outcomes are likewise absent: they are answers a step produces, so
-        they belong after it, and a checkpoint has nothing to say about a step that
-        has not run yet.
-
-        **The first frame is usually free.** The previous step's effect
-        verification ended by settling on a frame, and nothing has acted between
-        then and now — so that frame *is* this step's starting frame, and taking
-        another costs one full perception (~2.4s on a dense page, and it was half
-        of a replay's wall clock) to photograph the same screen twice. `ctx.fresh`
-        carries it; anything that acts on the surface drops it, so the reuse can
-        only ever span an interval in which this system did nothing.
+        The first frame is usually free: the previous step settled on one and nothing has acted
+        since, so taking another would photograph the same screen twice.
         """
         reused = ctx.fresh
         ctx.fresh = None
         if reused is not None:
-            # Its after-frame becomes this step's acted-on frame. Same pixels,
-            # deliberately written under both names: one moment described from two
-            # steps' points of view, and a reader following one step should not
-            # have to know what the previous one did to see what it looked at.
+            # Its after-frame becomes this step's acted-on frame — same pixels under
+            # both names, so following one step does not require knowing what the
+            # previous one did.
             obs = self._adopt(reused, step, ctx)
         else:
             obs = await self._observe(cap, step, ctx)
-        # Bounded by the recovery's own `max_per_run`, which `conditions` enforces;
-        # this is the backstop for a policy file declaring an absurd cap.
+        # Bounded by `max_per_run`, which `conditions` enforces; this is the
+        # backstop for a policy file declaring an absurd cap.
         for _ in range(8):
             verdict = conditions(obs, self.policy, ctx.recovery_counts)
 
@@ -723,11 +613,10 @@ class ReplayEngine:
                 continue
 
             if verdict is not None and verdict.kind is Classification.FAILURE:
-                # A recovery past its cap, with the condition still up. Not "the
-                # checkpoint failed": the condition has a name and the handler is
-                # the thing that stopped working. Not `unexpected_overlay` either
-                # — that names something *undeclared* on top of the target, and
-                # this one was declared, handled, and did not clear.
+                # Past its cap with the condition still up. Not "the checkpoint
+                # failed" — the condition has a name and the handler is what stopped
+                # working. Not `unexpected_overlay` either: that names something
+                # *undeclared*, and this was declared, handled, and did not clear.
                 raise _Failed(
                     FailureDetail(
                         kind=FailureKind.RECOVERY_EXHAUSTED,
@@ -763,9 +652,9 @@ class ReplayEngine:
                         message="navigate step has no url",
                     )
                 )
-            # The artifact supplies the path; this deployment supplies the origin.
-            # Checked against the allowlist *after* rebasing, so what is permitted
-            # is what is actually navigated to.
+            # The artifact supplies the path, the deployment the origin. Checked
+            # against the allowlist *after* rebasing, so what is permitted is what is
+            # actually navigated to.
             value, note = rebase(value, self.entry_url)
             if note:
                 ctx.notes.append(note)
@@ -774,8 +663,8 @@ class ReplayEngine:
             return None
 
         if step.action in (Primitive.WAIT, Primitive.ASSERT):
-            # Both are pure checkpoint steps: the waiting is done by the effect
-            # verification that follows, which polls until the declared timeout.
+            # Pure checkpoint steps: the effect verification that follows does the
+            # waiting, polling to the declared timeout.
             return None
 
         if step.action is Primitive.KEY:
@@ -812,8 +701,8 @@ class ReplayEngine:
             return resolution
 
         if step.action is Primitive.TYPE:
-            # Focus first. Typing into whatever happened to have focus is how a
-            # password ends up in a search box.
+            # Focus first: typing into whatever had focus is how a password ends up
+            # in a search box.
             await self._act_on_surface(ctx, lambda: self.driver.click(resolution.point))
             secret = bool(placeholders(step.value) & ctx.sensitive)
             await self._act_on_surface(
@@ -857,8 +746,8 @@ class ReplayEngine:
             ) from e
 
         if found.inconclusive:
-            # The distinction the brief singles out: we ran out of budget while
-            # the list was still moving, so "not found" would be a guess.
+            # The distinction the brief singles out: out of budget while the list
+            # was still moving, so "not found" would be a guess.
             raise _Failed(
                 FailureDetail(
                     kind=FailureKind.SCAN_INCONCLUSIVE,
@@ -1030,10 +919,9 @@ class ReplayEngine:
         while True:
             if polled and await self._unchanged(ctx):
                 if monotonic_ms() >= deadline:
-                    # Out of time on a screen that never moved. Fall through to
-                    # one last real read so the verdict — and the `observed` text
-                    # a human will be shown — comes from an interpreted frame
-                    # rather than from a hash comparison.
+                    # Out of time on a screen that never moved. One last real read,
+                    # so the verdict and the `observed` text come from an interpreted
+                    # frame rather than a hash comparison.
                     pass
                 else:
                     await asyncio.sleep(self.settle_poll_ms / 1000.0)
@@ -1059,19 +947,17 @@ class ReplayEngine:
 
             if verdict.kind is Classification.APP_ERROR:
                 # Returned, not raised: no handler exists and none should be
-                # invented, but whether the *step* is worth running again is a
-                # question `_attempt` owns — it is the same question as any other
-                # re-execution and it has the same gate. Polling stops here either
-                # way, because an application error is not "not yet".
+                # invented, but whether the *step* is worth running again is
+                # `_attempt`'s question, with the same gate. Polling stops either
+                # way — an application error is not "not yet".
                 ctx.verify_ms += monotonic_ms() - entered - (ctx.observe_ms - observing)
                 return obs, verdict
 
             if verdict.kind is Classification.ESCALATE:
                 if ctx.escalations >= self.policy.max_escalations_per_step:
-                    # The operator handed the session back with the condition
-                    # still on screen. Asking again would park the run on the same
-                    # intervention indefinitely; the honest report is that we are
-                    # stuck on a state a human has already looked at twice.
+                    # Handed back with the condition still on screen. Asking again
+                    # parks the run on the same intervention forever; the honest
+                    # report is a state a human has already looked at twice.
                     raise _Failed(
                         FailureDetail(
                             kind=FailureKind.APP_ERROR,
@@ -1095,9 +981,8 @@ class ReplayEngine:
 
             if verdict.kind is Classification.OK or monotonic_ms() >= deadline:
                 ctx.verify_ms += monotonic_ms() - entered - (ctx.observe_ms - observing)
-                # The frame this step ended on. Nothing acts between here and the
-                # next step's first look, so that step does not need to take its
-                # own — see `_clear_the_way`.
+                # The frame this step ended on. Nothing acts before the next step's
+                # first look, so it does not need its own — see `_clear_the_way`.
                 ctx.fresh = obs
                 return obs, verdict
 
@@ -1138,45 +1023,35 @@ class ReplayEngine:
                     message=check.detail,
                     expected=check.expected,
                     observed=check.observed,
-                    # Where it is, not just what it said. The console draws this
-                    # over the step's frame, which is the difference between an
-                    # operator reading "an undeclared element covers the target"
-                    # and seeing which element.
+                    # Where it is, not just what it said. The console draws this over
+                    # the step's frame — the difference between reading "an undeclared
+                    # element covers the target" and seeing which element.
                     region=check.region,
                 )
             )
-        # Booked whether or not the ladder found anything: a step that spent its
-        # time failing to resolve is exactly the one whose profile matters.
+        # Booked either way: a step that spent its time failing to resolve is the
+        # one whose profile matters.
         ctx.resolve_ms += monotonic_ms() - began
         return resolution
 
     def _check_viewport(self, cap: Capability, ctx: RunContext, obs: Observation) -> None:
         """Is this deployment's display the shape the capability was recorded on?
 
-        Coordinates in an artifact are normalized 0..1, so a display that is
-        larger or smaller in the same proportions is not a problem: every recorded
-        box still covers the same fraction of the same content. A different
-        *aspect ratio* is a different problem entirely — the application reflows,
-        so a recorded box no longer covers what it covered, and the recorded-bbox
-        tier starts returning coordinates that are precise and wrong.
+        Coordinates are normalized, so a larger or smaller display in the same
+        proportions changes nothing. A different *aspect ratio* does: the app
+        reflows, and the recorded-bbox tier starts returning coordinates that are
+        precise and wrong.
 
-        The artifact has always carried `recording.viewport` and nothing compared
-        it to anything, which made "the recording viewport is part of the
-        contract" a sentence in a config file rather than a fact. Checked once per
-        run, on the first frame, because the answer cannot change mid-run and
-        paying for it per step would be paying for a constant.
-
-        A scale change is a note; a shape change stops the run. Neither is a
-        guess about how much distortion is survivable — the line is whether the
-        page laid out differently, and that is what aspect ratio measures.
+        Checked once per run, on the first frame — the answer cannot change mid-run.
+        A scale change is a note; a shape change stops the run. The line is whether
+        the page laid out differently, which is what aspect ratio measures.
         """
         if ctx.viewport_checked:
             return
         ctx.viewport_checked = True
         if cap.recording is None:
-            # A hand-written capability makes no claim about the geometry it was
-            # authored against, and inventing one to check against would be
-            # inventing a constraint its author did not write.
+            # A hand-written capability makes no claim about its geometry, and
+            # inventing one would be inventing a constraint nobody wrote.
             return
         recorded, current = cap.recording.viewport, obs.viewport
         if (recorded.width, recorded.height) == (current.width, current.height):
@@ -1204,20 +1079,14 @@ class ReplayEngine:
     ) -> None:
         """An anchor that matched more than one element, on a step that mutates.
 
-        The resolver reports ambiguity rather than hiding it — `_pick` chooses the
-        match nearest the recorded position, which is a good guess and is exactly
-        as good as a guess. On a read that is fine and worth a note: two elements
-        said the right words, we took the one where the recording found it, and a
-        wrong answer will fail its own checkpoint.
+        `_pick` takes the match nearest the recorded position — a good guess, and
+        exactly as good as a guess. On a read that is fine and worth a note: a wrong
+        answer fails its own checkpoint. On a write it is not, for the same reason
+        `find_and_act` defaults to `on_multiple: escalate` — three rows reading
+        "View" are three different members.
 
-        On a write it is not fine, for the same reason `find_and_act` defaults to
-        `on_multiple: escalate`: three rows whose anchor reads "View" are three
-        different members, and acting on the wrong one is unrecoverable. The
-        discipline already existed on the scan path, which is the harder case and
-        so got the attention; this is the same rule on the ordinary one.
-
-        Gated on policy's *effective* risk, so a step the recording mislabelled as
-        safe and policy promoted is covered too.
+        Gated on policy's *effective* risk, so a mislabelled step that policy
+        promoted is covered too.
         """
         if not resolution.ambiguous:
             return
@@ -1281,9 +1150,8 @@ class ReplayEngine:
             return
         if getattr(step, "action", None) is Primitive.NAVIGATE:
             # A screen claim is about where an action lands. Navigation is how you
-            # *leave* a screen, and it is legal from anywhere — asserting one
-            # before it would make a capability refuse to start from a cold
-            # browser.
+            # *leave* one and is legal from anywhere; asserting before it would make
+            # a capability refuse to start from a cold browser.
             return
         declared = {s.name: s for s in cap.screens}
         wanted = declared.get(expected)
@@ -1354,20 +1222,18 @@ class ReplayEngine:
         if recovery is None:  # pragma: no cover - classify only names real ones
             return
         ctx.recovery_counts[name] = ctx.recovery_counts.get(name, 0) + 1
-        # Which handler fired, on the step it fired on. `recovery_applied` existed
-        # on StepResult and was never populated: a run that dismissed two
-        # interstitials looked identical to one that met none.
+        # Which handler fired, on the step it fired on. Unpopulated, a run that
+        # dismissed two interstitials looked identical to one that met none.
         ctx.recovery_applied = name
-        # …and whether it fired during the attempt currently in flight, which is
-        # what may buy that attempt a re-execution. Reset per attempt, not per
-        # step: a modal cleared on attempt one must not also justify attempt three.
+        # …and whether it fired during the attempt in flight, which is what may buy
+        # a re-execution. Per attempt, not per step: a modal cleared on attempt one
+        # must not also justify attempt three.
         ctx.recovered_this_attempt = True
 
         for action in recovery.actions:
             kind = action.get("action")
             if kind == "wait":
-                # The one sleep on this path, and it is declared in policy with a
-                # number rather than guessed at by the engine.
+                # The one sleep on this path, declared in policy with a number.
                 await asyncio.sleep(int(action.get("value", "1000")) / 1000)
             elif kind == "click" and ctx.obs is not None:
                 target = Target(
@@ -1384,10 +1250,9 @@ class ReplayEngine:
                 keys = action.get("value", "Escape")
                 await self._act_on_surface(ctx, lambda k=keys: self.driver.key(k))
             elif kind == "reload":
-                # Re-request the page. What makes "wait and try again" expressible
-                # for a condition that a wait alone cannot clear — a 5xx, a failed
-                # partial render — with the recovery's own `max_per_run` as the
-                # bound on how long we are willing to believe it is transient.
+                # Makes "wait and try again" expressible for a condition a wait
+                # alone cannot clear — a 5xx, a failed partial render — bounded by
+                # the recovery's own `max_per_run`.
                 await self._act_on_surface(ctx, lambda: self.driver.reload())
             elif kind == "sign_on":
                 await self._re_authenticate(cap, step, ctx, name)
@@ -1397,17 +1262,14 @@ class ReplayEngine:
     ) -> None:
         """Sign in again and start the capability over, or hand it to a human.
 
-        The gate is `ctx.mutated`: has this run already executed a step policy
-        judged risky? If it has not, nothing it did needs a person's judgement to
-        re-do, and re-running the flow from step 1 against a fresh session is
-        precisely what "safe" means. If it has, we stop — resuming a flow whose
-        earlier half may or may not have committed is not a decision an engine
-        gets to make, and a balance read at 3am should not page someone while a
-        half-finished transfer should.
+        The gate is `ctx.mutated`: has this run already executed a step policy judged risky? If
+        not, re-running the flow from step 1 against a fresh session is precisely what "safe"
+        means. If so, we stop — resuming a flow whose earlier half may or may not have committed
+        is not a decision an engine gets to make.
 
-        Note what is *not* the argument: that the automation would have to hold a
-        credential. It already holds one and types it at session start. What
-        changes across a mid-flow expiry is the state of the work, not the secret.
+        Note what is *not* the argument: that the automation would have to hold a credential. It
+        already holds one and types it at session start. What a mid-flow expiry destroys is the
+        state of the work, not the secret.
         """
         if ctx.mutated:
             await self._escalate(
@@ -1435,8 +1297,8 @@ class ReplayEngine:
         try:
             await self.sign_on()
         except Exception as e:  # noqa: BLE001 - a bad credential is a human's problem
-            # Deliberately not quoting what the screen said: the sign-on screen is
-            # the one place a message may contain a credential.
+            # Not quoting the screen: sign-on is the one place a message may carry
+            # a credential.
             await self._escalate(
                 cap,
                 step,
@@ -1531,8 +1393,8 @@ class ReplayEngine:
         if resolution.outcome == "abort":
             raise _Escalated(request.id, resolution.note)
 
-        # Resumed. Re-observe rather than trusting the step counter: the operator
-        # may have advanced the application several screens while they had it.
+        # Re-observe rather than trusting the step counter: the operator may have
+        # advanced the application several screens.
         await self._observe(cap, step, ctx)
 
     # -----------------------------------------------------------------------
@@ -1609,14 +1471,12 @@ def _terminal_step(
         step_id=getattr(step, "id", 0),
         intent=intent,
         status=StepStatus.FAILED if failure is not None else StepStatus.SKIPPED,
-        # The tier that was reached before it went wrong. A step that failed
-        # *after* falling through to the recorded box and one that failed before
-        # resolving at all are different diagnoses.
+        # The tier reached before it went wrong. Failing *after* falling through to
+        # the recorded box and failing before resolving are different diagnoses.
         resolution=trace.tier if trace is not None else ResolutionTier.NONE,
         duration_ms=int(monotonic_ms() - began),
-        # A step that failed after three attempts and one that failed on the first
-        # are different diagnoses, and the failing step is exactly the one whose
-        # record has to say so.
+        # Failing on the third attempt and failing on the first are different
+        # diagnoses, and the failing step is the one whose record must say so.
         attempts=ctx.attempt,
         note="; ".join(ctx.notes) or None,
         expected=failure.expected if failure is not None else _expected_of(step),

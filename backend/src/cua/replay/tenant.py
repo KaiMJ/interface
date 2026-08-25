@@ -1,29 +1,11 @@
 """Which institution's install a recorded URL means.
 
-A capability records absolute URLs, because that is what it navigated to. An
-allowlist, on the other hand, is a *pattern* — `^https://coreview\\.[a-z0-9-]+\\
-.example(/.*)?$` — precisely so one artifact is valid at every institution running
-the same vendor product (REPORT §4).
-
-Those two facts compose into a quiet hazard. Replay `cap_open_member`, recorded at
-riverside, against lakeside: step 1 navigates to the literal
-`https://coreview.riverside.example/members`, the allowlist pattern matches it
-because it was written to span tenants, and the run then reads a balance out of the
-wrong institution's core and reports success. Nothing failed. The result is simply
-about someone else's member.
-
-So the recorded origin is not authoritative on replay; the deployment's entry URL
-is. Every navigate is rebased onto it before the allowlist sees it — the artifact
-contributes the *path*, which is the part that is a fact about the vendor product,
-and the deployment contributes the *origin*, which is the part that is a fact about
-the tenant. That is the same split `base_url_pattern` versus `entry_url` already
-makes in policy; this is where it reaches the execution path.
-
-The limit, stated: this assumes one origin per app per deployment. A capability
-that legitimately spans two hosts (an SSO bounce, a reporting subdomain) would need
-the artifact to say which of its URLs are tenant-relative and which are absolute.
-That is a schema field, not a redesign — and no capability recorded so far needs it,
-so it is not built.
+A capability records absolute URLs, because that is what it navigated to. An allowlist is
+a *pattern*, precisely so one artifact is valid at every institution running the same
+vendor product. Compose those and a capability recorded at riverside, replayed from
+lakeside's deployment, navigates to riverside, passes the allowlist, and reports success
+about the wrong credit union's member. Rebasing means the deployment decides which
+install a run acts on.
 """
 
 from __future__ import annotations

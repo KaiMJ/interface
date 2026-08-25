@@ -1,24 +1,14 @@
 "use client";
 
 /**
- * Starting work from the console.
+ * Starting work from the console. Two ways in, and the difference is the system in
+ * miniature: **Discover** takes a goal in English, costs model calls and may stop to
+ * ask a human; **Replay** takes a capability and typed inputs, and constructs no
+ * model at all. One panel rather than two, because putting them side by side is the
+ * clearest statement of which is the production path.
  *
- * Two ways in, and the difference between them is the whole system in miniature:
- *
- *   Discover  a goal in English. A model drives the app, and what it learns is
- *             recorded as a capability. Costs model calls, takes a minute, and
- *             may stop to ask a human.
- *   Replay    a capability that already exists, with typed inputs. No model is
- *             constructed on that path at all.
- *
- * They are one panel rather than two because an operator moves between them
- * constantly — record once, then run it a dozen times with different inputs —
- * and because putting them side by side is the clearest possible statement that
- * the second is the production path and the first is not.
- *
- * Both start the run in the background and hand back an id. A discovery run takes
- * longer than any sensible HTTP timeout, and the operator wants to watch it
- * happen rather than stare at a spinner.
+ * Both start the run in the background and hand back an id — a discovery run outlasts
+ * any sensible HTTP timeout, and the operator wants to watch rather than wait.
  */
 
 import { useEffect, useState } from "react";

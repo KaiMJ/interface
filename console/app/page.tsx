@@ -1,34 +1,16 @@
 "use client";
 
 /**
- * One page, three regions, one subject.
+ * One page, three regions: the navigator (what exists), the run (what you are
+ * looking at), and the live session (what is happening now).
  *
- *   navigator   what exists: runs, and the capabilities that produce them
- *   the run     what you are looking at — its steps, its frames, its decisions
- *   session     what is happening right now: the live display, and anyone
- *               waiting on a human
+ * There is deliberately no separate /operator route — a debug view and an operator
+ * view of the same run differ only in whether you may touch it, and splitting them
+ * means whoever handles an escalation navigates away from the evidence.
  *
- * The earlier version put eleven panels on screen at once. Everything was
- * visible and nothing was legible, and it needed a 1440px window before the
- * columns stopped fighting each other. What changed is not the information —
- * all of it is still here — but when you are shown it: the two contracts
- * governing a run (its capability, its policy) and a run's full record are
- * things you consult once, so they are a drawer; starting a run is a form you
- * use and dismiss, so it is a modal; the four stages of a step are one at a
- * time, because you are only ever asking about one of them.
- *
- * The live session stays on screen throughout. It is the one panel that is not
- * a record of something that already happened.
- *
- * There is deliberately no separate /operator route. A debug view and an
- * operator view of the same run differ only in whether you may touch it, and
- * splitting them would mean whoever is handling an escalation has to navigate
- * away from the evidence to see why it happened.
- *
- * Live updates come from the run's own evidence stream (SSE over `steps.jsonl`
- * and `run.json`), not an in-process bus, so a run started by the CLI is
- * watchable here for free and what this shows cannot disagree with the audit
- * trail — it is reading the audit trail.
+ * Live updates come from the run's own evidence stream (SSE over `steps.jsonl` and
+ * `run.json`), so a CLI-started run is watchable here for free and what this shows
+ * cannot disagree with the audit trail — it is reading it.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -57,6 +39,7 @@ import {
   type Policy,
   type Run,
   type RunSummary,
+  type Thinking,
 } from "@/lib/api";
 
 const OPERATOR = "reviewer";
@@ -77,6 +60,7 @@ export default function Console() {
   const [history, setHistory] = useState<CapabilityHistory | null>(null);
   const [selectedCapability, setSelectedCapability] = useState<string | null>(null);
 
+  const [thinking, setThinking] = useState<Thinking | null>(null);
   const [stepIndex, setStepIndex] = useState<number | null>(null);
   const [follow, setFollow] = useState(true);
   const [filter, setFilter] = useState("");
@@ -157,6 +141,7 @@ export default function Console() {
     if (!current) return;
     setStepIndex(null);
     setFollow(true);
+    setThinking(null);
     void load(current);
   }, [current, load]);
 
@@ -164,6 +149,7 @@ export default function Console() {
     if (!current) return;
     let frames = 0;
     const stop = runEvents(current, {
+      thinking: setThinking,
       run: (fresh) => {
         setRun(fresh);
         // A new step means a new frame on disk. The manifest maps step ids to
@@ -184,6 +170,17 @@ export default function Console() {
   useEffect(() => {
     if (follow) setStepIndex(steps.length ? steps.length - 1 : null);
   }, [follow, steps.length]);
+
+  // Nothing rewrites the heartbeat when the model answers, so the step it names
+  // arriving is what retires it — which is also the only signal that survives a
+  // reload or a reconnect in the middle of a call.
+  const pending = useMemo(
+    () =>
+      thinking && run?.status === "running" && !steps.some((s) => s.step_id === thinking.step_id)
+        ? thinking
+        : null,
+    [thinking, run?.status, steps],
+  );
 
   const step = stepIndex !== null ? (steps[stepIndex] ?? null) : null;
   // Only when the manifest in hand is the selected run's. Switching runs replaces
@@ -283,6 +280,7 @@ export default function Console() {
         >
           <Navigator
             run={run}
+            pending={pending}
             step={stepIndex}
             onSelectStep={(index) => {
               setStepIndex(index);

@@ -1,18 +1,14 @@
 "use client";
 
 /**
- * The capability catalog — what this system knows how to do.
+ * The capability catalog — the agent-facing surface rendered for a human: the same
+ * list a calling agent gets, with each contract and the approval gate that decides
+ * whether an agent may call it at all. Approving here is the same act as approving
+ * from the CLI, and it is the reviewer's only gate before unattended replay.
  *
- * This is the agent-facing surface rendered for a human: the same list
- * `/capabilities` hands a calling agent, with the contract each one offers and
- * the approval gate that decides whether an agent may call it at all. A draft is
- * a proposal a model helped write and nobody has vouched for; approving it here
- * is the same act as approving it from the CLI, and it is the reviewer's only
- * gate before unattended replay.
- *
- * The history strip beside it is the reason approving is a judgement rather than
- * a formality: resolution tiers and settle modes aggregated over past runs say
- * whether the flow still fits the application, and one run cannot tell you that.
+ * The history strip beside it is why approving is a judgement rather than a
+ * formality: resolution tiers and settle modes over past runs say whether the flow
+ * still fits the application, and one run cannot tell you that.
  */
 
 import { useState } from "react";

@@ -17,10 +17,9 @@ no display, no model and no target app.
 ## 1. Where it is
 
 **The whole thread works end to end against the live application.** A real xAI run
-records a capability; replay executes it deterministically and returns typed
-outputs; the same artifact returns a typed business outcome for a member that does
-not exist; a risky step parks the run and hands the live session to a human who can
-act and give it back; every run leaves evidence the console can show.
+records a capability; replay executes it deterministically and returns typed outputs;
+the same artifact returns a business outcome for a member that does not exist; a risky
+step parks and hands the live session to a human; every run leaves evidence.
 
 | Area | State |
 |---|---|
@@ -41,7 +40,7 @@ act and give it back; every run leaves evidence the console can show.
 
 | | |
 |---|---|
-| perception, warm | 1.6–2.3s per observation; OCR is ~95% of it |
+| perception, warm | ~0.9s per observation on the GPU (2.6s on a CPU); OCR is ~95% of it |
 | a dense member page | 143 elements — 8 detector boxes, 135 OCR lines |
 | replay, 5-step capability | ~10s end to end |
 | discovery run | 5 model calls, ~90s, `xai/grok-4.3` |
@@ -62,31 +61,29 @@ Ordered by what a reviewer would ask about, then by what an unseen site would ne
 
 ### 1. `cua learn-screens` — the one real gap
 
-`Screen` is in the schema and replay asserts it (`WRONG_SCREEN` names where the
-flow actually is). Nothing produces one, so every recorded capability declares
-none. Deriving from a single run was tried and named the member profile
-`riverside_004`, after the member's *branch* — data, not a screen, so the
-capability would have refused to run for anybody else.
+`Screen` is in the schema and replay asserts it. Nothing produces one, so every
+capability declares none. Deriving from a single run named the member profile
+`riverside_004`, after the member's *branch* — data, not a screen, so it would have
+refused to run for anybody else.
 
-Two runs with different inputs separate the two: text identical across both is the
-application, text that differs is the record. That is the comparison
-`catalog/learn.py` already performs for outcome detectors, asking about sameness
-instead of difference.
+Two runs with different inputs separate them: identical across both is the
+application, differing is the record. The comparison `catalog/learn.py` already
+performs, asking about sameness instead of difference.
 
 *Shape.* `cua learn-screens <cap> --input <alternate values>`: replay twice,
 intersect the frames step by step, name each screen from the longest invariant line
 the other screens do not show. Emit a new draft version, exactly as `learn-outcome`
 does.
 
-*Why it matters beyond correctness.* It is REPORT §4's multi-tenant story made
-concrete. What separates chrome from data across two runs separates a vendor
-product from one tenant's branding across two institutions, and a per-tenant
-override then attaches to a screen — one reviewable diff — instead of to every
-artifact that passes through it.
+*Why it matters beyond correctness.* What separates chrome from data across two runs
+separates a vendor product from one tenant's branding across two institutions, and a
+per-tenant override then attaches to a screen — one reviewable diff — rather than to
+every artifact passing through it.
 
 ### 2. A recorded write capability
 
-`cap_transfer_funds` exists only as a fixture (`backend/fixtures/transfer_funds.json`).
+`cap_transfer_funds` exists only as a hand-written stand-in
+(`backend/scripts/smoke_capabilities/transfer_funds.json`).
 The transfer form is three `<select>` elements, which the discovery loop has not
 been pointed at — a real perception question (a dropdown's options are not on
 screen until it is open), not a gap in the plumbing.
@@ -104,17 +101,15 @@ a number.
 
 ### 5. Bring your own session
 
-`BrowserDriver.start` launches Chromium with a fresh temporary profile, so every
-run begins logged out and the only way in is the `sign_on` recipe in policy. On an
-unseen site the first login may be SSO, may be MFA, may be a consent screen before
-the form. Writing a recipe for that before seeing it is guesswork.
+`BrowserDriver.start` launches a fresh profile, so every run begins logged out and the
+only way in is the `sign_on` recipe. On an unseen site the first login may be SSO, MFA,
+or a consent screen — writing a recipe before seeing it is guesswork.
 
-*Change.* Two more ways in, keeping the recipe for where it fits:
-`launch_persistent_context` against a profile directory (a human signs in once over
-VNC, later runs inherit it), and `storage_state` import/export. Both belong in
-`Session`, which already owns "the thing that outlives a run". Neither touches the
-artifact schema: a capability starts from an authenticated state and says nothing
-about how it got there. That property is why no artifact references a credential.
+*Change.* Two more ways in: `launch_persistent_context` against a profile directory (a
+human signs in once over VNC, later runs inherit it), and `storage_state`
+import/export. Both belong in `Session`. Neither touches the schema — a capability
+starts from an authenticated state and says nothing about how it got there, which is
+why no artifact references a credential.
 
 *Also:* an SSO redirect leaves the allowlist, and `check_url` runs after every
 click, so it would deny the login itself. The allowlist has to name the auth
@@ -122,8 +117,8 @@ origins for that site — configuration, not code.
 
 ### 6. Re-measure calibration, do not re-guess it
 
-`calibration.py` holds every perceptual threshold with the measurement that set it,
-all taken on one surface. Two are surface-dependent enough to expect trouble:
+`calibration.py` holds every perceptual threshold with the measurement that set it, all
+taken on one surface. Two are surface-dependent enough to expect trouble:
 
 - `container_frame_area = 0.15` — above this a detection is treated as a container
   and does not absorb text. A site with large cards will exceed it and lose labels
@@ -133,18 +128,16 @@ all taken on one surface. Two are surface-dependent enough to expect trouble:
 
 `ocr_det_side_len` is already a setting and should be reviewed for text size.
 
-*Change.* Nothing structural — run `scripts/smoke_observe.py --url <page>` on three
-or four pages of the new site, read the row and label findings it reports, and
-adjust with the measurement recorded in the docstring the way the existing ones
-are. Resist adding a threshold; prefer deleting one. The last one deleted
-(`neighbour_max_gap`) had been quietly wrong for days.
+*Change.* Nothing structural — run `smoke_observe.py --url <page>` on three or four
+pages, read the row and label findings, adjust with the measurement recorded. Resist
+adding a threshold; prefer deleting one. The last deleted (`neighbour_max_gap`) had
+been quietly wrong for days.
 
 ### 7. Console gaps
 
-- **A catalog panel.** The catalog is the agent-facing surface and the console does
-  not show it. A list of capabilities with their contracts, `approve` as a button,
-  and **invoke with typed inputs** — the same call an agent makes, from the
-  operator's screen. Also how a reviewer tries a capability without a terminal.
+- **A catalog panel.** The catalog is the agent-facing surface and the console does not
+  show it. Capabilities with their contracts, `approve` as a button, and **invoke with
+  typed inputs** — the same call an agent makes, from the operator's screen.
 - **A discovery run in progress**, following its steps as they land. The SSE stream
   exists (`/runs/{id}/events`) and nothing consumes it; runs now write a `running`
   result before their first step, so the list is already correct.
@@ -216,6 +209,17 @@ turned up and did *not* close, in order:
 - `prune` renumbering steps cut the link between an extraction and its output.
 - Models answer `expect` with descriptions ("the profile is shown") unless the tool
   says, with examples, that it is matched as a substring of screen text.
+- …and once told that, they answer with the record's own data. `find_and_act` made
+  `expect` required on a read, where the only text guaranteed to be on screen after
+  the action is the value just read: a recording asserted `$18,204.55` and failed
+  every replay for another member, having navigated perfectly. Fixed in three places,
+  because a description alone is advice — the field is gone from the read tool
+  (`find_and_extract`), an amount or a date is refuted before it becomes a checkpoint
+  (`durable_expect`), and the model is told mid-run so the next step is better. A
+  declared input is exempt: `parameterize` turns it into a placeholder that holds.
+- The residual is stated rather than closed: `Marcus Webb` is data that looks like a
+  heading, and one frame cannot tell them apart. Two runs with different inputs can —
+  the same comparison item 1 needs for screens.
 
 **Docker / build**
 - `docker compose exec` resets `HOME` for a uid with no passwd entry; the XDG vars

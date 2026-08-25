@@ -1,18 +1,9 @@
 """The caller's side of a capability: inputs in, typed outputs out.
 
-Separated from the engine because it is the only part of replay that never looks
-at a screen. Everything here is answerable from the artifact and the caller's
-arguments alone, which is exactly why it runs *before* anything is touched — a
-type error should be a rejected call, not a run that gets four steps in and types
-"None" into an amount field.
-
-The two directions are not symmetric, and the asymmetry is deliberate:
-
-  inbound   the caller may be wrong. Reject early, name the input, name the rule.
-  outbound  *we* may be wrong. A declared output that could not be read is
-            EXTRACTION_FAILED, never a quietly absent field — returning three of
-            four values with no signal is how a downstream agent ends up acting
-            on a null balance.
+The only part of replay that never looks at a screen, answerable from the artifact and
+the caller's arguments alone — which is why it runs *before* anything is touched. A type
+error should be a rejected call, not a run that gets four steps in and types "None" into
+an amount field.
 """
 
 from __future__ import annotations
@@ -30,6 +21,19 @@ class ContractError(Exception):
     def __init__(self, failure: FailureDetail) -> None:
         super().__init__(failure.message)
         self.failure = failure
+
+
+def _absent(value: Any) -> bool:
+    """Nothing supplied — including a string that only looks like it was.
+
+    `None` was the whole test until a replay was called with
+    `account_nickname=""`. Empty is not missing to a dict, so the contract passed
+    it, `{{account_nickname}}` rendered to nothing, the anchor tier skipped itself
+    for want of a needle, and the ladder fell to "any text element" and returned
+    the first row's balance as a success. A blank required input is the caller
+    saying nothing, and the place to say so is here, before a browser is opened.
+    """
+    return value is None or (isinstance(value, str) and not value.strip())
 
 
 def validate_inputs(
@@ -52,7 +56,7 @@ def validate_inputs(
 
     params: dict[str, Any] = {}
     for spec in cap.inputs:
-        if spec.name not in inputs or inputs[spec.name] is None:
+        if spec.name not in inputs or _absent(inputs[spec.name]):
             if spec.required:
                 raise ContractError(
                     FailureDetail(

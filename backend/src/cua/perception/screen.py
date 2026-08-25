@@ -1,15 +1,9 @@
 """X display capture.
 
-We photograph the whole virtual display, not the browser viewport.
-
-`page.screenshot()` would be easier and higher fidelity, and it is the wrong
-choice here for two reasons. First, it is browser-only — the moment a desktop
-surface enters the picture there are two capture paths and two coordinate spaces.
-Second, and more immediately: the operator sees the X display over VNC, so if the
-model reasons about a different image than the human sees, every escalation
-becomes an argument about which picture was right.
-
-One display, one image, one coordinate space.
+We photograph the whole virtual display, not the browser viewport. `page.screenshot()`
+would be easier and is browser-only, which means two capture paths and two coordinate
+spaces the moment a desktop surface appears — and the operator sees the X display over
+VNC, so the evidence should be the picture they are looking at.
 """
 
 from __future__ import annotations

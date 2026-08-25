@@ -1,18 +1,9 @@
 """Text reading.
 
-PP-OCR detection + recognition, executed by ONNX Runtime via RapidOCR. Gives text
-lines with boxes and per-line confidence. Used in three places, and it is worth
-being explicit that the third is the weak one:
-
-  1. Joining text to detected controls, so a box becomes "the Transfer button".
-  2. Evaluating checkpoints — asserting the screen says what we expected.
-  3. Scanning lists in `find_and_act`.
-
-(3) is the least deterministic part of an otherwise model-free replay path.
-Truncation ("ACME Corporat..."), currency formatting and column bleed are all
-real, which is why `Normalizer` exists and why the normalizer list is recorded in
-the artifact rather than being a property of the engine. Stated plainly in
-REPORT §3 as the known weakest link.
+PP-OCR detection and recognition: text lines with boxes and per-line confidence. Three
+uses — naming detected controls, evaluating checkpoints, and scanning lists in
+`find_and_act`, which is the weak one, because a predicate is only as good as the
+characters that came back.
 """
 
 from __future__ import annotations

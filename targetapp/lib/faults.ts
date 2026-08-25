@@ -1,21 +1,14 @@
 /**
- * Injectable fault states.
+ * Injectable fault states — the reason this app exists rather than a public sandbox,
+ * since you cannot make a demo site return "session expired" on command.
  *
- * The reason this app exists rather than pointing the demo at a public sandbox:
- * §3.3 asks the replay engine to detect and respond to runtime conditions —
- * validation errors, permission denials, unexpected dialogs, session expiry,
- * transient slowness, app errors — and §6.3 asks for evidence of one. You cannot
- * make a public demo site return "session expired" on command.
- *
- * Toggled at /dev, or by POST /api/faults for a test harness. State lives in a
- * cookie so it is per-browser-session and survives navigation, which means the
+ * Toggled at /dev or by POST /api/faults. State lives in a cookie, so the
  * automation's session and a reviewer's own tab do not fight over it.
  *
  * Note the deliberate split: these are FAULTS. The business outcomes — member not
- * found, no savings account, insufficient funds, over the daily limit, restricted
- * member — are NOT here. They are ordinary behaviour of the app, reachable with
- * ordinary inputs, because conflating "a legitimate answer" with "an injected
- * failure" is exactly the mistake the system is supposed to avoid.
+ * found, insufficient funds, over the daily limit, restricted member — are ordinary
+ * behaviour reachable with ordinary inputs, because conflating "a legitimate answer"
+ * with "an injected failure" is exactly the mistake the system exists to avoid.
  */
 
 import { cookies } from "next/headers";

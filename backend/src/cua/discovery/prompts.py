@@ -1,33 +1,7 @@
 """Prompts for the discovery agent.
 
-Kept in one file and out of the loop so they are reviewable as text, and so a
-prompt change is a visible diff rather than a line buried in control flow.
-
-Shape of each turn:
-  system  : role, the surface contract, the action space, the rules
-  user    : the goal, the declared inputs, and the current annotated screenshot
-            plus its candidate list
-  assistant: exactly one tool call
-
-Design notes that belong with the prompt rather than in a doc:
-
-  - The model is told it is choosing from an enumerated candidate list, never
-    producing coordinates. Coordinates from a model are the failure mode this
-    whole design avoids.
-  - It is told which values are parameters up front, so it types `{{member_id}}`'s
-    value knowing it is a parameter. Synthesis still does the substitution
-    deterministically; telling the model improves the intent text it writes.
-  - It is instructed to prefer `find_and_act` over manual scrolling, with the
-    reason given. Models follow rules better when the rule has a stated cause.
-  - It is told that `escalate` is a legitimate, non-penalized answer. Without
-    that, a stuck model does something plausible and wrong.
-  - Page text is untrusted input. The system prompt says so explicitly. This is a
-    mitigation, not a defense — see the prompt-injection limit in REPORT §6.
-
-The turn carries the history as text rather than as a chain of tool-call and
-tool-result messages. Two reasons: the shape is identical across every provider
-LiteLLM can route to, and only the current screenshot is ever sent, so a ten-step
-run does not drag ten megabytes of base64 through every later turn.
+In one file and out of the loop, so they are reviewable as text and a prompt change is a
+visible diff rather than a line buried in control flow.
 """
 
 from __future__ import annotations
@@ -55,10 +29,11 @@ replayed later, with different parameter values, without you. Write `intent` for
 the human who will review that recording.
 
 Rules
-- Prefer `find_and_act` over scrolling and clicking whenever what you want is \
-identified by its content — a member, an account, a transaction. Scrolling and \
-clicking records a position, and the position will be different tomorrow. \
-`find_and_act` records what you were looking for, which keeps working.
+- Prefer `find_and_click` / `find_and_extract` over scrolling and clicking \
+whenever what you want is identified by its content — a member, an account, a \
+transaction. Scrolling and clicking records a position, and the position will be \
+different tomorrow. The find tools record what you were looking for, which keeps \
+working.
 - Mark an action `risky` if it changes the institution's records or is hard to \
 undo: submitting a transfer, confirming, deleting, closing. A risky action IS \
 paused for a human to confirm before it is recorded. That is expected, not a \

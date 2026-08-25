@@ -36,7 +36,7 @@ from cua.schema import (
 # CUA_TARGET_BASE_URL override. One answer, the same one every command uses.
 BASE_URL = entry_url(settings(), build_policy(settings()))
 
-FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
+CAPABILITIES = Path(__file__).resolve().parent / "smoke_capabilities"
 
 failures: list[str] = []
 
@@ -60,7 +60,8 @@ def savings_capability(base_url: str) -> Capability:
     The same shape synthesis emits: a templated navigate, an extraction anchored
     relative to a label, a typed output, and the two legitimate non-answers this
     screen can produce."""
-    text = (FIXTURES / "read_balance.json").read_text().replace("http://targetapp:8080", base_url)
+    text = (CAPABILITIES / "read_balance.json").read_text()
+    text = text.replace("http://targetapp:8080", base_url)
     return Capability.model_validate_json(text)
 
 

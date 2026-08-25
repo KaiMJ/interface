@@ -1,78 +1,66 @@
 # Guardrails for the mock back-office target app.
 #
-# Loaded by cua.policy.Policy and enforced identically on the discovery and replay
-# paths. Per-application, not per-capability: recoverable conditions like a session
-# interstitial can interrupt any flow on this app, and duplicating them into every
-# artifact would guarantee they drift apart.
+# Enforced identically on the discovery and replay paths. Per-application, not
+# per-capability: a session interstitial interrupts any flow on this app, and
+# duplicating it into every artifact would guarantee the copies drift.
 #
-# One file per application, named `<app>.yaml` and selected with `--app`. Adding a
-# second application is adding a second file — nothing in backend/src knows this
-# one exists.
+# One file per application, selected with `--app`. A second application is a second
+# file — nothing in backend/src knows this one exists.
 
 # --- Identity --------------------------------------------------------------
-# `app` and `vendor` are what a recorded capability carries in its AppRef, so an
-# artifact says which product it drives rather than which URL it was recorded at.
+# What a recorded capability carries in its AppRef, so an artifact says which
+# product it drives rather than which URL it was recorded at.
 app: targetapp
 vendor: null
 
-# Which installs this app's artifacts are valid against. A pattern, not a literal,
-# because the same vendor product at a second institution is the same application
-# at a different address. Defaults to the first allowlist pattern if omitted.
+# Which installs this app's artifacts are valid against. A pattern, not a literal:
+# the same vendor product at a second institution is the same application at a
+# different address.
 base_url_pattern: "^http://targetapp:8080(/.*)?$"
 
-# This deployment's concrete entry point — a per-institution fact. Overridden by
-# CUA_TARGET_BASE_URL, which is how a second tenant runs the same policy.
+# This deployment's entry point — a per-institution fact, overridden by
+# CUA_TARGET_BASE_URL. How a second tenant runs the same policy.
 entry_url: http://targetapp:8080
 
-# Where this app's fault-injection harness lives. Demo apps have one; a real core
-# banking system does not, and an app that declares none simply gets no fault
-# panel in the console. Note the address: it is deliberately *excluded* from the
-# allowlist below, because arming a fault is something done to the automation
-# from outside it. The control plane drives the session here with the driver,
-# before a run starts — never during one, and never as a recordable step.
+# The fault-injection harness. Demo apps have one, a real core banking system does
+# not, and an app declaring none gets no fault panel in the console. Deliberately
+# *excluded* from the allowlist below: arming a fault is done to the automation from
+# outside it, by the driver, before a run starts — never as a recordable step.
 fault_url: http://targetapp:8080/api/faults
 
 # --- Allowlist -------------------------------------------------------------
 # The agent may not act outside these. Note what is absent: the control plane
-# itself (:8000), the console (:3000), and the noVNC endpoint (:6080). The agent
-# runs on the same machine as its own operator surface, so "localhost" would be a
-# hole, not a convenience.
-# `/dev` and `/api/faults` are excluded too. They are the fault-injection harness,
-# and an agent that can switch on its own "session expired" is an agent that can
-# switch it off. A fault is something done *to* the automation, from outside it —
-# `cua replay --fault` drives the session there with the driver, before the engine
-# that would enforce this line exists.
+# (:8000), the console (:3000) and noVNC (:6080). The agent runs on the same machine
+# as its own operator surface, so "localhost" would be a hole, not a convenience.
+# `/dev` and `/api/faults` are excluded for the same reason — an agent that can
+# switch on its own "session expired" can switch it off.
 allowed_url_patterns:
   - "^http://targetapp:8080(?!/dev|/api/faults)(/.*)?$"
 
-# Primitives the agent may use at all. `navigate` is allowed but the URL is still
-# checked against the patterns above.
+# Primitives the agent may use. `navigate` is allowed; the URL is still checked.
 allowed_actions: [navigate, click, type, key, scroll, extract, wait, assert]
 
 # --- Risk ------------------------------------------------------------------
-# What to do when a step declares risk: risky.
-#   allow   | confirm (escalate to a human first) | block
-# `confirm` for the demo: it exercises the escalation path on the write capability
-# rather than requiring a contrived failure to trigger it.
+# What to do when a step declares `risk: risky`.
+#   allow | confirm (escalate to a human first) | block
+# `confirm` here, so the write capability exercises the escalation path.
 risky_disposition: confirm
 
-# Intent phrases that force a step to be treated as risky regardless of what the
-# recording declared. A backstop against a mislabelled artifact — cheap, and the
-# failure mode it prevents (a submit recorded as `safe`) is the expensive one.
+# Intent phrases that force `risky` whatever the recording declared. A backstop
+# against a mislabelled artifact — cheap, and the failure it prevents (a submit
+# recorded as `safe`) is the expensive one.
 risky_intent_patterns:
   - "(?i)\\b(submit|confirm|transfer|send|delete|remove|close|authorize|approve)\\b"
 
 # --- Recoverable conditions ------------------------------------------------
-# Detector + ordered recovery + a cap. The cap is the important field: dismissing
-# the same modal eleven times means the dismissal is not working, and that is a
-# hard failure rather than eleven successful recoveries.
+# Detector + ordered actions + a cap. The cap is the important field: dismissing the
+# same modal eleven times means the dismissal is not working, which is a hard failure
+# rather than eleven successful recoveries.
 #
-# Available actions: `wait` (declared milliseconds), `click` (by anchor text),
-# `key`, `reload` (re-request the page — for a condition a wait alone cannot
-# clear), and `sign_on` (re-run the recipe below). `sign_on` is gated in the
-# engine: it is available only while the run has performed no risky action, and
-# it restarts the capability from step 1, because signing back in returns the
-# session and not your place in the flow.
+# Actions: `wait` (ms), `click` (by anchor text), `key`, `reload` (for a condition a
+# wait alone cannot clear), `sign_on`. `sign_on` is gated in the engine — available
+# only while no risky action has run, and it restarts the capability from step 1,
+# because signing back in returns the session and not your place in the flow.
 recoveries:
   - name: maintenance_notice
     detector: { kind: text_present, value: "scheduled maintenance" }
@@ -86,21 +74,14 @@ recoveries:
       - { action: wait, value: "2000" }
     max_per_run: 3
 
-  # Session expiry, on a run that has not yet done anything irreversible.
+  # Session expiry, on a run that has done nothing irreversible.
   #
-  # This was an escalation, on the argument that re-authenticating would mean the
-  # automation holds a credential. That argument does not survive contact with
-  # the code: it already holds one and types it at session start. What actually
-  # changes across a mid-flow expiry is the state of the *work*, not the secret —
-  # signing back in lands on the application's landing page, several screens from
-  # where the run was.
-  #
-  # So the handler is "sign in and start the capability over", and the engine
-  # allows it only while no risky step has executed. A balance read at 3am
-  # re-runs itself; a transfer that has already been confirmed parks for a person,
-  # because whether its first half committed is not a question an engine may
-  # answer. `max_per_run: 1` — a session that dies twice in one run is not
-  # transient.
+  # Was an escalation, on the argument that re-authenticating means holding a
+  # credential — which does not survive contact with the code: it already holds one
+  # and types it at session start. What a mid-flow expiry changes is the state of the
+  # *work*, not the secret. So the handler is "sign in and start over", allowed only
+  # while no risky step has executed: a balance read at 3am re-runs itself, a
+  # confirmed transfer parks for a person. `max_per_run: 1` — twice is not transient.
   - name: session_expired
     detector: { kind: text_present, value: "session has expired" }
     actions:
@@ -108,9 +89,8 @@ recoveries:
     max_per_run: 1
 
 # --- Declared conditions with no handler -----------------------------------
-# Two lists, split by who can clear the condition. Without them both of these
-# states would surface as "the checkpoint did not hold", which sends an operator
-# looking for a layout problem that is not there.
+# Split by who can clear it. Without these, both surface as "the checkpoint did not
+# hold" — which sends an operator looking for a layout problem that is not there.
 
 # Nobody can fix this from here: stop with APP_ERROR and keep the evidence.
 app_errors:
@@ -119,28 +99,25 @@ app_errors:
 
 # A human can fix this: park the run and hand them the live session.
 escalations:
-  # Signed out with no explanation. Deliberately still an escalation while
-  # `session_expired` above is not: the app saying "your session has expired" is a
-  # condition with a known cause and a known handler, and arriving on the sign-on
-  # screen without it is not. Detector order settles which fires — recoveries are
-  # matched before escalations, so an expiry that says so is recovered.
+  # Signed out with no explanation. Still an escalation while `session_expired` is
+  # not: the app saying so is a condition with a known cause and handler; arriving
+  # here without it is not. Recoveries match before escalations, so an expiry that
+  # says so is recovered.
   - name: sign_on_required
     detector: { kind: text_present, value: "Staff Sign-On" }
 
 # --- Business outcomes -----------------------------------------------------
-# Detectors for legitimate alternative answers, owned by the application because
-# the wording is: every capability that searches for a member meets the same "no
-# member matches" screen, and copying that phrase into each artifact would
-# guarantee the copies drift.
+# Detectors for legitimate alternative answers, owned by the application because the
+# wording is: every capability that searches for a member meets the same "no member
+# matches" screen, and copies in each artifact would drift.
 #
-# What is *not* decided here is which flows may return which answer. A capability
-# opts in by name (`business_outcomes: [{ name: member_not_found }]`) and inherits
-# the detector, because that list is the contract its caller branches on and a
-# capability advertising an outcome it cannot reach is lying to its caller.
+# Which flows may *return* which answer is not decided here. A capability opts in by
+# name (`business_outcomes: [{ name: member_not_found }]`) and inherits the detector,
+# because that list is the contract its caller branches on.
 #
-# Taught, not guessed — `cua learn-outcome` demonstrates one and `cua diagnose`
-# proposes one off a run that stopped on an undeclared screen. Both copy the
-# wording off the screen that produces it.
+# Taught, not guessed: `cua learn-outcome` demonstrates one, `cua diagnose` proposes
+# one off a run that stopped on an undeclared screen. Both copy the wording off the
+# screen that produces it.
 business_outcomes:
   - name: member_not_found
     description: no member exists with that id
@@ -157,30 +134,25 @@ business_outcomes:
     result_fields: [member_id]
 
 # --- Text that changes on its own ------------------------------------------
-# Lines this application renders that tick while nothing is happening. They are
-# excluded when perception decides whether the screen has stopped moving, and
-# nowhere else — a countdown is still read, still perceived, still available to a
-# checkpoint; it is just no longer evidence that the page is in motion.
+# Lines that tick while nothing is happening. Excluded when perception decides
+# whether the screen stopped moving, and nowhere else — a countdown is still read and
+# still available to a checkpoint, it is just no longer evidence of motion.
 #
-# Without this a session countdown defeats both settle tests at once: the pixels
-# differ because a digit changed, and the text differs for the same reason, so
-# every step burns two full timeouts and then fails on a screen that was ready
-# throughout. Any application that shows a clock, a countdown or a "last
-# refreshed" stamp needs an entry here — which, for a back-office system that
-# declares session expiry as a condition, is most of them.
+# Without this a countdown defeats both settle tests at once — the pixels differ
+# because a digit changed, and the text differs for the same reason — so every step
+# burns two timeouts on a screen that was ready throughout. Any app showing a clock
+# or a "last refreshed" stamp needs an entry, which is most of them.
 volatile_text:
   - "\\b\\d{1,2}:\\d{2}(:\\d{2})?\\b"      # clocks and session countdowns
   - "(?i)last (refreshed|updated)"
 
 # --- Sign-on ---------------------------------------------------------------
-# A precondition of every capability, and never a capability itself: this is the
-# one flow that types a credential, and keeping it here means no artifact ever
-# references one. `{{username}}` and `{{password}}` are resolved from
-# configuration in the action layer, below the point where anything is
-# serialized.
+# A precondition of every capability and a capability of none: the one flow that
+# types a credential, kept here so no artifact ever references one. `{{username}}`
+# and `{{password}}` are resolved in the action layer, below serialization.
 #
-# It is described exactly the way a capability describes anything — by what is on
-# the screen — because the mechanism is the same one. Only the storage differs.
+# Described the way a capability describes anything — by what is on the screen —
+# because the mechanism is the same. Only the storage differs.
 sign_on:
   detector: { kind: text_present, value: "Sign-On" }
   steps:
@@ -199,9 +171,8 @@ sign_on:
       intent: "submit the sign-on form"
 
 # --- Discovery -------------------------------------------------------------
-# What the model is told it is looking at. Here rather than in the prompt file
-# because it is the one part of the prompt that is a fact about this application
-# rather than about how the loop works.
+# What the model is told it is looking at — the one part of the prompt that is a
+# fact about this application rather than about how the loop works.
 surface: >-
   a bank back-office application, operated on behalf of a credit-union teller
 

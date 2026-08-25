@@ -1,18 +1,14 @@
 "use client";
 
 /**
- * The escalation queue and the control transfer, in the console itself.
+ * The escalation queue and the control transfer, in the console itself rather than
+ * behind a separate operator route.
  *
- * There is no separate operator route. The debug view and the operator console
- * show the same thing, and the only difference is whether the operator may touch
- * it — splitting them would mean someone handling an escalation has to navigate
- * away from the evidence to see why it happened.
- *
- * The card carries the context §3.6 requires before acting: which capability and
- * goal, which step, why it stopped, and expected against observed. Below it, once
- * the transfer has happened, is the record of what the human did — the handoff and
- * handback frames and every input captured at the X layer. Keystrokes are counted
- * and named, never recorded: the operator may be typing a credential.
+ * The card carries the context an operator needs before acting: which capability and
+ * goal, which step, why it stopped, expected against observed. Below it, once the
+ * transfer has happened, is what the human did — handoff and handback frames and
+ * every input captured at the X layer. Keystrokes are counted and named, never
+ * recorded: the operator may be typing a credential.
  */
 
 import { useState } from "react";

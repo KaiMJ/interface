@@ -1,20 +1,10 @@
-"""Verification — the three checks that wrap every action.
+"""Verification — the checks that wrap every action.
 
-A resolved coordinate being *stable* does not make it *right*. An unexpected modal
-moves nothing; it lands on top. The recorded coordinate is still correct in the
-sense that nothing shifted, and the click hits the dialog. In a banking
-application that is a correctness and safety failure, not a robustness one, and no
-amount of better targeting detects it. Verification does.
-
-So each step is: resolve, verify target, execute, verify effect.
-
-  verify_target   before acting: does the region I am about to click actually say
-                  what the recording said it said, and is anything on top of it?
-                  Nearly free — the observation already exists.
-  verify_effect   after acting: did the state actually change the way the step's
-                  checkpoint declares? Per-step, not just at the end, so a wrong
-                  click at step 3 fails at step 3 with a legible diff rather than
-                  producing a confident wrong output at step 9.
+A stable coordinate is not a right one. An unexpected modal moves nothing; it lands on
+top, so the recorded coordinate still resolves and the click hits the dialog. In a
+banking application that is a correctness failure rather than a robustness one, and no
+amount of better targeting detects it. So each step is: resolve, verify target, execute,
+verify effect.
 """
 
 from __future__ import annotations
@@ -53,11 +43,9 @@ class VerifyResult:
     expected: str | None = None
     observed: str | None = None
     detail: str = ""
-    # Where on screen the problem is. Carried because "an undeclared element
-    # covers the target" is not actionable without knowing *which* element: an
-    # operator has to find it in the frame, and a policy author has to write a
-    # dismissal handler for it. Reporting the text alone makes both people
-    # open the screenshot and guess.
+    # "An undeclared element covers the target" is not actionable without knowing
+    # *which*: an operator has to find it, and a policy author has to write a
+    # dismissal handler against it.
     region: Bbox | None = None
 
 
@@ -83,19 +71,34 @@ def verify_target(
 
     # 1. Does the region say what the recording said it said?
     #
-    # Only the semantic handles are assertable. `target_desc` is prose written for
-    # a human reviewer ("primary submit button on the transfer form") and appears
-    # nowhere on screen; asserting against it would fail every step. When a target
-    # carries neither an anchor nor a name there is nothing to check, and saying so
-    # is more honest than inventing a check that always passes.
+    # Only the semantic handles are assertable. `target_desc` is prose for a
+    # reviewer and appears nowhere on screen. With neither an anchor nor a name there
+    # is nothing to check, and saying so beats a check that always passes.
+    # Declared-but-unrenderable is not the same as never declared. The first is a
+    # check that has become impossible and must fail; the second is a target with
+    # nothing assertable, which is legitimate. Reading both as "nothing to check"
+    # turned off this assertion for exactly the run that needed it — a blank input,
+    # an anchor that rendered to nothing, and a balance read off the wrong row.
+    if target.anchor_text and not (render(target.anchor_text, p) or "").strip():
+        return VerifyResult(
+            ok=False,
+            kind=FailureKind.TARGET_MISMATCH,
+            expected=target.anchor_text,
+            observed="<the anchor rendered empty>",
+            detail=(
+                "the target's anchor is a template that rendered to nothing against "
+                "these inputs, so there is no way to confirm what was resolved"
+            ),
+            region=resolution.bbox,
+        )
+
     expected = render(target.anchor_text, p) or target.name
     if expected:
-        # With a relation, the resolved box is the *neighbour* — an empty input
-        # beside a label — so the assertion belongs on the anchor we stepped from,
-        # which the resolution carries. When that is absent the target fell through
-        # to a recorded box without ever finding the label, and "type the username
-        # at these coordinates on a screen that does not say 'User ID'" is the
-        # precise disaster this check exists to prevent.
+        # With a relation the resolved box is the *neighbour* — an empty input
+        # beside a label — so the assertion belongs on the anchor we stepped from.
+        # Absent, the target fell through to a recorded box without finding the
+        # label, and "type the username at these coordinates on a screen that does
+        # not say User ID" is exactly what this prevents.
         observed = (
             region_text(obs, resolution.bbox)
             if target.relation is Relation.SELF
@@ -117,12 +120,11 @@ def verify_target(
 
     # 2. Is something sitting on top of it?
     #
-    # Only worth asking when the target was *not* confirmed from what the screen
-    # says. If we just read the recording's own words at these coordinates, then
-    # nothing opaque is covering them — and a legitimate panel enclosing its own
-    # button would otherwise be indistinguishable from a modal enclosing someone
-    # else's. Measured: the sign-on panel encloses the Sign On button and tripped
-    # this check on every login.
+    # Only worth asking when the target was *not* confirmed from screen text: if we
+    # just read the recording's words at these coordinates, nothing opaque covers
+    # them. Otherwise a panel enclosing its own button is indistinguishable from a
+    # modal enclosing someone else's — measured, the sign-on panel tripped this on
+    # every login.
     overlay = (
         _overlay_over(obs, resolution.bbox)
         if resolution.tier is ResolutionTier.RECORDED_BBOX
@@ -137,8 +139,7 @@ def verify_target(
                 :_OBSERVED_SNIPPET
             ],
             detail="an undeclared element covers the target; refusing to click through it",
-            # The *overlay's* box, not the target's: this is the thing a policy
-            # author needs to write a dismissal handler against.
+            # The *overlay's* box: what a dismissal handler is written against.
             region=overlay.bbox,
         )
 

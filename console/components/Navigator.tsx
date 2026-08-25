@@ -1,35 +1,32 @@
 "use client";
 
 /**
- * One rail, three lists, one at a time.
+ * One rail, three lists, one at a time — what is this run doing, what has this
+ * system done, what can it do. You are never asking two at once, so they are tabs
+ * rather than three columns competing for the same space.
  *
- * They answer different questions — what is this run doing, what has this system
- * done, what can it do — and you are never asking two at once, so they are tabs
- * rather than three panels competing for the same column.
- *
- * Ordered the way the system narrows: a capability is a thing you can run, a run
- * is one execution of one, a step is one moment inside a run. Left to right is
- * broad to specific, which is also the order you drill in. `steps` is the default
- * selection because it is where you land once something is running, but it sits
- * at the end because that is where it belongs in the hierarchy.
- *
- * The horizontal rail above the frame is a scrubber: it shows shape and
- * timing at a glance and deliberately says nothing about what each step *is*.
- * That belongs in a list with room for the intent, the resolution tier, and the
- * first line of what the model said — which is the thing you scan when you want
- * to know where a run went wrong.
+ * The horizontal rail above the frame is a scrubber: shape and timing at a glance,
+ * deliberately saying nothing about what each step *is*.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Tabs } from "./Shell";
 import { Chip, Empty, StatusDot, ms } from "./ui";
-import { api, isFailed, type CapabilitySummary, type Run, type RunSummary } from "@/lib/api";
+import {
+  api,
+  isFailed,
+  type CapabilitySummary,
+  type Run,
+  type RunSummary,
+  type Thinking,
+} from "@/lib/api";
 
 const TABS = ["capabilities", "runs", "steps"] as const;
 type Tab = (typeof TABS)[number];
 
 export function Navigator({
   run,
+  pending,
   step,
   onSelectStep,
   runs,
@@ -46,6 +43,8 @@ export function Navigator({
 }: {
   /** The selected run, whose steps are the first thing an operator wants. */
   run: Run | null;
+  /** The step being decided right now, if the run is waiting on the model. */
+  pending: Thinking | null;
   step: number | null;
   onSelectStep: (index: number) => void;
   runs: RunSummary[];
@@ -97,7 +96,7 @@ export function Navigator({
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {tab === "steps" ? (
-          !run || run.steps.length === 0 ? (
+          !run || (run.steps.length === 0 && !pending) ? (
             <Empty>
               No steps yet. They appear here as the run writes them — the console tails the
               run's own evidence, so a run started from the CLI streams here too.
@@ -134,9 +133,12 @@ export function Navigator({
                   ) : null}
                   <Chip>{ms(s.duration_ms)}</Chip>
                 </div>
-                {s.model_turn?.text ? (
+                {/* Whatever the model actually produced. A forced tool call leaves
+                    `text` empty on a reasoning model, so the chain of thought is the
+                    only thing there is to preview. */}
+                {s.model_turn?.text || s.model_turn?.reasoning ? (
                   <p className="truncate pt-1 pl-[14px] text-[11px] text-[var(--muted)]">
-                    “{s.model_turn.text}”
+                    “{s.model_turn.text || s.model_turn.reasoning}”
                   </p>
                 ) : null}
               </button>
@@ -201,6 +203,7 @@ export function Navigator({
             </div>
           ))
         )}
+        {tab === "steps" && pending ? <Pending pending={pending} /> : null}
         {error ? <p className="px-3 py-2 text-[11px] text-[var(--err)]">{error}</p> : null}
       </div>
     </div>
@@ -239,5 +242,42 @@ function Row({
       </div>
       <div className="truncate pl-[14px] text-[11px] text-[var(--muted)]">{detail}</div>
     </button>
+  );
+}
+
+/**
+ * The live edge of a running discovery: the step being decided, before there is any
+ * outcome to record. Discovery spends roughly half its wall clock waiting on the
+ * model — one turn of the recording run took 70 seconds — and without this the
+ * console is indistinguishable from a hung run for that whole time.
+ *
+ * The elapsed seconds are counted here rather than sent. The server has nothing new
+ * to say each second, and a heartbeat per second is a heartbeat too many.
+ */
+function Pending({ pending }: { pending: Thinking }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    setNow(Date.now());
+    const tick = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(tick);
+  }, [pending.step_id, pending.since]);
+
+  const since = Date.parse(pending.since);
+  const elapsed = Number.isNaN(since) ? null : Math.max(0, Math.round((now - since) / 1000));
+
+  return (
+    <div className="border-b border-[var(--rule)] px-3 py-2 last:border-0">
+      <div className="flex items-baseline gap-2">
+        <span className="h-[6px] w-[6px] animate-pulse rounded-full bg-[var(--muted)]" />
+        <span className="mono text-[11px] text-[var(--muted)]">{pending.step_id}</span>
+        <span className="min-w-0 flex-1 text-[12px] text-[var(--muted)] italic">
+          deciding what to do next…
+        </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-1 pt-1 pl-[14px]">
+        <Chip title="the model this run is waiting on">{pending.model || "model"}</Chip>
+        {elapsed === null ? null : <Chip>{elapsed}s</Chip>}
+      </div>
+    </div>
   );
 }

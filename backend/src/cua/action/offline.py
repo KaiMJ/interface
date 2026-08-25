@@ -1,16 +1,9 @@
 """Offline driver — replay the decision path against recorded frames.
 
-Not a mock in the pejorative sense. It is what makes the deterministic half of
-this system reviewable by someone with no GPU, no model credentials and no
-browser: point it at a previous run's evidence frames and the engine re-derives
-every decision from the same pixels — resolving targets, asserting pre-click, and
-evaluating checkpoints and business outcomes — with nothing live involved.
-
-What it proves and what it does not, stated plainly. It proves the decision path
-is reproducible from pixels alone: same frames in, same resolutions, same
-checkpoints, same result contract. It does not prove the application responds the
-way it did, because nothing is being clicked. A green offline replay and a green
-live replay say different things, and the README says which is which.
+Point it at a previous run's frames and the engine re-derives every decision from the
+same pixels, with no GPU, no credentials and no browser. It proves the decision path is
+reproducible from pixels alone; it does not prove the application responds the way it
+did, because nothing is being clicked.
 """
 
 from __future__ import annotations

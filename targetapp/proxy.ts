@@ -1,17 +1,12 @@
 /**
- * Session-expiry injection.
+ * Session-expiry injection, in the proxy layer rather than a page guard for a
+ * mundane reason: Next forbids writing cookies during a Server Component render, and
+ * expiring a session means clearing one.
  *
- * This lives in the proxy layer (Next 16's replacement for `middleware`) rather
- * than in the page guard for a mundane reason:
- * Next forbids writing cookies during a Server Component render, and expiring a
- * session means clearing one. The proxy is the one place that can both redirect
- * and mutate cookies.
- *
- * It fires ONCE and clears itself. A session-expiry that fired on every request
- * would make the app permanently unusable and would test only whether the agent
- * can loop. Firing once means the automation hits it mid-flow — which is how it
- * happens in production — and the app is usable again afterwards, so the operator
- * who takes over can actually finish the work.
+ * It fires ONCE and clears itself. Firing on every request would make the app
+ * permanently unusable and would test only whether the agent can loop; firing once
+ * means the automation hits it mid-flow, and the operator who takes over can
+ * actually finish the work.
  */
 
 import { NextResponse, type NextRequest } from "next/server";

@@ -1,4 +1,4 @@
-.PHONY: help dev up down build logs shell targetapp console api test lint fmt install clean
+.PHONY: help dev up down build logs shell targetapp console api test lint fmt install clean diagram
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -38,8 +38,12 @@ api:           ## Run just the backend (no docker)
 test:          ## Backend tests (no browser, no display, no model, no target app)
 	cd backend && uv run pytest -q
 
-lint:          ## ruff + mypy strict
+lint:          ## ruff + mypy strict, and diagram.html's citations
 	cd backend && uv run ruff check . && uv run mypy src
+	python3 scripts/anchors.py --check
+
+diagram:       ## Regenerate diagram.html's file:line citations from the source
+	python3 scripts/anchors.py
 
 fmt:           ## ruff format
 	cd backend && uv run ruff format .

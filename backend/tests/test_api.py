@@ -294,10 +294,9 @@ def test_capability_history_aggregates_the_drift_signal(client: Any) -> None:
     # A business outcome is a correct answer and deliberately does not count as a
     # failure against the flow.
     assert agg["success_rate"] == 0.5
-    # What the runs spent their time on. Perception dominates everything else the
-    # engine does by about two orders of magnitude, so it is the only performance
-    # number worth aggregating — and `observations_per_step` is what shows the
-    # frame reuse working: one perception per step rather than two.
+    # Perception dominates everything else by two orders of magnitude, so it is the
+    # only number worth aggregating. `observations_per_step` shows the frame reuse
+    # working: one perception per step, not two.
     assert agg["observe_share"] == 0.9
     assert agg["observations_per_step"] == 1.0
 

@@ -1,19 +1,7 @@
 """Control plane.
 
-Small on purpose. It exists to serve three callers:
-
-  - an AI agent invoking a capability          POST /capabilities/{id}/invoke
-  - a human operator handling an escalation    /interventions/*
-  - the console watching a run                 GET  /runs/{id}/events (SSE)
-
-Routes are the seam where "this system" becomes "a thing an agent can call". The
-invoke endpoint takes typed inputs and returns a `ReplayResult` — the same object
-the engine produces — so the HTTP contract and the internal contract cannot drift.
-
-Invocations are synchronous: the caller waits for the run. That is the right shape
-for one browser on one display, where a queue would only be a place for the second
-caller to wait less visibly. It is also the first thing that changes at scale, and
-the seam for it is `SessionPool` rather than this file.
+Small on purpose, with three callers: an AI agent invoking a capability, a human
+operator handling an escalation, and the console watching a run over SSE.
 """
 
 from __future__ import annotations

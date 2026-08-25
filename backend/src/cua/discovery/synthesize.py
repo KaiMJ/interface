@@ -1,43 +1,10 @@
 """Run -> capability. The synthesis pass.
 
-Open question in PLAN.md; resolved here as a three-stage pipeline, deterministic
-first and model-assisted only where determinism cannot answer.
-
-  1. PRUNE      (deterministic)
-     Drop steps that did not advance the state. This stage turned out to be
-     nearly empty, and that is a design result rather than an omission: the loop
-     only records a step whose stated expectation came true, so the failed and
-     retried actions this stage was meant to remove never enter the list. What is
-     left to drop is a navigation immediately superseded by another.
-
-  2. PARAMETERIZE (deterministic, from known inputs)
-     The run was given concrete inputs. Any recorded literal equal to one of them
-     becomes `{{that_input}}` — in typed values, in anchor text, in predicates, and
-     in checkpoint values. This is the answer to "who decided 12345 was a
-     parameter?": nobody did, at synthesis time. The caller declared it when they
-     started the run.
-
-     This is deliberately *not* an LLM guessing which numbers look like ids. It is
-     exact string matching against declared inputs, which cannot invent a parameter
-     and cannot miss one that was actually supplied.
-
-  3. DECLARE    (model-assisted, bounded)
-     What is left needs judgment: a description for the calling agent, the success
-     phrase, and which legitimate alternative results this flow can produce. One
-     structured completion, no tool use, and the success phrase is validated
-     against the final recorded frame — a proposed checkpoint that does not
-     actually match is rejected, not trusted.
-
-     Outputs are *not* asked for. Every extraction the model performed already
-     carries the name it chose and the step it came from, so the output contract
-     is read off the recording instead of being re-derived by a second model call
-     that could disagree with the first.
-
-Stage 3 output is `status: draft`. A human approves it before unattended replay.
-That approval gate is the honest place to put a human, rather than pretending
-stage 3 is reliable. Business outcomes in particular are *proposals*: they
-describe screens this run did not visit, so unlike the success condition there is
-nothing to validate them against.
+Three stages, deterministic first and model-assisted only where determinism cannot
+answer: prune steps that did not advance the state, parameterize recorded literals by
+exact match against declared inputs, then ask the model only for naming and outcome
+candidates — discarding any proposed outcome detector that was visible on the successful
+run's own frames, since a detector that matches every success is worse than none.
 """
 
 from __future__ import annotations
@@ -73,29 +40,22 @@ MONEY = (Normalizer.COLLAPSE_WS, Normalizer.STRIP_CURRENCY)
 _COMPARE = (Normalizer.CASEFOLD, Normalizer.COLLAPSE_WS)
 _NORMALIZE_SEP = "\n"
 
-# A success condition is a *proof*, not a transcript. Measured: a model asked for
-# one returned the entire final screen — which validates, and then fails on the
-# next run because a balance in the middle of it changed by twenty-five dollars.
+# A success condition is a *proof*, not a transcript. Measured: a model asked for one
+# returned the whole final screen — which validates, then fails next run because a
+# balance in the middle of it moved by twenty-five dollars.
 MAX_SUCCESS_TEXT = 120
 
 
 # Screens are deliberately *not* derived here, and the reason is a measurement.
+# A first version took the longest line unique to each acted-on frame — the rule
+# that works for outcome detectors — and named the member profile `riverside_004`,
+# after the member's *branch*. That identifies the record, not the screen, so the
+# capability would have refused to run for anybody else.
 #
-# A first version took, for each frame a step acted on, the longest line unique to
-# it among the run's other frames — the same rule that works for outcome
-# detectors. On the read capability it named the three screens `s_cards_reports`
-# ("s Cards Reports", an OCR fragment of the navigation bar that happened to read
-# differently on each frame) and `riverside_004` ("Riverside — 004", the member's
-# *branch*). The second is the instructive one: it identifies the record, not the
-# screen, so the capability would have refused to run for any other member.
-#
-# One run cannot tell an application's chrome from one record's data, because it
-# only ever sees one record. Two runs with different inputs can: text identical
-# across both is chrome, text that differs is data — the same comparison outcome
-# learning uses, asking about sameness instead of difference. That is where screen
-# derivation belongs, and until it exists a capability declares screens because a
-# human wrote them at approval, or it declares none and makes no claim about where
-# it is.
+# One run cannot tell chrome from data: it only sees one record. Two runs with
+# different inputs can, which is where screen derivation belongs (PLAN item 1).
+# Until then a capability declares screens because a human wrote them, or declares
+# none and makes no claim about where it is.
 
 
 def prune(steps: list[Any], observations: list[Any]) -> list[Any]:
@@ -108,8 +68,8 @@ def prune(steps: list[Any], observations: list[Any]) -> list[Any]:
     kept: list[Any] = []
     read: set[str] = set()
     for step in steps:
-        # A second read of a value already read under the same name adds nothing
-        # to the contract and one more thing to go wrong on replay.
+        # A second read under the same name adds nothing to the contract and one
+        # more thing to go wrong on replay.
         name = getattr(step, "extract_as", None) or getattr(step, "on_found_extract_as", None)
         if name:
             if name in read:
@@ -127,9 +87,8 @@ def prune(steps: list[Any], observations: list[Any]) -> list[Any]:
             kept[-1] = step
             continue
         kept.append(step)
-    # Ids are left alone here. They are what ties an extraction to the output it
-    # populates, and renumbering mid-pipeline is how that link gets quietly cut —
-    # see `_renumber`, which does it at the end and remaps the outputs with it.
+    # Ids tie an extraction to the output it populates, and renumbering mid-pipeline
+    # cuts that link. `_renumber` does it at the end and remaps the outputs with it.
     return kept
 
 
@@ -166,6 +125,11 @@ def parameterize(steps: list[Any], inputs: dict[str, Any]) -> tuple[list[Any], l
                             terms=tuple(sub(t) or "" for t in step.predicate.terms),
                             normalize=step.predicate.normalize,
                         ),
+                        # Declared a `Template` in the schema, so it is substituted like
+                        # one. A column header is chrome and normally has nothing to
+                        # replace — but a header carrying an input value would otherwise
+                        # be the one recorded literal parameterization missed.
+                        "on_found_extract_column": sub(step.on_found_extract_column),
                     }
                 )
             )
@@ -189,9 +153,9 @@ def parameterize(steps: list[Any], inputs: dict[str, Any]) -> tuple[list[Any], l
             example=str(inputs[name]),
         )
         for name in inputs
-        # An input that appears nowhere in the recording is not a parameter of
-        # this flow. Declaring it would tell a calling agent it can steer
-        # something it cannot.
+        # An input appearing nowhere in the recording is not a parameter of this
+        # flow, and declaring it tells a calling agent it can steer something it
+        # cannot.
         if name in used
     ]
     return rewritten, specs
@@ -370,6 +334,10 @@ def _sub_target(target: Target | None, sub: Any) -> Target | None:
     return target.model_copy(
         update={
             "anchor_text": sub(target.anchor_text),
+            # Declared a `Template`, so it is substituted like one. A header is chrome
+            # and usually has nothing to replace; one carrying an input value would
+            # otherwise be a recorded literal parameterization missed.
+            "column": sub(target.column),
             "name": sub(target.name),
             "intent": sub(target.intent),
             "target_desc": sub(target.target_desc),
@@ -445,21 +413,12 @@ _ID = re.compile(r"^[a-z][a-z0-9_]{2,47}$")
 def _name(proposed: str, inputs: dict[str, Any], goal: str) -> tuple[str, str]:
     """The capability's id: proposed by the model, then refuted by code.
 
-    Same shape as everything else the model writes here — it is asked, and what it
-    says has to survive a check before it is believed. The fallback is a slug of
-    the goal, which is correct and unreadable: `open_the_profile_for_member_12345
-    _and_read_the_current_balan`. Note what that name has in it. The id of a thing
-    parameterised by member id should not contain a member id, and that is the one
-    rejection worth making mechanically:
-
-      shape     snake_case, starts with a letter, 3-48 characters. A name that
-                cannot be typed at a shell or read in a manifest is not a name.
-      literals  none of the caller's declared values may appear in it. `12345` is
-                what varies per invocation — it is the argument, not the flow.
-
-    Returns the id and, when the proposal was refused, why. The reason is kept in
-    `synthesis.json` beside the rejected outcome detectors, because what was
-    proposed and thrown away is part of judging the rest.
+    The fallback is a slug of the goal, which is correct and unreadable — and contains a
+    member id, which is the one rejection worth making mechanically: the id of a thing
+    parameterised by member id should not contain one. Two checks: snake_case, 3-48
+    characters, and none of the caller's declared values, since those are the arguments rather
+    than the flow. Returns the id and, when the proposal was refused, why — kept in
+    `synthesis.json`, because what was proposed and thrown away is part of judging the rest.
     """
     # Normalised directly rather than through `_slug`, whose empty-string
     # fallback is the literal name "capability" — which would then pass the shape

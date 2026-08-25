@@ -1,18 +1,9 @@
 """Set-of-Marks overlay — the discovery-time view.
 
-The model is shown the screenshot with numbered boxes drawn over every candidate,
-plus a compact JSON list of those candidates. It replies with a mark id, not with
-coordinates.
-
-This is the single decision that makes discovery recordings replayable by
-construction. If the model returned pixel coordinates we would have to infer, after
-the fact, *what* it meant to click — and that inference is exactly the fragile
-post-hoc step this design is trying to avoid. By making it choose from an
-enumerated set, the chosen element's role, name, text and box are known exactly,
-and the artifact's `Target` can be written from real data rather than guessed.
-
-Replay does not use this module at all. Replay has a `Target` and needs a
-coordinate; that is `resolve/`.
+The model is shown the screenshot with numbered boxes over every candidate, and replies
+with a mark id rather than coordinates. Choosing from an enumerated set is what makes
+discovery recordings replayable by construction, instead of by inferring intent back out
+of pixels afterwards.
 """
 
 from __future__ import annotations

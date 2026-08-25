@@ -496,10 +496,9 @@ async def test_navigating_outside_the_allowlist_is_denied(tmp_path: Path) -> Non
 
 
 async def test_a_url_containing_a_risky_verb_is_not_a_risky_action(tmp_path: Path) -> None:
-    # The policy promotes a step to risky when its *declared intent* reads as a
-    # mutation. Matching that against the step's value instead would stop the run
-    # before every page whose path contains a verb — measured on
-    # /transfer/review, which is a page you look at, not a transfer you make.
+    # Promotion reads the *declared intent*. Matching the step's value instead would
+    # stop before every page whose path contains a verb — measured on
+    # /transfer/review, a page you look at rather than a transfer you make.
     cap = savings_capability()
     cap.steps[0] = cap.steps[0].model_copy(
         update={"value": "http://targetapp:8080/transfer/review?member={{member_id}}"}
@@ -621,12 +620,11 @@ async def test_a_declared_interstitial_is_dismissed_and_the_run_continues(
 
 # --- an interstitial that eats the click ------------------------------------
 #
-# The case the dismiss-and-re-poll strategy above cannot handle on its own, and
-# the one the demo app was built to produce: the maintenance dialog does not move
-# the page, so a recorded coordinate still resolves to the right control and the
-# click lands on the dialog instead. Dismissing it afterwards does not make the
-# eaten click happen. Either it is cleared before the step acts, or the step is
-# executed again.
+# The case dismiss-and-re-poll cannot handle alone, and the one the demo app was
+# built to produce: the dialog does not move the page, so a recorded coordinate
+# still resolves to the right control and the click lands on the dialog. Dismissing
+# it afterwards does not make the eaten click happen — either it is cleared before
+# the step acts, or the step runs again.
 
 SEARCH = frame("Member Search", "Search", url="http://targetapp:8080/members")
 MODAL = Observation(
@@ -1402,10 +1400,8 @@ async def test_a_condition_a_human_does_not_clear_stops_rather_than_parking_fore
     ignore it. After two the run stops and names the condition it could not get
     past, which is a thing someone can act on.
     """
-    # A bare sign-on screen, with no "session has expired" on it. The distinction
-    # is the point: an expiry that says so is a declared *recovery* now (sign in,
-    # start over), and arriving on the sign-on screen with no explanation is not.
-    # This test is about the second one.
+    # A bare sign-on screen with no "session has expired" on it. An expiry that says
+    # so is a declared recovery; arriving here with no explanation is not.
     locked = frame("Staff Sign-On", "Please sign on to continue")
     engine, _, control = build(tmp_path, [locked, locked, locked, locked, locked])
 
@@ -1653,3 +1649,40 @@ async def test_an_outcome_the_app_does_not_declare_stops_before_anything_is_touc
     assert result.failure is not None
     assert "account_dormant" in result.failure.message
     assert driver.calls == []
+
+
+# ---------------------------------------------------------------------------
+# a blank argument is not an argument
+# ---------------------------------------------------------------------------
+
+
+async def test_a_blank_required_input_is_refused_before_the_browser_opens(
+    tmp_path: Path,
+) -> None:
+    """The incident, at its narrowest point.
+
+    Measured, on a live run: `account_nickname=""` reached the contract, which
+    tested `is None` and let it by. `{{account_nickname}}` then rendered to
+    nothing, the anchor tier skipped itself for want of a needle, the ladder fell
+    to "any text element", and the run returned the first row's balance as a
+    SUCCESS. A caller asking for nothing was told a number about somebody's money.
+    """
+    engine, driver, _ = build(tmp_path, [ACCOUNTS_ROW])
+    result = await engine.replay(
+        savings_capability(), {"member_id": "12345", "account_nickname": ""}
+    )
+
+    assert result.status is not RunStatus.SUCCESS
+    assert result.outputs == {}
+    # Refused at the contract, so nothing was driven at all.
+    assert driver.calls == []
+    assert "account_nickname" in (result.failure.message if result.failure else "")
+
+
+async def test_a_whitespace_input_is_blank_too(tmp_path: Path) -> None:
+    """`" "` is a caller saying nothing with extra steps."""
+    engine, _, _ = build(tmp_path, [ACCOUNTS_ROW])
+    result = await engine.replay(
+        savings_capability(), {"member_id": "12345", "account_nickname": "   "}
+    )
+    assert result.status is not RunStatus.SUCCESS

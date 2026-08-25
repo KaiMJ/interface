@@ -1,20 +1,7 @@
 """CLI — the demo path.
 
-The README's four commands map to the four subcommands here. A reviewer should be
-able to run the whole thread without touching HTTP:
-
-    cua discover  --app targetapp --goal "..." --input member_id=12345
-    cua replay    cap_get_savings_balance --input member_id=12345
-    cua replay    cap_get_savings_balance --input member_id=99999   # business outcome
-    cua catalog
-
-`replay` runs with no API key set. That is the check that matters: if the
-deterministic path needs a model, it is not deterministic.
-
-Every command that touches a live surface takes `--app`, which selects
-`policies/<app>.yaml`. Replay defaults it to the capability's own `app.name`,
-so an artifact is executed under the guardrails of the application it was
-recorded against and cannot be run under another one by accident.
+The README's commands map to the subcommands here, so a reviewer can run the whole
+thread without touching HTTP.
 """
 
 from __future__ import annotations

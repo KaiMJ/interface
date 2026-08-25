@@ -1,19 +1,8 @@
 """Fusing detector boxes with OCR text into one element list.
 
-Detection knows where the controls are. OCR knows what the words are. Neither
-alone is enough: a bare box cannot be targeted semantically, and a bare text line
-is not necessarily clickable.
-
-Merge rules, in order:
-
-  1. A text element substantially inside a control box becomes that control's
-     `name`/`text`; the text element is absorbed.
-  2. Control boxes overlapping each other above `iou_threshold` collapse to the
-     highest-confidence one. OmniParser routinely emits a button and its label as
-     two nearly-identical boxes.
-  3. Text with no enclosing control survives as its own `role="text"` element.
-     It cannot be clicked meaningfully but it is exactly what checkpoints and
-     anchors match against.
+Detection knows where the controls are, OCR knows what the words are, and neither alone
+is enough: a bare box cannot be targeted semantically, and a bare text line is not
+necessarily clickable.
 """
 
 from __future__ import annotations

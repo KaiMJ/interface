@@ -1,17 +1,16 @@
 """Human-in-the-loop control transfer.
 
-The load-bearing idea is that control is a token with exactly one holder, and the
-*session outlives the transfer*. The human does not get a fresh browser; they get
-the same X display, the same Chromium process, the same cookies and the same
-half-filled form the automation was looking at when it stopped.
+Control is a token with exactly one holder, and the *session outlives the transfer*:
+the human gets the same display, the same Chromium process, the same cookies and the
+same half-filled form.
 
     AUTOMATION --(escalate)--> PENDING --(operator takes control)--> HUMAN
          ^                                                             |
          '------------------- (resume) <---- RELEASING <---------------'
 
-Who holds control is explicit state, not an implicit consequence of "nobody is
-currently calling page.click()". Without that, an operator clicking during a run
-races the automation on the same display.
+Who holds control is explicit state, not the implicit consequence of "nobody is
+currently calling page.click()". Without that, an operator clicking during a run races
+the automation on the same display.
 """
 
 from __future__ import annotations

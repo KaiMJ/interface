@@ -1,29 +1,14 @@
 "use client";
 
 /**
- * The fault harness, in the operator console.
+ * The fault harness, in the console — you arm a fault because you want to watch
+ * what the automation does about it, and the watching is here.
  *
- * §3.3 is about what a replay does when the application does something
- * legitimate and inconvenient — a session that expires, a modal nobody declared,
- * a 500, a validation error. Producing those on demand is what the demo app's
- * fault panel is for, and until now reaching it meant leaving the console for the
- * target app's own `/dev` page in another tab. That is the wrong seam: you arm a
- * fault *because* you want to watch what the automation does about it, and the
- * watching is here.
- *
- * Three properties worth knowing, because they are what make this safe to expose
- * beside a live session rather than a hazard:
- *
- *   it is not the agent      the control plane drives the browser to the fault
- *                            URL with the driver — no policy check, no evidence,
- *                            no step. The URL is *outside* the app's allowlist by
- *                            construction, because an agent that could arm its
- *                            own faults could disarm them.
- *   it cannot interleave     arming claims the session the same way a run does,
- *                            so it is refused while one is in flight.
- *   it is per-application    faults live in the app's policy, so an application
- *                            that declares no harness — every real one — shows no
- *                            panel at all.
+ * Three properties make that safe beside a live session: the control plane drives
+ * the browser to the fault URL itself, which is outside the app's allowlist by
+ * construction (an agent that could arm its own faults could disarm them); arming
+ * claims the session, so it cannot interleave with a run; and faults live in app
+ * policy, so an application declaring no harness shows no panel.
  */
 
 import { useEffect, useState } from "react";

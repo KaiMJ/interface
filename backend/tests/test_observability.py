@@ -130,10 +130,8 @@ def test_the_winning_tier_records_what_it_matched() -> None:
 
 
 def test_a_fallthrough_says_why_each_rung_missed() -> None:
-    # The question an operator actually has when a step resolves by the recorded
-    # box is *why did the anchor miss* — and "recorded_bbox" alone cannot answer
-    # it. A miss because the text is gone and a miss because it matched three
-    # elements are different applications and different fixes.
+    # The question is *why did the anchor miss*, which "recorded_bbox" alone cannot
+    # answer: text gone and text matching three elements are different fixes.
     obs = frame(el("e0", 0.1, 0.1, "Something else"))
     target = Target(
         intent="i",

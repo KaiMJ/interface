@@ -1,28 +1,12 @@
 """Browser driver.
 
-Playwright is used as an input engine and a process manager, not as a locator
-library. There is no `page.locator()` anywhere in this file and there should never
-be one: the moment element resolution happens inside Playwright, the design stops
-generalizing to a surface that has no DOM, and the artifact stops being a
-description of what a person does.
-
-What Playwright gives us that a raw X-level driver would not:
-  - a browser process we can start, stop and configure reproducibly
-  - `page.mouse` / `page.keyboard`, which inject trusted events
-  - `page.url()` for evidence
-
-Chromium runs *headful on the Xvfb display*. Headless would be faster and would
-also make the §3.6 handoff a lie — there would be no window for a human to take
-over.
-
-Coordinate spaces
------------------
-Perception photographs the whole display; Playwright's mouse works in page
-coordinates. The window is sized to the display and put fullscreen at start, which
-should make the two identical, and the offset is then *measured and checked*
-anyway. A silent off-by-85px is the kind of bug that produces a plausible wrong
-click, reports success on every step, and is invisible in a log of coordinates —
-so `start()` refuses to hand back a session whose page and display disagree.
+Playwright as an input engine and a process manager, never a locator library — there is
+no `page.locator()` here and there should never be one, or the design stops
+generalizing to a surface with no DOM. Chromium runs *headful* on the Xvfb display:
+headless would be faster and would make the handoff a lie, since there would be no
+window for a human to take over. The page/display coordinate offset is measured and
+checked, because a silent off-by-85px produces a plausible wrong click and reports
+success on every step.
 """
 
 from __future__ import annotations
@@ -38,9 +22,9 @@ _CHROMIUM_ARGS = (
     "--no-default-browser-check",
     "--disable-session-crashed-bubble",
     "--disable-infobars",
-    # "Chrome is being controlled by automated test software" renders an infobar
-    # that shifts the page down by ~35px. Harmless to a DOM-based tool; to a
-    # coordinate-based one it moves every element on every page.
+    # The "controlled by automated test software" infobar shifts the page down
+    # ~35px. Harmless to a DOM-based tool; to a coordinate-based one it moves
+    # every element on every page.
     "--disable-blink-features=AutomationControlled",
 )
 
@@ -55,9 +39,8 @@ class BrowserDriver:
     def __init__(self, display: str, viewport: Viewport, control: Any | None = None) -> None:
         self.display = display
         self.viewport = viewport
-        # The control token, when a run has one. Checked here rather than in the
-        # runner: an escalation path that forgot to yield still cannot inject
-        # input while an operator is holding the mouse.
+        # Checked here rather than in the runner: an escalation path that forgot to
+        # yield still cannot inject input while an operator holds the mouse.
         self.control = control
         self._page: Any | None = None
         self._browser: Any | None = None
@@ -80,11 +63,9 @@ class BrowserDriver:
             env={**os.environ, "DISPLAY": self.display},
         )
         # `no_viewport=True`, not `viewport=None`: the latter reads as "unspecified"
-        # and Playwright then emulates its default 1280x720 render surface inside
-        # whatever window it opened. The page would render at one size while we
-        # photograph another, and every coordinate this driver translates would be
-        # wrong by a scale factor. This is not a hypothetical — it is what the
-        # first version of this file did.
+        # and Playwright emulates 1280x720 inside whatever window it opened, so the
+        # page renders at one size while we photograph another and every coordinate
+        # is wrong by a scale factor. What the first version of this file did.
         context = await self._browser.new_context(no_viewport=True)
         self._page = await context.new_page()
         await self._fill_display(context)
@@ -177,15 +158,13 @@ class BrowserDriver:
 
     async def navigate(self, url: str) -> None:
         self._assert_control()
-        # `domcontentloaded`, not `networkidle`: waiting is the perceiver's job and
-        # it does it by watching the frame settle, which works on a page that
-        # polls forever. Waiting for network silence on such a page does not.
+        # `domcontentloaded`, not `networkidle`: waiting is the perceiver's job, done
+        # by watching the frame settle — which works on a page that polls forever.
         await self._require_page().goto(url, wait_until="domcontentloaded")
 
     async def reload(self) -> None:
         self._assert_control()
-        # Same wait condition as `navigate`, for the same reason: settling is the
-        # perceiver's job, and a page that polls forever never goes network-idle.
+        # Same condition as `navigate`, same reason.
         await self._require_page().reload(wait_until="domcontentloaded")
 
     async def click(self, p: Point, button: str = "left") -> None:
@@ -194,9 +173,8 @@ class BrowserDriver:
         await self._require_page().mouse.click(x, y, button=button)
 
     async def type_text(self, text: str, secret: bool = False) -> None:
-        # `secret` is honoured by not being used: the value is typed and never
-        # returned, logged or stored here. The flag exists so callers above this
-        # layer know which values must not reach evidence.
+        # `secret` is honoured by not being used: typed, never returned or logged.
+        # The flag exists so callers above know which values must not reach evidence.
         self._assert_control()
         # A small per-key delay, because back-office forms routinely attach
         # keyup handlers that filter, mask or re-render as you type, and a

@@ -1,14 +1,12 @@
 /**
- * Transfer funds — step 1 of 3. The write capability's entry point.
+ * Transfer funds — step 1 of 3, and the write capability's entry point. Multi-field
+ * form -> review -> confirmation is where the risky/irreversible distinction becomes
+ * concrete: everything on this page is safe, and the single button on the review
+ * page is not.
  *
- * Multi-field form -> review -> confirmation is the second flow shape the brief
- * asks for, and it is where the risky/irreversible distinction becomes concrete:
- * everything on this page is safe, and the single button on the review page is
- * not.
- *
- * The `validation` fault makes the inline error render above the fields, which
- * pushes every input below it down. That is the everyday reason a recorded
- * coordinate is wrong in an app that has not changed at all.
+ * The `validation` fault renders the inline error above the fields, pushing every
+ * input below it down — the everyday reason a recorded coordinate is wrong in an app
+ * that has not changed at all.
  */
 
 import { redirect } from "next/navigation";

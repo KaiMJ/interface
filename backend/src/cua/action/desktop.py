@@ -1,17 +1,9 @@
-"""Desktop driver — the §3.7 seam, deliberately not built out.
+"""Desktop driver — the heterogeneity seam, deliberately not built out.
 
-`xdotool` against the same X display the browser is on. Every primitive maps
-directly: click is `xdotool mousemove/click`, type is `xdotool type`, key is
-`xdotool key`, scroll is button 4/5. `navigate` has no meaning and returns a
-policy error rather than silently succeeding.
-
-This file exists to make one claim concrete and checkable rather than asserted in
-prose: *nothing above the action layer changes when the surface does*. A desktop
-capability would use the same artifact schema, the same resolver ladder, the same
-checkpoint kinds (minus `url_matches`) and the same replay engine. Perception
-already reads pixels rather than a DOM, so it needs no change at all.
-
-Stubbed on purpose, documented as a cut in REPORT §7.
+`xdotool` against the same X display; every primitive maps directly, and `navigate` has
+no meaning here so it returns a policy error rather than silently succeeding. The file
+exists to make one claim checkable rather than asserted: nothing above the action layer
+changes when the surface does.
 """
 
 from __future__ import annotations

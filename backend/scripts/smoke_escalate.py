@@ -46,7 +46,7 @@ from cua.schema import (
 # CUA_TARGET_BASE_URL override. One answer, the same one every command uses.
 BASE_URL = entry_url(settings(), build_policy(settings()))
 
-FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
+CAPABILITIES = Path(__file__).resolve().parent / "smoke_capabilities"
 
 failures: list[str] = []
 
@@ -71,7 +71,8 @@ def transfer_capability(base_url: str) -> Capability:
     form before it is three `<select>` elements, and driving those is a perception
     problem worth solving separately from the escalation mechanism this script
     exists to prove."""
-    text = (FIXTURES / "transfer_funds.json").read_text().replace("http://targetapp:8080", base_url)
+    text = (CAPABILITIES / "transfer_funds.json").read_text()
+    text = text.replace("http://targetapp:8080", base_url)
     return Capability.model_validate_json(text)
 
 

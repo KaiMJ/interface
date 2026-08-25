@@ -17,7 +17,8 @@ from typing import Any
 import pytest
 from fakes import VIEWPORT, el
 
-from cua.replay.scan import Scanner, Untestable, cell_in_column, column_span, find_header
+from cua.perception import cell_in_column, column_span, find_header
+from cua.replay.scan import Scanner, Untestable
 from cua.resolve import Resolver
 from cua.schema import (
     FindAndActStep,
@@ -233,3 +234,41 @@ def test_a_header_below_the_row_is_not_that_rows_header() -> None:
     # Nothing above the header row itself, so a lookup anchored above it finds
     # nothing rather than reaching down the page for a match.
     assert find_header(obs, "Amount", above=0.0) is None
+
+
+def test_a_header_whose_box_overlaps_the_row_is_still_its_header() -> None:
+    """Real geometry, taken off a live frame.
+
+    Detected boxes are taller than the gap between rows, so a header's box ends
+    below the top of the row beneath it — here by about a pixel. Requiring the
+    header to clear the row entirely rejected the only header there was, and every
+    read of that column silently fell back to counting cells along the row.
+    """
+    obs = Observation(
+        screenshot_path="/nonexistent.png",
+        viewport=VIEWPORT,
+        url="http://targetapp:8080/members/22841",
+        frame_hash="h",
+        taken_at="2026-08-16T00:00:00+00:00",
+        elements=(
+            el("h0", 0.017, 0.2622, 0.044, 0.0244, "Account"),
+            el("h1", 0.490, 0.2622, 0.071, 0.0244, "Current Balance"),
+            el("h2", 0.679, 0.2630, 0.076, 0.0244, "Available Balance"),
+            el("c0", 0.017, 0.2880, 0.033, 0.0244, "30117"),
+            # y=0.2856 is the row's top edge, and it sits above the header's bottom
+            # at 0.2866 — the overlap this test exists for.
+            el("c3", 0.126, 0.2856, 0.044, 0.0311, "Checking"),
+            el("c1", 0.638, 0.2878, 0.039, 0.0267, "$712.04"),
+            el("c2", 0.842, 0.2889, 0.038, 0.0244, "$1,020.00"),
+        ),
+    )
+    row = [e for e in obs.elements if e.id.startswith("c")]
+    header = obs.elements[1]
+    # The overlap is the whole point: the header ends below where the row starts.
+    assert min(e.bbox.y for e in row) < header.bbox.y + header.bbox.h
+
+    span = column_span(obs, "Current Balance", above=min(e.bbox.y for e in row))
+    assert span is not None
+    cell = cell_in_column(row, span)
+    assert cell is not None
+    assert cell.text == "$712.04"

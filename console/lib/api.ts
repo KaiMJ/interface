@@ -1,20 +1,12 @@
 /**
  * Client for the automation control plane.
  *
- * Every call degrades rather than throws. The console is a debugging surface: it
- * is most useful precisely when the backend is unhealthy, so a fetch failure has
- * to render as "backend unreachable" and not as a blank page.
- *
- * The exception is anything the operator *initiated* — starting a run, taking
- * control, approving a capability. A silent null there is worse than an error:
- * the operator believes they did something they did not do. Those calls go
- * through `send`, which returns the failure so the UI can say what the control
- * plane refused and why (a 409 when the session is busy is the common one).
- *
- * Types mirror the API's own shapes rather than a convenient subset. Where they
- * drifted apart before — a run summary that did not carry steps, a `mode` field
- * the API calls `kind` — the console rendered empty panels and said nothing about
- * why.
+ * Every read degrades rather than throws: the console is most useful precisely when
+ * the backend is unhealthy, so a fetch failure has to render as "backend
+ * unreachable" and not as a blank page. Anything the operator *initiated* — starting
+ * a run, taking control, approving — goes through `send` instead and returns the
+ * failure, because a silent null there means they believe they did something they
+ * did not do.
  */
 
 export const API = process.env.NEXT_PUBLIC_CUA_API ?? "http://localhost:8000";
@@ -66,6 +58,12 @@ export interface ModelTurn {
   call: string;
   /** What the model said alongside the call — its own reasoning, verbatim. */
   text?: string;
+  /** The chain of thought behind the call. Usually the only populated one of the
+   *  two: a forced tool call leaves `text` empty on a reasoning model. */
+  reasoning?: string;
+  /** What the model was shown for this step: goal, inputs, the candidate list off
+   *  this frame, and the run's history. The system prompt is per-run, not here. */
+  prompt?: string;
   /** The tool call's arguments exactly as emitted. */
   arguments?: Record<string, unknown>;
   intent: string;
@@ -73,6 +71,9 @@ export interface ModelTurn {
   mark?: number | null;
   element_id?: string | null;
   element_label?: string | null;
+  /** What became a checkpoint. Absent beside a present `expect` is a refutation:
+   *  an assertion true of the recorded record and false for the next one. */
+  expect_recorded?: string | null;
   anchor_proposed?: string | null;
   anchor_recorded?: string | null;
   candidates_shown: number;
@@ -438,6 +439,16 @@ export const api = {
 };
 
 /**
+ * The run is waiting on the model for this step. Not evidence — it describes work
+ * that has not happened yet, and the step whose id it carries is what retires it.
+ */
+export interface Thinking {
+  step_id: number;
+  since: string;
+  model: string;
+}
+
+/**
  * Tail a run's evidence as it is written.
  *
  * The stream reads the run's own `steps.jsonl` and `run.json` server-side, which
@@ -448,7 +459,12 @@ export const api = {
  */
 export function runEvents(
   runId: string,
-  on: { step?: (row: StepRow) => void; run?: (run: Run) => void; error?: () => void },
+  on: {
+    step?: (row: StepRow) => void;
+    run?: (run: Run) => void;
+    thinking?: (thinking: Thinking) => void;
+    error?: () => void;
+  },
 ): () => void {
   let source: EventSource | null = null;
   try {
@@ -468,6 +484,7 @@ export function runEvents(
     };
   source.addEventListener("step", parse<StepRow>(on.step));
   source.addEventListener("run", parse<Run>(on.run));
+  source.addEventListener("thinking", parse<Thinking>(on.thinking));
   source.addEventListener("error", () => on.error?.());
   return () => source?.close();
 }

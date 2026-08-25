@@ -1,16 +1,12 @@
 /**
- * Seed data for the mock back office.
+ * Seed data for the mock back office, deterministic by construction: transaction
+ * histories come from a seeded PRNG keyed on the account number, so the same account
+ * always shows the same rows. Replay asserts against this data, and a random history
+ * would make every checkpoint flaky in a way that looks like a bug in the
+ * automation.
  *
- * Deterministic by construction: transaction histories are generated from a
- * seeded PRNG keyed on the account number, so the same account always shows the
- * same rows. That matters because replay asserts against this data — a random
- * history would make every checkpoint flaky and the flakiness would look like a
- * bug in the automation.
- *
- * Balances live in a module-level ledger so a transfer visibly moves money
- * within the life of the process. /dev has a reset.
- *
- * None of this is real. Names, numbers and addresses are invented.
+ * Balances live in a module-level ledger so a transfer visibly moves money. None of
+ * it is real.
  */
 
 export type AccountKind = "Checking" | "Savings" | "Money Market" | "Certificate";

@@ -41,6 +41,7 @@ from cua.schema import (
     MatchMode,
     Normalizer,
     Observation,
+    Relation,
     ResolutionTier,
     Target,
     Viewport,
@@ -444,3 +445,151 @@ def test_the_longest_input_is_substituted_first() -> None:
     assert unrender("member 12345 at branch 123", params) == (
         "member {{member_id}} at branch {{branch}}"
     )
+
+
+# ---------------------------------------------------------------------------
+# a value in a table is addressed by its column, not by counting cells
+# ---------------------------------------------------------------------------
+
+ACCOUNTS_TABLE = observation(
+    el("h0", 0.02, 0.20, 0.08, 0.02, "Account"),
+    el("h1", 0.13, 0.20, 0.05, 0.02, "Type"),
+    el("h2", 0.24, 0.20, 0.09, 0.02, "Nickname"),
+    el("h3", 0.40, 0.20, 0.07, 0.02, "Status"),
+    el("h4", 0.49, 0.20, 0.14, 0.02, "Current Balance"),
+    el("h5", 0.68, 0.20, 0.16, 0.02, "Available Balance"),
+    el("r0", 0.02, 0.28, 0.06, 0.02, "30117"),
+    el("r1", 0.13, 0.28, 0.08, 0.02, "Checking"),
+    el("r2", 0.24, 0.28, 0.12, 0.02, "Free Checking"),
+    el("r3", 0.40, 0.28, 0.06, 0.02, "Active"),
+    el("r4", 0.64, 0.28, 0.06, 0.02, "$712.04"),
+    el("r5", 0.84, 0.28, 0.06, 0.02, "$712.04"),
+)
+
+
+def _read(target: Target) -> str | None:
+    found = Resolver(allow_vlm=False).resolve(target, ACCOUNTS_TABLE)
+    hit = next(
+        (e for e in ACCOUNTS_TABLE.elements if e.bbox.contains(found.point)),
+        None,
+    )
+    return (hit.text or hit.name or "").strip() if hit else None
+
+
+def test_counting_cells_reads_the_wrong_one_when_the_anchor_is_ambiguous() -> None:
+    """The failure this exists to prevent, reproduced.
+
+    `Checking` matches the Type cell and `Free Checking` alike. The count starts from
+    whichever one resolved, and one column of drift lands on the status.
+    """
+    counted = Target(
+        intent="read the balance",
+        target_desc="the value to the right of 'Checking'",
+        anchor_text="Checking",
+        anchor_match=MatchMode.CONTAINS,
+        relation=Relation.RIGHT_OF,
+        relation_index=1,
+        bbox=Bbox(x=0.64, y=0.28, w=0.06, h=0.02),
+    )
+    assert _read(counted) == "Active"
+
+
+def test_naming_the_column_reads_the_balance() -> None:
+    """Same ambiguous anchor, same row, right cell.
+
+    The column is a band between two headers, so which cell is in it does not depend
+    on how many cells to its left happen to be filled in.
+    """
+    addressed = Target(
+        intent="read the balance",
+        target_desc="the value to the right of 'Checking'",
+        anchor_text="Checking",
+        anchor_match=MatchMode.CONTAINS,
+        relation=Relation.RIGHT_OF,
+        relation_index=1,
+        column="Current Balance",
+        bbox=Bbox(x=0.64, y=0.28, w=0.06, h=0.02),
+    )
+    assert _read(addressed) == "$712.04"
+
+
+def test_a_column_that_is_not_on_this_screen_falls_back_to_the_count() -> None:
+    """Weaker than the recording had, but never worse than before columns existed."""
+    absent = Target(
+        intent="read the balance",
+        target_desc="the value to the right of 'Nickname'",
+        anchor_text="Free Checking",
+        anchor_match=MatchMode.CONTAINS,
+        relation=Relation.RIGHT_OF,
+        relation_index=1,
+        column="Ledger Balance",
+        bbox=Bbox(x=0.64, y=0.28, w=0.06, h=0.02),
+    )
+    assert _read(absent) == "$712.04"
+
+
+# ---------------------------------------------------------------------------
+# a target that identifies a record, not a control
+# ---------------------------------------------------------------------------
+
+
+def test_an_anchor_that_renders_empty_stops_rather_than_degrades() -> None:
+    """No needle is not the same as no anchor.
+
+    Both used to return "skipped" from the same branch, and the ladder read that as
+    permission to try the tiers below — which answer a different question. `role_name`
+    matches any text element on the frame; the recorded box is where another record
+    sat. Either can return a plausible number for a caller who named nothing.
+    """
+    target = Target(
+        intent="read the balance",
+        target_desc="the value to the right of the account",
+        anchor_text="{{account_nickname}}",
+        relation=Relation.RIGHT_OF,
+        relation_index=1,
+        role="text",
+        bbox=Bbox(x=0.64, y=0.28, w=0.06, h=0.02),
+    )
+    with pytest.raises(Unresolvable):
+        Resolver(allow_vlm=False).resolve(target, ACCOUNTS_TABLE, {"account_nickname": ""})
+
+
+def test_a_record_that_is_absent_is_not_looked_for_by_position() -> None:
+    """The banner case, and every other page shift.
+
+    The anchor is a template, so it names a row rather than a control. Absent means
+    absent: falling to the recorded coordinates returns whichever record has moved
+    into that position, with no signal that it is the wrong one.
+    """
+    target = Target(
+        intent="read the balance",
+        target_desc="the value to the right of the account",
+        anchor_text="{{account_nickname}}",
+        relation=Relation.RIGHT_OF,
+        relation_index=1,
+        role="text",
+        bbox=Bbox(x=0.64, y=0.28, w=0.06, h=0.02),
+    )
+    with pytest.raises(Unresolvable):
+        Resolver(allow_vlm=False).resolve(
+            target, ACCOUNTS_TABLE, {"account_nickname": "No Such Account"}
+        )
+
+
+def test_a_control_still_degrades_the_way_it_always_did() -> None:
+    """The rule keys on the template, not on extraction.
+
+    A button carries no placeholder: it is one control that exists on every run, so
+    a miss really is drift and the lower rungs are the right answer.
+    """
+    target = Target(
+        intent="click View",
+        target_desc="View",
+        anchor_text="View",
+        role="text",
+        bbox=Bbox(x=0.017, y=0.28, w=0.033, h=0.02),
+    )
+    found = Resolver(allow_vlm=False).resolve(target, ACCOUNTS_TABLE, {})
+    # Which lower rung caught it is not the claim — that it was allowed to fall past
+    # the anchor at all is, and a data target no longer is.
+    assert found.tier is not ResolutionTier.ANCHOR_TEXT

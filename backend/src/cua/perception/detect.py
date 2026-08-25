@@ -1,17 +1,9 @@
 """Control detection.
 
-OmniParser v2's `icon_detect` checkpoint is a YOLO model trained to find
-interactable regions in UI screenshots — buttons, inputs, icons, checkboxes,
-rows. It finds *where things are*; it does not tell us what they say. Text comes
-from OCR (`ocr.py`) and the two are merged in `merge.py`.
-
-We deliberately do not run OmniParser's Florence-2 captioning stage. It exists to
-describe icons in natural language, which is expensive on CPU and largely
-redundant here: OCR already supplies the visible text, and for the small number of
-text-free icon buttons a role guess from geometry is sufficient. Noted as a cut.
-
-Weights are pulled from HuggingFace on first use into CUA_MODELS_DIR (a mounted
-volume), not baked into the image.
+OmniParser v2's `icon_detect` checkpoint — where the interactable regions are, not what
+they say; text comes from `ocr.py` and the two are fused in `merge.py`. The Florence-2
+captioning stage is deliberately not run: expensive, and largely redundant here, since
+OCR already supplies the words.
 """
 
 from __future__ import annotations

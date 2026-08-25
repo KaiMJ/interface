@@ -1,13 +1,9 @@
 """The perception seam.
 
-`Perceiver.observe()` is the only way anything in this system learns what is on
-the screen. Everything above it — resolver, discovery loop, replay engine —
-consumes `Observation` and knows nothing about screenshots, OmniParser, OCR, DOM,
-or accessibility APIs.
-
-That is the seam §3.7 asks about. Extending to a legacy frameset app or a native
-desktop application means writing a new `Detector` / `Screen` pair; the artifact
-format, the resolver ladder, and the replay engine are untouched.
+`observe()` is the only way anything here learns what is on the screen. Everything
+above it consumes `Observation` and knows nothing about screenshots, OmniParser,
+OCR, DOM or accessibility APIs — so a frameset app or a desktop application is a new
+`Detector`/`Screen` pair and nothing else. (REPORT §4.)
 """
 
 from __future__ import annotations
@@ -55,20 +51,16 @@ class TextReader(Protocol):
 
 
 class Unsettled(Exception):
-    """The surface never stopped changing within the timeout.
-
-    Terminal for the step. Deliberately not "carry on with the last frame": the
-    frames disagreed about where things are, and resolving a coordinate against a
-    page that is still laying out is how a click lands on the wrong control.
-    """
+    """Never stopped changing within the timeout. Terminal for the step, rather
+    than "carry on with the last frame": resolving against a page that is still
+    laying out is how a click lands on the wrong control."""
 
 
 class Perceiver:
     """Composes a screen, a detector and a text reader into one observation.
 
-    Kept as a concrete class rather than a protocol because the composition itself
-    — capture, detect, read, merge, assign stable ids — is the same for every
-    surface. Only the three collaborators change.
+    Concrete rather than a protocol: capture, detect, read, merge is the same for
+    every surface. Only the three collaborators change.
     """
 
     def __init__(
@@ -86,15 +78,12 @@ class Perceiver:
         self.reader = reader
         self.merge_iou = merge_iou
         self.containment = containment
-        # Supplied by the action layer when the surface happens to have a URL.
-        # A callable rather than a value so perception never holds a reference to
-        # a browser, and so a desktop surface simply passes nothing.
+        # A callable, not a value, so perception never holds a browser reference —
+        # and a desktop surface passes nothing.
         self.url_provider = url_provider
-        # Text that is *expected* to change on this surface while nothing is
-        # happening: a session countdown, a clock, a "last refreshed" stamp. Facts
-        # about the application, declared in its policy and handed down here,
-        # because deciding what counts as motion is perception's job and knowing
-        # which lines tick is the application's.
+        # Lines expected to change while nothing is happening: a countdown, a clock,
+        # a "last refreshed" stamp. Declared in app policy — what counts as motion
+        # is perception's job, which lines tick is the application's.
         self._volatile = tuple(re.compile(p) for p in volatile)
 
     def _reads_the_same(self, a: Observation, b: Observation) -> bool:
@@ -104,12 +93,9 @@ class Perceiver:
     def observe(self, out_path: Path, region: Bbox | None = None) -> Observation:
         """Capture and interpret one frame.
 
-        Contract:
-          - `region`, when given, restricts *text reading* only. Detection always
-            runs full-frame, because a control partially outside the region still
-            matters for overlay detection.
-          - Element ids are stable within one observation and meaningless across
-            observations. Nothing may persist them.
+        `region` restricts *text reading* only — detection stays full-frame,
+        because a control partly outside the region still matters for overlay
+        detection. Element ids are meaningless across observations; do not persist.
         """
         viewport, frame_hash = self.screen.capture(out_path)
         return self._interpret(out_path, viewport, frame_hash, region)
@@ -117,37 +103,17 @@ class Perceiver:
     def settle(self, out_path: Path, timeout_ms: int, poll_ms: int) -> Observation:
         """Observe repeatedly until the surface stops changing.
 
-        Deterministic replacement for `sleep()`. Raises rather than returning a
-        possibly-mid-reflow frame — resolving coordinates against a page that is
-        still laying out is how a click lands on the wrong control.
+        The deterministic replacement for `sleep()`. Two definitions of "stopped", in order:
+        two consecutive frames hash-equal, which is cheapest and fires on a static enterprise
+        screen; then two consecutive *observations* whose text and boxes match, ignoring
+        declared-volatile lines. The fallback exists because a caret, a spinner or a clock means
+        no two frames are byte-identical — identical pixels was only ever a proxy for the property
+        the resolver depends on, that the words and boxes have stopped moving.
 
-        Two definitions of "stopped", tried in that order:
-
-          pixels  two consecutive frames hash-equal. The cheapest correct answer,
-                  and on a static enterprise screen it is the one that fires.
-          text    two consecutive *observations* whose readable text and control
-                  boxes match, ignoring lines the application declares volatile.
-                  Costs two extra observations (~4s) and only runs when the pixel
-                  test has already given up.
-
-        The fallback exists because a blinking caret, a spinner, a carousel or a
-        live clock means no two frames are ever byte-identical, and on such a
-        surface the pixel test alone fails every step. Identical pixels was only
-        ever a cheap proxy for the property the resolver actually depends on:
-        that the words and the boxes have stopped moving.
-
-        A session countdown is the case that defeats *both* tests, and it is not
-        exotic — a back-office banking application that declares session expiry as
-        a condition is very likely to render the countdown. `14:59` becoming
-        `14:58` changes the pixels and changes the text, so the page never settles
-        by either measure and every step burns two full timeouts before failing on
-        a screen that was ready the whole time. `volatile` is how an application
-        says which lines those are; they are excluded from the comparison and from
-        nothing else, so a countdown is still readable, still perceivable, and
-        still no longer evidence that the page is moving.
-
-        Which one fired is recorded on the observation, because a run that settles
-        by text on every step is telling you something about the surface.
+        A session countdown defeats *both*, since `14:59` to `14:58` changes pixels and text, so
+        every step would burn two timeouts on a screen that was ready throughout; `volatile`
+        excludes those lines from this comparison and from nothing else. Which test fired is
+        recorded, because settling by text on every step says something about the surface.
         """
         deadline = monotonic_ms() + timeout_ms
         previous: str | None = None

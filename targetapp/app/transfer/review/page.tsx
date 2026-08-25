@@ -1,15 +1,12 @@
 /**
- * Transfer funds — step 2 of 3. The risky action lives here.
+ * Transfer funds — step 2 of 3. "Confirm Transfer" is the one control in this app
+ * that moves money and cannot be taken back, so under `risky_disposition: confirm`
+ * the automation must escalate before pressing it — which makes the escalation demo
+ * a real guardrail firing rather than a contrived failure.
  *
- * "Confirm Transfer" is the one control in this app that moves money and cannot
- * be taken back. Under `risky_disposition: confirm` in the policy, the automation
- * must escalate to a human before pressing it — which is what makes the
- * escalation demo a real guardrail firing rather than a contrived failure.
- *
- * Both business outcomes are decided here, and both render on this page with a
- * 200: insufficient funds, and over the daily limit. Neither is a failure. A
- * caller needs to distinguish "the transfer did not happen because the member is
- * short" from "the transfer may or may not have happened, we lost the thread".
+ * Both business outcomes are decided here and render with a 200: insufficient funds,
+ * and over the daily limit. Neither is a failure, and a caller needs to distinguish
+ * "the member is short" from "we lost the thread".
  */
 
 import Link from "next/link";

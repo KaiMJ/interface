@@ -1,33 +1,8 @@
 """Perceptual calibration — every tuned threshold, with what set it.
 
-These are the numbers that decide what perception concludes: how much of a text
-box must sit inside a control before it counts as that control's label, how much
-vertical overlap makes two boxes the same table row, how large a detection has to
-be before it reads as a container rather than a control.
-
-They are empirical. Collecting them here does not make them principled; it makes
-them **visible as a set**, which is the property that matters. A threshold living
-beside its call site is a threshold nobody re-examines, and two call sites
-answering the same question with different values — which is what this module was
-extracted from — is how a threshold set turns into folklore.
-
-Every field carries the measurement that set it. Where a value has no measurement
-behind it, that is stated too.
-
-Three rules keep this from becoming a junk drawer:
-
-  1. Only *perceptual* values live here — things that could be re-measured against
-     a different surface. Display truncation lengths, prompt budgets and
-     structural constants stay where they are used.
-  2. Anything a deployment might legitimately change lives in `Settings` and is
-     passed in: the OCR detector's input size, confidence floors, the merge IoU.
-     Calibration is what we measured. Settings are what an operator may override.
-  3. One value per question. There is exactly one containment threshold for "is
-     this element inside this region", not one per caller.
-
-Re-measuring: `scripts/smoke_observe.py` and `scripts/smoke_drive.py` are the
-harnesses these were set against. Change a value, run both, and read the element
-counts and the resolution tiers.
+Empirical rather than principled. Collecting them here does not make them right; it
+makes them visible as a set, since a threshold beside its call site is one nobody
+re-examines.
 """
 
 from __future__ import annotations

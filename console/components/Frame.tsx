@@ -1,25 +1,13 @@
 "use client";
 
 /**
- * What the agent was looking at, and what it made of it.
+ * What the agent was looking at, and what it made of it. Three layers over one
+ * image: the capture an operator would have seen over VNC; the numbered marks the
+ * model was actually shown, against which any argument about a decision is
+ * litigated; and every box perception found, with role, source and confidence.
  *
- * Three layers over one image, each answering a different question:
- *
- *   capture     what an operator would have seen over VNC. The ground truth.
- *   marks       the numbered overlay the model was actually shown. Any argument
- *               about a decision it made is litigated against this one.
- *   elements    what perception found — every box, its role, its source and its
- *               confidence. This is the layer that was missing: the frames and
- *               the model's answer were both visible, and the reading between
- *               them, on which everything downstream depends, was not.
- *
- * The failure region and the resolved target draw on top of whichever layer is
- * showing, because "where did it click" and "what was there" are the same
- * question asked twice.
- *
- * All coordinates are normalised 0..1 of the recording viewport, so they overlay
- * any rendered size without knowing what that size is — which is the whole point
- * of normalising them in the first place.
+ * Coordinates are normalised 0..1 of the recording viewport, so they overlay any
+ * rendered size — which is the point of normalising them.
  */
 
 import { useEffect, useState } from "react";
@@ -28,6 +16,7 @@ import { StepLine } from "./RunView";
 import {
   api,
   evidenceUrl,
+  isFailed,
   type Bbox,
   type EvidenceStep,
   type Observation,
@@ -74,6 +63,16 @@ export function Frame({
       live = false;
     };
   }, [runId, frame?.observation]);
+
+  // A step that failed *after* acting has its reason on the after-frame — the
+  // permission denial, the application error, the screen the checkpoint did not
+  // find. Defaulting to the pre-action capture there shows the screen from before
+  // the thing went wrong, which reads as the console having missed the failure
+  // entirely. Keyed on the step so it re-decides on selection and still leaves the
+  // tabs under the operator's hand.
+  useEffect(() => {
+    setLayer(step && isFailed(step.status) && frame?.after ? "after" : "marks");
+  }, [frame?.step_id, frame?.after, step?.status, step]);
 
   // Fall back to the clean capture when a run has no overlay — replay runs never
   // write one, because no model was shown anything — or no after-frame, which a

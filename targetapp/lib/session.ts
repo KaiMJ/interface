@@ -1,11 +1,9 @@
 /**
- * Teller session.
- *
- * A cookie and a redirect. Authentication is not the interesting part of this
- * project; it is here because a back-office app that opens straight onto member
- * data would be an unrealistic surface, and because login is where the
- * automation's one credential is used — which is what makes "secrets never reach
- * an artifact" a claim with something behind it.
+ * Teller session: a cookie and a redirect. Authentication is not the interesting
+ * part of this project; it is here because a back-office app that opened straight
+ * onto member data would be an unrealistic surface, and because login is where the
+ * automation's one credential is used — which is what puts something behind
+ * "secrets never reach an artifact".
  */
 
 import { cookies } from "next/headers";

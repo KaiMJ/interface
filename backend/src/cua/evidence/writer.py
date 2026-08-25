@@ -1,25 +1,8 @@
 """Evidence.
 
-One directory per run, written incrementally as the run proceeds rather than
-assembled at the end. A run that crashes at step 9 is exactly the run whose
-evidence matters most, so evidence that only exists on the success path is
-evidence that is missing when it is needed.
-
-    evidence/<run_id>/
-      run.json              DiscoveryResult | ReplayResult, rewritten each step
-      steps.jsonl           one structured record per step, append-only
-      frames/
-        step-03.png             what the screen looked like
-        step-03.annotated.png   with the set-of-marks overlay (discovery only)
-      observations/
-        step-03.json          detected elements, for offline debugging
-      intervention/
-        request.json  handoff.png  handback.png  human_actions.jsonl
-      capability.json       the emitted artifact (discovery only)
-
-Everything here passes through the redactor before it is written. That is the
-whole reason `Redactor` exists as a seam even though v1's implementation is a
-no-op — the call sites are the expensive part to retrofit.
+One directory per run, written as the run proceeds rather than assembled at the end: a
+run that crashes at step 9 is the run whose evidence matters most, so evidence that
+exists only on the success path is missing exactly when it is needed.
 """
 
 from __future__ import annotations

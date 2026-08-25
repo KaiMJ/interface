@@ -1,18 +1,11 @@
 "use client";
 
 /**
- * The run, as a bar and a rail.
- *
- * `RunBar` is one line of identity and one of result. Everything else a run
- * carries — inputs, model, duration, the raw record — is a detail you open, not
- * a detail you are shown, because you read it once per run and the rest of the
- * time it is noise between you and the frame.
- *
- * `StepRail` replaces a whole column. A run is five to thirty steps; laid out
- * horizontally with the status in the colour and the detail in the tooltip, it
- * costs one row instead of a third of the screen, and the shape of the run — how
- * long each step took, where it went wrong — is legible at a glance in a way a
- * vertical list of six chips per row never was.
+ * The run, as a bar and a rail. `RunBar` is one line of identity and one of result;
+ * everything else a run carries is a detail you open, because you read it once per
+ * run and the rest of the time it is noise between you and the frame. `StepRail`
+ * lays five to thirty steps out horizontally, status in the colour and detail in the
+ * tooltip, so the shape of the run is legible at a glance for the cost of one row.
  */
 
 import { Chip, Field, Json, StatusDot, ms, statusColor } from "./ui";

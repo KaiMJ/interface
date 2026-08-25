@@ -1,30 +1,10 @@
 """Learning a business outcome by demonstrating one.
 
-Synthesis asks the model to name the legitimate alternative results a caller must
-branch on — "no such member", "not entitled to view this record". Those are
-screens the successful recording never visited, so the model is guessing their
-wording, and a detector built on guessed wording is worse than no detector at all.
-Measured on the real recording run: it proposed `"Accounts"` as the detector for
-`account_not_found`, which is a column header on every screen of the flow. Every
-success would have been reported as a business outcome.
-
-Two mechanisms, and neither of them asks a model to be right about a screen it did
-not see.
-
-**Falsify what was proposed.** A detector cannot be positively validated — the
-screen was not visited — but it can be refuted. If the phrase appears on any frame
-the successful run passed through, it is not a detector for an alternative
-outcome. `discovery.synthesize` drops those and records why.
-
-**Learn the wording from a run that reaches the screen.** Replay the capability
-twice, once with the inputs it was recorded with and once with inputs that reach
-the other result, and difference the two final frames. Lines present only in the
-second are that outcome's signature. No model, no guess: the phrase is copied off
-the screen that produces it, then parameterized so it describes the capability
-rather than one run.
-
-The pieces here are pure functions over evidence directories, so the mechanism is
-testable without a browser and works on evidence already on disk.
+Synthesis asks the model to name the alternative results a caller branches on, but those
+are screens the successful recording never visited — so it guesses the wording, and on
+the real run proposed a column header present on every screen of the flow. Nothing here
+asks a model to be right about a screen it did not see: the detector comes from the
+difference between a run that succeeded and a run that did not.
 """
 
 from __future__ import annotations
@@ -85,28 +65,20 @@ def final_lines(evidence_dir: Path) -> list[str]:
 def all_lines(evidence_dir: Path) -> list[str]:
     """Every line a run read, on every screen it passed through.
 
-    This is the right reference side of the comparison, and getting it wrong is
-    instructive: comparing final frames alone taught the first attempt that
-    "Try 12345, 22841, 30992, 44100, 57310 — or a surname." meant "member not
-    found". It is the search page's hint text. The successful run *passed through*
-    that page on its way to the profile, so the phrase says nothing about how a
-    run ended — only about where both of them went."""
+    The right reference side, and getting it wrong is instructive: comparing final
+    frames alone taught the first attempt that the search page's hint text meant
+    "member not found". Both runs passed through that page.
+    """
     return [line for path in _observations(evidence_dir) for line in _lines(path)]
 
 
 def distinguishing_text(reference: Sequence[str], outcome: Sequence[str]) -> str:
     """The line that says this run ended differently.
 
-    `reference` is every line the successful run read anywhere; `outcome` is the
-    screen the other run ended on. Anything both runs saw is shared furniture.
-
-    Longest line present in the outcome run and absent from the reference run.
-    Longest because a screen announcing a different result says so in a sentence,
-    while the chrome it shares with every other screen is short — and because the
-    alternative is a scoring function with weights nobody can defend.
-
-    Comparison is case- and whitespace-insensitive; the returned text is the
-    original, because a detector has to match what is actually rendered.
+    Longest line present in `outcome` and absent from `reference`. Longest because a
+    screen announcing a result says so in a sentence while shared chrome is short,
+    and because the alternative is a scoring function nobody can defend. Compared
+    case- and whitespace-insensitively; returned as rendered.
     """
     seen = {normalized_line(line) for line in reference}
     only = [line for line in outcome if normalized_line(line) and normalized_line(line) not in seen]
@@ -125,11 +97,10 @@ def with_outcome(
     inputs: dict[str, object],
     version: int | None = None,
 ) -> Capability:
-    """A new draft version of `cap` that declares one more business outcome.
+    """A new draft version declaring one more business outcome.
 
-    A new version rather than an edit: the version production is calling keeps
-    working and stays approved, and the diff between v1 and v2 is what a reviewer
-    reads to decide whether the new outcome is real.
+    A version rather than an edit: what production is calling stays approved, and
+    the v1/v2 diff is what a reviewer reads.
     """
     parameterized = unrender(detector_text, dict(inputs)) or detector_text
     declared = {spec.name: spec.type for spec in cap.inputs}
@@ -149,8 +120,7 @@ def with_outcome(
     return cap.model_copy(
         update={
             "version": version if version is not None else cap.version + 1,
-            # Back to draft: the capability now claims something a human has not
-            # reviewed, and approval is a statement about the whole contract.
+            # Back to draft: approval is a statement about the whole contract.
             "status": Status.DRAFT,
             "business_outcomes": [*remaining, outcome],
         }
@@ -158,9 +128,5 @@ def with_outcome(
 
 
 def normalized_line(line: str) -> str:
-    """How two lines of screen text are compared for identity.
-
-    Shared with screen derivation, which asks the same question of a different set
-    of frames: is this line one I have seen elsewhere?
-    """
+    """How two lines of screen text are compared for identity."""
     return " ".join(line.casefold().split())

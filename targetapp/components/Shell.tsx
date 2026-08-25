@@ -1,17 +1,12 @@
 /**
- * App chrome: title bar, teller strip, nav, and the two injectable interruptions.
+ * App chrome, deliberately hostile-ish in ways that are true of real back-office
+ * systems and that a modern component library would accidentally fix: no
+ * data-testid anywhere, plain anchors with generic labels, and two injectable
+ * interruptions.
  *
- * Deliberately hostile-ish, in ways that are true of real back-office systems and
- * that a modern component library would accidentally fix:
- *
- *   - no data-testid, anywhere in this app
- *   - nav items are plain anchors with generic labels
- *   - the notice banner and the modal are the two "everything moved / something
- *     is on top of my target" cases, and they are togglable
- *
- * The banner is the shift case: it pushes every coordinate below it down by its
- * own height. The modal is the overlay case: it moves nothing and lands on top,
- * which no amount of better targeting detects — only verification does.
+ * The banner is the shift case — it pushes every coordinate below it down by its own
+ * height. The modal is the overlay case: it moves nothing and lands on top, which no
+ * amount of better targeting detects, only verification does.
  */
 
 import Link from "next/link";

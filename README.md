@@ -7,8 +7,9 @@ that replays deterministically — no model in the decision loop.
 > The model discovers. The artifact becomes a reusable capability. Deterministic replay is how
 > the AI agent invokes it in production.
 
-Design write-up: [`REPORT.md`](REPORT.md) · Brief: [`ASSIGNMENT.md`](ASSIGNMENT.md) ·
-Runs that prove it: [`evidence/`](evidence/README.md) · What is next: [`PLAN.md`](PLAN.md)
+Design write-up: [`REPORT.md`](REPORT.md) · How it runs, stage by stage: [`diagram.html`](diagram.html) ·
+Brief: [`ASSIGNMENT.md`](ASSIGNMENT.md) · Runs that prove it: [`evidence/`](evidence/README.md) ·
+What is next: [`PLAN.md`](PLAN.md)
 
 ---
 
@@ -143,11 +144,10 @@ cua replay cap_get_savings_balance --input member_id=12345 \
   "note": "cleared 'maintenance_notice' before acting" }, ... ] }
 ```
 
-The dialog is dismissed *before* the step acts, which is the ordering that matters:
-it does not move the page, so a recorded coordinate still resolves to the control
-underneath and a click issued into it would simply be eaten. `--fault slow` is the
-other half — the step polls for its target for ~3.5s rather than reporting drift.
-All three tiers in one command:
+Dismissed *before* the step acts, which is the ordering that matters: the dialog does
+not move the page, so a recorded coordinate still resolves to the control underneath
+and a click into it is eaten. `--fault slow` is the other half — the step polls for
+~3.5s rather than reporting drift. All three tiers in one command:
 
 ```bash
 python3 scripts/smoke_recover.py      # modal, slow, expired — see evidence/README.md
@@ -193,9 +193,8 @@ request, the handoff and handback frames, what the operator did, and how they re
 
 **6. Teaching it an outcome** — what "no such member" looks like, learned rather than guessed
 
-A recorded capability declares only the outcomes it can actually detect. Synthesis refuses any
-the model proposed that appear on the successful run's own frames, so a fresh recording often
-declares none. Show it one instead:
+A recording declares only the outcomes it can detect — synthesis refuses any that appear
+on the successful run's own frames, so a fresh one often declares none. Show it one:
 
 ```bash
 cua learn-outcome cap_get_savings_balance \
@@ -204,9 +203,8 @@ cua learn-outcome cap_get_savings_balance \
   --input member_id=99999
 ```
 
-It replays the capability with its recorded example inputs, replays it again with yours, and
-takes the detector from the difference — the app's own wording, copied off the screen that
-produces it:
+It replays with the recorded example inputs, replays again with yours, and takes the
+detector from the difference — the app's own wording, off the screen that produces it:
 
 ```json
 { "capability": "cap_get_savings_balance@v2", "learned": "member_not_found",
@@ -226,11 +224,10 @@ escalation *once* rather than every time:
 cua diagnose replay-e83d23ba
 ```
 
-It reads that run's evidence, shows the model the lines that were on the failing
-screen **numbered**, and asks which kind of condition it is and which line
-identifies it. The model returns an *index*, never a phrase — so a detector it
-invented is not something it can express — and the chosen line is then falsified
-against every successful run of the same capability before it is offered:
+It reads that run's evidence, shows the model the failing screen's lines **numbered**,
+and asks which kind of condition it is and which line identifies it. The model returns
+an *index*, never a phrase, so an invented detector is not expressible — and the chosen
+line is falsified against every successful run of the same capability first:
 
 ```json
 { "classification": "business_outcome", "detector": "This account is dormant and cannot be viewed.",
@@ -243,15 +240,13 @@ business_outcomes:
     detector: { kind: text_present, value: "This account is dormant and cannot be viewed." }
 ```
 
-YAML to paste, not an edit — a model that could rewrite a guardrail is not a
-guardrail. Nothing here touches a session: the run has already ended, and replay
-still constructs no model client. A proposal that is refused is written to
-`evidence/<run>/diagnosis.json` too, with the reason — that is what shows the
-falsification runs.
+YAML to paste, not an edit — a model that could rewrite a guardrail is not a guardrail.
+Nothing here touches a session. A refused proposal is written to
+`evidence/<run>/diagnosis.json` with its reason, which is what shows the falsification
+runs.
 
-Because the patch lands in the *application's* policy rather than in one artifact,
-every capability on that app inherits it, at every institution running the product.
-A capability opts in by name and the detector comes from the app:
+Because the patch lands in the *application's* policy, every capability on that app
+inherits it, at every institution running the product. A capability opts in by name:
 
 ```jsonc
 "business_outcomes": [{ "name": "account_dormant" }]
@@ -275,11 +270,11 @@ running unapproved automation against member accounts.
 Everything above is also doable from http://localhost:3000, and one thing is only doable there:
 seeing *why* a step did what it did.
 
-Four columns, no routing. **Start** — a goal in English with its inputs (Record), or a recorded
-capability with typed inputs (Replay), plus the catalog and every run this deployment has ever
-done. **Steps** — the selected run's log, streaming as it happens. **Evidence** — the frame and
-the step taken apart. **Session** — the live display over noVNC, the escalation queue, and the
-two contracts governing the run: the capability and the policy.
+Four columns, no routing. **Start** — a goal in English with its inputs (Record) or a
+recorded capability with typed inputs (Replay), plus the catalog and every run this
+deployment has done. **Steps** — the run's log, streaming. **Evidence** — the frame and
+the step taken apart. **Session** — the live display over noVNC, the escalation queue,
+and the two contracts governing the run.
 
 The frame carries three layers, and the third is the one worth knowing about:
 
@@ -302,16 +297,15 @@ Below it, the step inspector shows the four stages the step went through:
   applications and different fixes.
 - **Verification** — expected against observed, how the frame settled, any recovery that fired.
 
-Interventions live in the same page rather than behind a separate operator route: whoever handles
-an escalation needs the evidence for it on screen, and a debug view and an operator view of the
-same run differ only in whether you may touch it. Take control, work the live session, write a
-note, hand back or abort. The handoff and handback frames and every input captured at the X layer
+Interventions live in the same page rather than behind an operator route: whoever
+handles an escalation needs the evidence on screen, and a debug view and an operator
+view differ only in whether you may touch it. Take control, work the session, write a
+note, hand back or abort — the handoff and handback frames and every X-layer input
 appear underneath.
 
-A run started here and a run started from the CLI are the same thing to the console: it tails the
-run's own `steps.jsonl` and `run.json` over SSE, so what it shows and what the audit trail says
-cannot disagree. Any view is a URL — `?run=<id>&step=<n>` — so a finding is something you can
-send to someone.
+A CLI run and a console run are the same thing here: it tails the run's own
+`steps.jsonl` and `run.json` over SSE, so what it shows and what the audit trail says
+cannot disagree. Any view is a URL — `?run=<id>&step=<n>`.
 
 One display means one run: starting a second while one holds the session is refused with a 409
 rather than queued, and the console greys the button and names the run that has it.
@@ -326,11 +320,11 @@ Nothing in `backend/src` knows the demo app exists. An application is **one YAML
 policies/<app>.yaml             # then: cua discover --app <app> --goal "..."
 ```
 
-That file carries everything per-app: identity (`app`, `vendor`, `base_url_pattern`), the entry
-URL, the allowlist, which primitives are permitted, the risky disposition, declared recoveries
-and app errors, the sign-on recipe, and the one sentence the discovery model is told about the
-surface. Copy `targetapp.yaml`, change it, and no Python is touched — `backend/tests/test_apps.py`
-asserts exactly that by standing up a second application from a temp directory.
+That file carries everything per-app: identity, entry URL, allowlist, permitted
+primitives, risky disposition, recoveries, app errors, business-outcome detectors,
+volatile text and the sign-on recipe. Copy `targetapp.yaml`, change it, touch no Python
+— `tests/test_apps.py` asserts exactly that by standing up a second app from a temp
+directory.
 
 ```bash
 cua discover --app coreview --goal "..."     # selects policies/coreview.yaml
@@ -362,11 +356,11 @@ python3 scripts/smoke_observe.py --url https://some-app.example/page \
     --expect "Account" --expect "Available Balance"
 ```
 
-It reports rather than asserts: how many elements and how long a frame takes, how many detected
-controls carry text (zero means the merge thresholds do not fit this surface), whether rows
-reconstruct into single visual lines, whether the page settles on pixels or only on text, and
-which `--expect` strings are unreadable. It writes the frame and the set-of-marks overlay to
-`/tmp/smoke/`, which usually answers the question faster than the checks do.
+It reports rather than asserts: element count and frame time, how many detected controls
+carry text (zero means the merge thresholds do not fit this surface), whether rows
+reconstruct into single lines, whether the page settles on pixels or only text, and which
+`--expect` strings are unreadable. It writes the frame and the overlay to `/tmp/smoke/`,
+which usually answers the question faster than the checks do.
 
 ---
 
@@ -395,9 +389,8 @@ cua replay cap_get_savings_balance \
   --input member_id=12345 --input account_nickname="Primary Savings"
 ```
 
-This proves the decision path is reproducible from pixels alone. It does **not** prove the
-application responds the way it did, because nothing is being clicked — a green offline replay and
-a green live replay say different things.
+This proves the decision path is reproducible from pixels alone. It does **not** prove
+the application responds the way it did, because nothing is being clicked.
 
 **No model.** Every command above except `cua discover` runs with no credential configured.
 
@@ -434,11 +427,11 @@ failure" is the mistake the system exists to avoid:
 | `validation` | hard failure, with the fields shifted down |
 | `confirm` | hard failure — an undeclared interstitial |
 
-Faults live in a cookie, so that a reviewer's own tab and the automation's browser do not fight
-over them. The consequence is that arming one *for the automation* means arming it inside the
-automation's browser, which `curl` cannot reach — `--fault` drives the session through
-`/api/faults?set=…` before the run starts. Both that route and `/dev` are excluded from the
-app's allowlist: an agent that can arm its own faults can disarm them.
+Faults live in a cookie so a reviewer's tab and the automation's browser do not fight
+over them — which means arming one *for the automation* means arming it inside that
+browser, where `curl` cannot reach. `--fault` drives the session through
+`/api/faults?set=…` before the run starts. That route and `/dev` are excluded from the
+allowlist: an agent that can arm its own faults can disarm them.
 
 ---
 

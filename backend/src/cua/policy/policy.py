@@ -1,32 +1,9 @@
 """Guardrails.
 
 Checked in the same place on both paths — discovery and replay call the identical
-`check_action()` and `check_url()` before every action. A guardrail that only
-guards the LLM is not a guardrail; a compromised or buggy artifact is just as
-capable of submitting the wrong transfer as a confused model is.
-
-Three rules:
-
-  1. Allowlist. Permitted URL patterns and permitted primitives. Anything else is
-     POLICY_DENIED, which is a hard stop rather than a skip — an agent that
-     silently continues past a denied action produces a run whose result no longer
-     means what it says.
-
-  2. Risk. Every step declares `safe` or `risky` (schema.Risk). Risky actions are
-     handled conservatively: blocked, or escalated to a human for confirmation, per
-     policy. In banking, latency is cheap and a silently wrong transfer is not.
-     This is only enforceable because steps carry declared intent — `click(0.42,
-     0.71)` cannot be classified.
-
-  3. Redaction. Values marked `sensitive` never reach a log line, an artifact, an
-     evidence file or a model prompt.
-
-Known limits, to state honestly rather than paper over:
-  - risk classification is static per capability, authored at record time and
-    reviewed by a human. There is no dynamic risk scoring.
-  - there is no defense here against prompt injection via page content that the
-    discovery model reads. The allowlist bounds the blast radius; it does not
-    prevent the model being misled inside it.
+`check_action()` and `check_url()`. A guardrail that only guards the LLM is not a
+guardrail: a buggy or tampered artifact submits the wrong transfer just as well as a
+confused model does.
 """
 
 from __future__ import annotations
@@ -168,26 +145,18 @@ class Policy:
     ) -> None:
         self.app = app
         self.vendor = vendor
-        # Which installs of this application an artifact recorded here applies to.
-        # Defaults to the allowlist's first pattern, which is the common case: the
-        # set of URLs the agent may touch and the set an artifact is valid against
-        # are usually the same set.
+        # Which installs an artifact recorded here applies to. Defaults to the
+        # allowlist's first pattern — usually the same set.
         self.base_url_pattern = base_url_pattern or (
             allowed_url_patterns[0] if allowed_url_patterns else ""
         )
-        # This deployment's concrete entry point. A per-institution fact, so a
-        # second tenant on the same vendor product overrides this and nothing else.
+        # A per-institution fact, so a second tenant overrides this and nothing else.
         self.entry_url = entry_url
-        # Where this application's fault-injection harness lives, if it has one.
-        # A demo app has one; a core banking system does not, and then the
-        # console simply shows no fault panel. Deliberately *outside* the
-        # allowlist above — arming a fault is something done to the automation
-        # from outside it, never by it, and an agent that could arm its own
-        # faults could disarm them.
+        # The fault harness, if the app has one. Deliberately *outside* the
+        # allowlist: an agent that could arm its own faults could disarm them.
         self.fault_url = fault_url
         self.sign_on = sign_on
-        # What the discovery model is told it is looking at. A fact about the
-        # application, so it lives with the application's other facts.
+        # What the discovery model is told it is looking at — a fact about the app.
         self.surface = surface
         self.app_errors = app_errors
         self.escalations = escalations
@@ -197,31 +166,24 @@ class Policy:
         self.recoveries = recoveries
         self.redact_patterns = redact_patterns
         self.risky_intent_patterns = risky_intent_patterns
-        # Two budgets that bound the ways a run can decline to finish, here
-        # rather than in the engine because both are judgements about an
-        # application and not about the mechanism. How flaky the sessions are
-        # decides the first; how much an operator's attention is worth decides
-        # the second. The defaults are the values the engine used to hardcode.
-        #
-        #   max_restarts               a session that dies twice inside ninety
-        #                              seconds is not a transient, and a run that
-        #                              keeps signing back in is an automation
-        #                              spending its night on a login screen.
-        #   max_escalations_per_step   an operator can resume without clearing the
-        #                              condition; without a bound the run parks on
-        #                              it forever, holding the only session, and a
-        #                              queue that re-issues the same request is how
-        #                              operators learn to ignore the queue.
+        # Two budgets bounding the ways a run can decline to finish. Here rather
+        # than in the engine because both are judgements about an application:
+        #   max_restarts              a session that dies twice in ninety seconds
+        #                             is not transient, and a run that keeps
+        #                             signing back in spends its night doing it.
+        #   max_escalations_per_step  an operator can resume without clearing the
+        #                             condition; unbounded, the run parks forever
+        #                             holding the only session, and a queue that
+        #                             re-issues one request teaches people to
+        #                             ignore the queue.
         self.max_restarts = max_restarts
         self.max_escalations_per_step = max_escalations_per_step
         # Detectors a capability on this app may inherit by name.
         self.business_outcomes = business_outcomes
-        # Lines this application renders that change while nothing is happening —
-        # a session countdown, a clock, a "last refreshed" stamp. Handed to the
-        # perceiver, which excludes them when deciding whether the screen has
-        # stopped moving. Without it a ticking clock means no two frames agree by
-        # pixels *or* by text, and every step on the app burns two full timeouts
-        # before failing on a screen that was ready throughout.
+        # Lines that change while nothing is happening — a countdown, a clock, a
+        # "last refreshed" stamp. Excluded from the settle comparison: a ticking
+        # clock means no two frames agree by pixels *or* text, so every step burns
+        # two timeouts on a screen that was ready throughout.
         self.volatile_text = volatile_text
         self._url_res = tuple(re.compile(p) for p in allowed_url_patterns)
         self._intent_res = tuple(re.compile(p) for p in risky_intent_patterns)

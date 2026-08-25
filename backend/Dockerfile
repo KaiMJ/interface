@@ -111,7 +111,6 @@ RUN playwright install --with-deps chromium \
 RUN chmod -R a+w /app/.venv/lib/python3.12/site-packages/rapidocr/models
 
 COPY src ./src
-COPY fixtures ./fixtures
 COPY image ./image
 COPY scripts ./scripts
 RUN chmod +x ./image/*.sh

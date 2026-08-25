@@ -1,19 +1,13 @@
 "use client";
 
 /**
- * One step, taken apart — one stage at a time.
+ * One step, taken apart — one stage at a time, in the order the step went through
+ * them: decide, permit, resolve, verify. A tab with nothing to say is disabled
+ * rather than hidden, because "this step consulted no resolver" is itself
+ * information, and a strip that changes shape per step is one you re-read every
+ * time.
  *
- * The tabs are the stages the step actually went through, in the order it went
- * through them: decide, permit, resolve, verify. All four were stacked before,
- * which meant the answer you wanted was always three sections below the fold and
- * the three you did not want were always on screen. A tab that has nothing to
- * say is disabled rather than hidden, because "this step consulted no resolver"
- * is itself information, and a strip that changes shape per step is one you have
- * to re-read every time.
- *
- * Everything here is a record the system already made and used to discard. The
- * step log could say `anchor_text · 2119ms` and nothing else, which answers "did
- * it work" and none of the questions you have when it did not.
+ * Everything here is a record the system already made and used to discard.
  */
 
 import { useState } from "react";
@@ -78,9 +72,44 @@ export function Inspector({ step }: { step: StepRow | null }) {
         {active === "decision" ? (
           turn ? (
             <>
+              {/* The turn in the order it happened — shown, thought, answered —
+                  above the fields that summarise it. These were at the bottom of a
+                  scrolling panel, which on a laptop meant nobody ever saw them. */}
+              {turn.prompt ? (
+                <Detail summary="what it was shown" chars={turn.prompt.length}>
+                  {turn.prompt}
+                </Detail>
+              ) : null}
+              {turn.reasoning ? (
+                <Detail summary="how it got there" chars={turn.reasoning.length} open>
+                  {turn.reasoning}
+                </Detail>
+              ) : null}
+
               <Field label="tool call" value={turn.call} mono />
               <Field label="intent" value={turn.intent || "—"} />
-              <Field label="expected" value={turn.expect ?? "—"} />
+              {/* Proposed and recorded, the same pair the anchor gets below. A
+                  refuted expectation is still shown — a step whose checkpoint was
+                  dropped reads as verified otherwise. */}
+              <Field
+                label="expected"
+                title="the model proposes an expectation; code refutes it before it becomes a checkpoint"
+                value={
+                  !turn.expect ? (
+                    "—"
+                  ) : turn.expect_recorded ? (
+                    turn.expect_recorded
+                  ) : (
+                    <>
+                      <span className="line-through">{turn.expect}</span>
+                      <span className="text-[var(--muted)]">
+                        {" "}
+                        (this record&rsquo;s data — no checkpoint recorded)
+                      </span>
+                    </>
+                  )
+                }
+              />
               <Field
                 label="chose mark"
                 title="the element behind the mark, measured — not the model's description of what it thought it was clicking"
@@ -330,5 +359,37 @@ function Cost({ step }: { step: StepRow }) {
         </p>
       ) : null}
     </>
+  );
+}
+
+/**
+ * A long record, collapsed to one line until asked for.
+ *
+ * A turn prompt is thousands of characters — the whole candidate list off the
+ * frame, plus the run's history — and the inspector is the shortest panel on the
+ * screen. Shown open it buries every field below it; shown as a summary with its
+ * size it stays one click away and says how much there is.
+ */
+function Detail({
+  summary,
+  chars,
+  open,
+  children,
+}: {
+  summary: string;
+  chars: number;
+  open?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <details open={open} className="mb-1 rounded border border-[var(--rule)] bg-[#10151a]">
+      <summary className="mono cursor-pointer px-2 py-1 text-[10px] tracking-wider text-[var(--muted)] uppercase">
+        {summary}
+        <span className="ml-2 normal-case opacity-60">{chars.toLocaleString()} chars</span>
+      </summary>
+      <p className="max-h-56 overflow-y-auto border-t border-[var(--rule)] px-2 py-1.5 text-[11px] whitespace-pre-wrap">
+        {children}
+      </p>
+    </details>
   );
 }

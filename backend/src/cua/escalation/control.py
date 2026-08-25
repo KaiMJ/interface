@@ -1,34 +1,17 @@
 """Control transfer.
 
-The mechanism §3.6 asks for. Its shape follows from one requirement — the human
-must operate *the same live session*, not a fresh one — and one hazard: the
-automation and the operator are pointed at the same X display, so if both can act
-at once they race, on a banking screen.
-
-Hence control is a token with exactly one holder, and it is explicit state rather
-than an implied consequence of nobody currently calling `click()`.
+The human operates the *same live session*, and both parties are pointed at the same X
+display — so if both can act at once they race, on a banking screen. Hence one token,
+one holder, as explicit state rather than the implied consequence of nobody currently
+calling `click()`:
 
     AUTOMATION ──escalate──► NOBODY ──take_control──► HUMAN
          ▲                                              │
          └──────────── resume ◄──── NOBODY ◄────release ┘
 
-`NOBODY` is not ceremony. It is the interval in which the automation has stopped
-but the operator has not yet connected, and it is the state that makes "the agent
-clicked while I was typing" impossible rather than unlikely.
-
-What survives the transfer: the browser process, the X display, cookies and
-session, the current page and any half-filled form, and the run's evidence
-directory. Nothing is torn down. The runner is parked on an asyncio event, not
-unwound.
-
-Resume re-observes rather than trusting the frame it parked on, because the human
-may have advanced the app several screens or gone back. In replay, a run parked
-*before* acting (a risky step awaiting confirmation) performs the step; one parked
-*after* a failure (`on_error: escalate`) treats the step as satisfied by the human
-and continues. Neither searches forward for a step whose checkpoint already holds —
-it does not have to, because the next step asserts its own screen and checkpoint
-and so fails loudly rather than clicking blind. In discovery the model is told an
-intervention happened and what the operator noted.
+`NOBODY` is the interval between the automation stopping and the operator connecting,
+and it is what makes "the agent clicked while I was typing" impossible rather than
+unlikely.
 """
 
 from __future__ import annotations
@@ -60,11 +43,10 @@ class RunControl:
     _resumed: asyncio.Event = field(default_factory=asyncio.Event)
 
     def assert_automation(self) -> None:
-        """Called by the driver before every input event.
+        """The enforcement point, called by the driver before every input event.
 
-        This is the enforcement point. Putting the check in the driver rather than
-        in the runner means an escalation path that forgot to yield still cannot
-        inject input while a human holds the token.
+        In the driver rather than the runner, so an escalation path that forgot to
+        yield still cannot inject input while a human holds the token.
         """
         if self.holder is not Controller.AUTOMATION:
             raise ControlError(
@@ -75,27 +57,21 @@ class RunControl:
     def park(self, req: InterventionRequest) -> None:
         """Surrender control and publish the request. Does not wait.
 
-        Split from `escalate` because it is the whole of the state transition —
-        everything an operator can observe has already happened when this returns.
-        The waiting is a separate concern, and keeping them separate means the
-        queue can be exercised without a background task pretending to be a run.
+        The whole state transition: everything an operator can observe has happened
+        when this returns. Split from `escalate` so the queue can be exercised
+        without a background task pretending to be a run.
         """
-        # Control is surrendered *before* the request is published, so there is no
-        # window in which an operator can see the intervention and start clicking
-        # while the automation still believes it may act.
+        # Surrendered *before* publishing, so there is no window in which an
+        # operator sees the intervention while the automation may still act.
         self.holder = Controller.NOBODY
         self.intervention = req.model_copy(update={"state": InterventionState.PENDING})
         self.resolution = None
         self._resumed.clear()
 
     async def escalate(self, req: InterventionRequest) -> InterventionResolution:
-        """Park the run and wait for a human. Returns how they resolved it.
-
-        Awaits an event rather than polling, and never times out on its own — a
-        run abandoned mid-intervention is a real state that an operator has to
-        clean up, not something to paper over by silently resuming automation on a
-        screen nobody looked at.
-        """
+        """Park and wait for a human. Never times out: a run abandoned
+        mid-intervention is a real state an operator has to clean up, not something
+        to paper over by resuming on a screen nobody looked at."""
         self.park(req)
         await self._resumed.wait()
 
@@ -140,12 +116,8 @@ class RunControl:
 
 
 class ControlRegistry:
-    """All live runs, by id. Single-process, in-memory, deliberately.
-
-    A durable store is the right answer for a real deployment and the wrong answer
-    here: the thing being coordinated is a browser process on one machine's X
-    display, so a control token that outlives that process would be a lie.
-    """
+    """All live runs, by id. In-memory deliberately: what it coordinates is a
+    browser on this machine's display, so a token outliving that process lies."""
 
     def __init__(self) -> None:
         self._runs: dict[str, RunControl] = {}
@@ -161,8 +133,8 @@ class ControlRegistry:
         return control
 
     def by_intervention(self, intervention_id: str) -> RunControl:
-        """Operators address interventions, not runs — the console shows a queue
-        of things to do, and which run each belongs to is our bookkeeping."""
+        """Operators address interventions, not runs. Which run each belongs to is
+        our bookkeeping."""
         for control in self._runs.values():
             if control.intervention is not None and control.intervention.id == intervention_id:
                 return control
@@ -178,15 +150,12 @@ class ControlRegistry:
         ]
 
     def all(self) -> list[InterventionRequest]:
-        """Every intervention this process has seen, open or closed.
-
-        The operator queue is `pending()`; this is the record beside it. An
-        operator who resumed a run five minutes ago and wants to check what they
-        did should not have to go looking in an evidence directory for it.
-        """
+        """Every intervention seen, open or closed. `pending()` is the queue; this
+        is the record beside it, so checking what you did five minutes ago does not
+        mean opening an evidence directory."""
         return [c.intervention for c in self._runs.values() if c.intervention is not None]
 
     def forget(self, run_id: str) -> None:
-        """Runs are dropped when they finish. The registry tracks live control,
-        not history — history is what the evidence directory is for."""
+        """Dropped when a run finishes. This tracks live control; history is the
+        evidence directory."""
         self._runs.pop(run_id, None)

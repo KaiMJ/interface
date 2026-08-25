@@ -1,27 +1,15 @@
 "use client";
 
 /**
- * The live session, streamed from the automation container's X display.
+ * The live session, streamed from the automation container's X display. Not a mock
+ * of the handoff — the same pixels the agent is driving, and `viewOnly` is the
+ * control token made visible: true while the automation holds control, so an
+ * operator's clicks go nowhere rather than racing it on a live banking screen;
+ * false once they take over, reaching the same Chromium process and the same
+ * half-filled form.
  *
- * This component is the handoff. Not a mock of one — the same pixels the agent is
- * driving, over the same VNC connection, and `viewOnly` is the control token made
- * visible:
- *
- *   viewOnly = true    automation holds control. The operator watches. Their
- *                      clicks go nowhere, which is the point: an operator who can
- *                      click during an automated run races the agent on a live
- *                      banking screen.
- *   viewOnly = false   the operator holds control. Input goes through websockify
- *                      -> x11vnc -> Xvfb, into the same Chromium process, with the
- *                      same cookies and the same half-filled form.
- *
- * Toggling this property is cheaper and more honest than tearing down and
- * re-establishing the connection, because it makes clear that nothing about the
- * session changed — only who is allowed to touch it.
- *
- * The noVNC library is used rather than an iframe to `vnc.html` so that view-only
- * state is ours to control rather than a URL parameter the operator could edit,
- * and so connection state is observable here.
+ * Toggling the property rather than reconnecting makes clear that nothing about the
+ * session changed — only who may touch it.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";

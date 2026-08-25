@@ -1,15 +1,9 @@
 /**
- * Member search.
- *
- * search -> results -> detail is the shape the brief asks for. Two details worth
- * noticing, both intentional:
- *
- *   - a query that matches nothing renders "No member matches" and an HTTP 200.
- *     It is an answer, not an error, and the capability contract has to say so.
- *   - every result row's action link is labelled "View". Several identical labels
- *     on one screen is the normal case in these systems and it is why a step
- *     cannot just target text — it has to target the row matching a predicate,
- *     then act at an offset within it.
+ * Member search: search -> results -> detail, the shape the brief asks for. Two
+ * intentional details — a query that matches nothing renders "No member matches" and
+ * an HTTP 200, because it is an answer rather than an error; and every result row's
+ * action link is labelled "View", which is the normal case in these systems and why
+ * a step has to target the row matching a predicate rather than the text.
  */
 
 import Link from "next/link";
