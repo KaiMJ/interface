@@ -1,0 +1,349 @@
+{
+  "screenshot_path": "/tmp/cua-frames-fdfh4gc8/frame-0004.png",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "elements": [
+    {
+      "id": "e0",
+      "role": "text",
+      "name": "MERIDIAN CREDIT UNION · Member Services Console",
+      "text": "MERIDIAN CREDIT UNION · Member Services Console",
+      "bbox": {
+        "x": 0.00625,
+        "y": 0.0077777777777777776,
+        "w": 0.2520833333333333,
+        "h": 0.01888888888888889
+      },
+      "source": "ocr",
+      "conf": 0.98971
+    },
+    {
+      "id": "e1",
+      "role": "control",
+      "name": "Teller: teller01 | Terminal 04-A | Sign out",
+      "text": "Teller: teller01 | Terminal 04-A | Sign out",
+      "bbox": {
+        "x": 0.8990156385633681,
+        "y": 0.007982277870178222,
+        "w": 0.05233951144748264,
+        "h": 0.015279332796732584
+      },
+      "source": "omniparser",
+      "conf": 0.7755182981491089
+    },
+    {
+      "id": "e2",
+      "role": "icon",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 0.9604446411132812,
+        "y": 0.008243417739868164,
+        "w": 0.03150236341688368,
+        "h": 0.015322357813517252
+      },
+      "source": "omniparser",
+      "conf": 0.7803112268447876
+    },
+    {
+      "id": "e3",
+      "role": "text",
+      "name": "Member Search",
+      "text": "Member Search",
+      "bbox": {
+        "x": 0.006944444444444444,
+        "y": 0.04111111111111111,
+        "w": 0.06875,
+        "h": 0.016666666666666666
+      },
+      "source": "ocr",
+      "conf": 0.99994
+    },
+    {
+      "id": "e4",
+      "role": "text",
+      "name": "Transfers Holds",
+      "text": "Transfers Holds",
+      "bbox": {
+        "x": 0.0763888888888889,
+        "y": 0.04,
+        "w": 0.07222222222222222,
+        "h": 0.01888888888888889
+      },
+      "source": "ocr",
+      "conf": 0.99593
+    },
+    {
+      "id": "e5",
+      "role": "text",
+      "name": "Cards",
+      "text": "Cards",
+      "bbox": {
+        "x": 0.15347222222222223,
+        "y": 0.03888888888888889,
+        "w": 0.03125,
+        "h": 0.02
+      },
+      "source": "ocr",
+      "conf": 0.99994
+    },
+    {
+      "id": "e6",
+      "role": "text",
+      "name": "Reports",
+      "text": "Reports",
+      "bbox": {
+        "x": 0.18680555555555556,
+        "y": 0.03888888888888889,
+        "w": 0.035416666666666666,
+        "h": 0.02
+      },
+      "source": "ocr",
+      "conf": 0.99996
+    },
+    {
+      "id": "e7",
+      "role": "text",
+      "name": "Fault Panel",
+      "text": "Fault Panel",
+      "bbox": {
+        "x": 0.9458333333333333,
+        "y": 0.03777777777777778,
+        "w": 0.04722222222222222,
+        "h": 0.021111111111111112
+      },
+      "source": "ocr",
+      "conf": 0.98271
+    },
+    {
+      "id": "e8",
+      "role": "text",
+      "name": "Funds Transfer — Step 3 of 3",
+      "text": "Funds Transfer — Step 3 of 3",
+      "bbox": {
+        "x": 0.0125,
+        "y": 0.08333333333333333,
+        "w": 0.11944444444444445,
+        "h": 0.01888888888888889
+      },
+      "source": "ocr",
+      "conf": 0.99525
+    },
+    {
+      "id": "e9",
+      "role": "text",
+      "name": "Transfer Complete",
+      "text": "Transfer Complete",
+      "bbox": {
+        "x": 0.021527777777777778,
+        "y": 0.12666666666666668,
+        "w": 0.07708333333333334,
+        "h": 0.021111111111111112
+      },
+      "source": "ocr",
+      "conf": 0.99988
+    },
+    {
+      "id": "e10",
+      "role": "text",
+      "name": "Confirmation Reference",
+      "text": "Confirmation Reference",
+      "bbox": {
+        "x": 0.01875,
+        "y": 0.1711111111111111,
+        "w": 0.1,
+        "h": 0.022222222222222223
+      },
+      "source": "ocr",
+      "conf": 0.99947
+    },
+    {
+      "id": "e11",
+      "role": "text",
+      "name": "TRF-MTJBIHK4",
+      "text": "TRF-MTJBIHK4",
+      "bbox": {
+        "x": 0.17569444444444443,
+        "y": 0.17333333333333334,
+        "w": 0.06388888888888888,
+        "h": 0.017777777777777778
+      },
+      "source": "ocr",
+      "conf": 0.99986
+    },
+    {
+      "id": "e12",
+      "role": "text",
+      "name": "Member",
+      "text": "Member",
+      "bbox": {
+        "x": 0.019444444444444445,
+        "y": 0.2011111111111111,
+        "w": 0.0375,
+        "h": 0.02
+      },
+      "source": "ocr",
+      "conf": 0.99998
+    },
+    {
+      "id": "e13",
+      "role": "text",
+      "name": "Dolores Chen (12345)",
+      "text": "Dolores Chen (12345)",
+      "bbox": {
+        "x": 0.17430555555555555,
+        "y": 0.2,
+        "w": 0.08611111111111111,
+        "h": 0.021111111111111112
+      },
+      "source": "ocr",
+      "conf": 0.99266
+    },
+    {
+      "id": "e14",
+      "role": "text",
+      "name": "Amount Transferred",
+      "text": "Amount Transferred",
+      "bbox": {
+        "x": 0.02013888888888889,
+        "y": 0.2288888888888889,
+        "w": 0.08333333333333333,
+        "h": 0.01888888888888889
+      },
+      "source": "ocr",
+      "conf": 0.98389
+    },
+    {
+      "id": "e15",
+      "role": "text",
+      "name": "$25.00",
+      "text": "$25.00",
+      "bbox": {
+        "x": 0.17291666666666666,
+        "y": 0.22555555555555556,
+        "w": 0.03333333333333333,
+        "h": 0.025555555555555557
+      },
+      "source": "ocr",
+      "conf": 0.99995
+    },
+    {
+      "id": "e16",
+      "role": "text",
+      "name": "From Account 29883 — New Balance",
+      "text": "From Account 29883 — New Balance",
+      "bbox": {
+        "x": 0.019444444444444445,
+        "y": 0.25666666666666665,
+        "w": 0.15069444444444444,
+        "h": 0.01888888888888889
+      },
+      "source": "ocr",
+      "conf": 0.98903
+    },
+    {
+      "id": "e17",
+      "role": "text",
+      "name": "$4,795.19",
+      "text": "$4,795.19",
+      "bbox": {
+        "x": 0.38472222222222224,
+        "y": 0.25555555555555554,
+        "w": 0.04236111111111111,
+        "h": 0.021111111111111112
+      },
+      "source": "ocr",
+      "conf": 0.99991
+    },
+    {
+      "id": "e18",
+      "role": "text",
+      "name": "To Account 13455 — New Balance",
+      "text": "To Account 13455 — New Balance",
+      "bbox": {
+        "x": 0.02013888888888889,
+        "y": 0.28444444444444444,
+        "w": 0.1388888888888889,
+        "h": 0.01888888888888889
+      },
+      "source": "ocr",
+      "conf": 0.99038
+    },
+    {
+      "id": "e19",
+      "role": "text",
+      "name": "$18,229.55",
+      "text": "$18,229.55",
+      "bbox": {
+        "x": 0.3798611111111111,
+        "y": 0.2822222222222222,
+        "w": 0.04722222222222222,
+        "h": 0.022222222222222223
+      },
+      "source": "ocr",
+      "conf": 0.99996
+    },
+    {
+      "id": "e20",
+      "role": "text",
+      "name": "Posted By",
+      "text": "Posted By",
+      "bbox": {
+        "x": 0.018055555555555554,
+        "y": 0.3088888888888889,
+        "w": 0.04791666666666667,
+        "h": 0.025555555555555557
+      },
+      "source": "ocr",
+      "conf": 0.98362
+    },
+    {
+      "id": "e21",
+      "role": "text",
+      "name": "teller01 · Checking → Savings",
+      "text": "teller01 · Checking → Savings",
+      "bbox": {
+        "x": 0.17291666666666666,
+        "y": 0.3088888888888889,
+        "w": 0.11805555555555555,
+        "h": 0.024444444444444446
+      },
+      "source": "ocr",
+      "conf": 0.98133
+    },
+    {
+      "id": "e22",
+      "role": "button",
+      "name": "New Transfer",
+      "text": "New Transfer",
+      "bbox": {
+        "x": 0.015950756602817112,
+        "y": 0.3458489990234375,
+        "w": 0.06747692161136204,
+        "h": 0.0264697265625
+      },
+      "source": "omniparser",
+      "conf": 0.8962371945381165
+    },
+    {
+      "id": "e23",
+      "role": "button",
+      "name": "Return to Member",
+      "text": "Return to Member",
+      "bbox": {
+        "x": 0.08555660247802735,
+        "y": 0.34687896728515627,
+        "w": 0.08591198391384548,
+        "h": 0.02534149169921875
+      },
+      "source": "omniparser",
+      "conf": 0.8958852291107178
+    }
+  ],
+  "url": "http://targetapp:8080/transfer/receipt?ref=TRF-MTJBIHK4&member=12345&from=29883&to=13455&amount=25",
+  "frame_hash": "3af0dbd87cde6037",
+  "settled_by": "pixels",
+  "taken_at": "2026-09-01T23:48:15.443734+00:00"
+}

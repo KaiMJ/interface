@@ -1,0 +1,405 @@
+{
+  "screenshot_path": "/tmp/cua-frames-02z2bly3/frame-0004.png",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "elements": [
+    {
+      "id": "e0",
+      "role": "text",
+      "name": "Notice: Core processing will be unavailable Saturday 02:00–04:00 PT. Batch postings may be delayed. Contact the service desk at extension 4180 with questions.",
+      "text": "Notice: Core processing will be unavailable Saturday 02:00–04:00 PT. Batch postings may be delayed. Contact the service desk at extension 4180 with questions.",
+      "bbox": {
+        "x": 0.005555555555555556,
+        "y": 0.0077777777777777776,
+        "w": 0.6041666666666666,
+        "h": 0.021111111111111112
+      },
+      "source": "ocr",
+      "conf": 0.99608
+    },
+    {
+      "id": "e1",
+      "role": "text",
+      "name": "MERIDIAN CREDIT UNION · Member Services Console",
+      "text": "MERIDIAN CREDIT UNION · Member Services Console",
+      "bbox": {
+        "x": 0.006944444444444444,
+        "y": 0.04666666666666667,
+        "w": 0.2513888888888889,
+        "h": 0.017777777777777778
+      },
+      "source": "ocr",
+      "conf": 0.97358
+    },
+    {
+      "id": "e2",
+      "role": "button",
+      "name": "Teller: teller01 Terminal 04-A :",
+      "text": "Teller: teller01 Terminal 04-A :",
+      "bbox": {
+        "x": 0.898785400390625,
+        "y": 0.04674942864312066,
+        "w": 0.05253787570529514,
+        "h": 0.01572334289550781
+      },
+      "source": "omniparser",
+      "conf": 0.38214337825775146
+    },
+    {
+      "id": "e3",
+      "role": "button",
+      "name": "Sign out",
+      "text": "Sign out",
+      "bbox": {
+        "x": 0.9603834364149305,
+        "y": 0.04726138220893012,
+        "w": 0.03139851888020833,
+        "h": 0.015135765075683594
+      },
+      "source": "omniparser",
+      "conf": 0.8103584051132202
+    },
+    {
+      "id": "e4",
+      "role": "text",
+      "name": "Member Search",
+      "text": "Member Search",
+      "bbox": {
+        "x": 0.006944444444444444,
+        "y": 0.07888888888888888,
+        "w": 0.07013888888888889,
+        "h": 0.01888888888888889
+      },
+      "source": "ocr",
+      "conf": 0.99994
+    },
+    {
+      "id": "e5",
+      "role": "text",
+      "name": "Transfers",
+      "text": "Transfers",
+      "bbox": {
+        "x": 0.0763888888888889,
+        "y": 0.07888888888888888,
+        "w": 0.04097222222222222,
+        "h": 0.017777777777777778
+      },
+      "source": "ocr",
+      "conf": 0.99992
+    },
+    {
+      "id": "e6",
+      "role": "text",
+      "name": "Holds",
+      "text": "Holds",
+      "bbox": {
+        "x": 0.12083333333333333,
+        "y": 0.07888888888888888,
+        "w": 0.027777777777777776,
+        "h": 0.017777777777777778
+      },
+      "source": "ocr",
+      "conf": 0.99994
+    },
+    {
+      "id": "e7",
+      "role": "button",
+      "name": "Cards",
+      "text": "Cards",
+      "bbox": {
+        "x": 0.1560058381822374,
+        "y": 0.07984589470757378,
+        "w": 0.024476517571343316,
+        "h": 0.01818030463324653
+      },
+      "source": "omniparser",
+      "conf": 0.416587769985199
+    },
+    {
+      "id": "e8",
+      "role": "text",
+      "name": "Reports",
+      "text": "Reports",
+      "bbox": {
+        "x": 0.18680555555555556,
+        "y": 0.07777777777777778,
+        "w": 0.035416666666666666,
+        "h": 0.02
+      },
+      "source": "ocr",
+      "conf": 0.99996
+    },
+    {
+      "id": "e9",
+      "role": "text",
+      "name": "Fault Panel",
+      "text": "Fault Panel",
+      "bbox": {
+        "x": 0.9465277777777777,
+        "y": 0.07777777777777778,
+        "w": 0.04652777777777778,
+        "h": 0.02
+      },
+      "source": "ocr",
+      "conf": 0.99987
+    },
+    {
+      "id": "e10",
+      "role": "text",
+      "name": "Member Search",
+      "text": "Member Search",
+      "bbox": {
+        "x": 0.011805555555555555,
+        "y": 0.12222222222222222,
+        "w": 0.06597222222222222,
+        "h": 0.01888888888888889
+      },
+      "source": "ocr",
+      "conf": 0.99997
+    },
+    {
+      "id": "e11",
+      "role": "text",
+      "name": "Member ID or Name",
+      "text": "Member ID or Name",
+      "bbox": {
+        "x": 0.015277777777777777,
+        "y": 0.16333333333333333,
+        "w": 0.07916666666666666,
+        "h": 0.017777777777777778
+      },
+      "source": "ocr",
+      "conf": 0.99984
+    },
+    {
+      "id": "e12",
+      "role": "button",
+      "name": "12345",
+      "text": "12345",
+      "bbox": {
+        "x": 0.09617280960083008,
+        "y": 0.15709320068359375,
+        "w": 0.15469107098049587,
+        "h": 0.03147650824652778
+      },
+      "source": "omniparser",
+      "conf": 0.8871998190879822
+    },
+    {
+      "id": "e13",
+      "role": "button",
+      "name": "Search",
+      "text": "Search",
+      "bbox": {
+        "x": 0.2534413231743707,
+        "y": 0.15669274224175347,
+        "w": 0.05133296118842231,
+        "h": 0.03223215738932292
+      },
+      "source": "omniparser",
+      "conf": 0.9285670518875122
+    },
+    {
+      "id": "e14",
+      "role": "text",
+      "name": "Try 12345, 22841, 30992, 44100, 57310 — or a surname.",
+      "text": "Try 12345, 22841, 30992, 44100, 57310 — or a surname.",
+      "bbox": {
+        "x": 0.015277777777777777,
+        "y": 0.19555555555555557,
+        "w": 0.1986111111111111,
+        "h": 0.02
+      },
+      "source": "ocr",
+      "conf": 0.98858
+    },
+    {
+      "id": "e15",
+      "role": "text",
+      "name": "Search Results",
+      "text": "Search Results",
+      "bbox": {
+        "x": 0.0125,
+        "y": 0.24666666666666667,
+        "w": 0.06388888888888888,
+        "h": 0.017777777777777778
+      },
+      "source": "ocr",
+      "conf": 0.99068
+    },
+    {
+      "id": "e16",
+      "role": "button",
+      "name": "Member ID",
+      "text": "Member ID",
+      "bbox": {
+        "x": 0.015960180759429933,
+        "y": 0.28103156195746526,
+        "w": 0.15458531247244942,
+        "h": 0.03066558837890625
+      },
+      "source": "omniparser",
+      "conf": 0.3113655149936676
+    },
+    {
+      "id": "e17",
+      "role": "text",
+      "name": "Name",
+      "text": "Name",
+      "bbox": {
+        "x": 0.1701388888888889,
+        "y": 0.2866666666666667,
+        "w": 0.02847222222222222,
+        "h": 0.021111111111111112
+      },
+      "source": "ocr",
+      "conf": 0.99995
+    },
+    {
+      "id": "e18",
+      "role": "text",
+      "name": "Branch",
+      "text": "Branch",
+      "bbox": {
+        "x": 0.3458333333333333,
+        "y": 0.2866666666666667,
+        "w": 0.034027777777777775,
+        "h": 0.02
+      },
+      "source": "ocr",
+      "conf": 0.99995
+    },
+    {
+      "id": "e19",
+      "role": "text",
+      "name": "Member Since",
+      "text": "Member Since",
+      "bbox": {
+        "x": 0.5527777777777778,
+        "y": 0.2877777777777778,
+        "w": 0.06041666666666667,
+        "h": 0.01888888888888889
+      },
+      "source": "ocr",
+      "conf": 0.99997
+    },
+    {
+      "id": "e20",
+      "role": "text",
+      "name": "Accounts",
+      "text": "Accounts",
+      "bbox": {
+        "x": 0.7430555555555556,
+        "y": 0.2866666666666667,
+        "w": 0.04375,
+        "h": 0.021111111111111112
+      },
+      "source": "ocr",
+      "conf": 0.99997
+    },
+    {
+      "id": "e21",
+      "role": "text",
+      "name": "Action",
+      "text": "Action",
+      "bbox": {
+        "x": 0.8798611111111111,
+        "y": 0.28555555555555556,
+        "w": 0.03333333333333333,
+        "h": 0.022222222222222223
+      },
+      "source": "ocr",
+      "conf": 0.99992
+    },
+    {
+      "id": "e22",
+      "role": "button",
+      "name": "12345",
+      "text": "12345",
+      "bbox": {
+        "x": 0.017173922061920165,
+        "y": 0.31066375732421875,
+        "w": 0.15206833283106486,
+        "h": 0.030042894151475694
+      },
+      "source": "omniparser",
+      "conf": 0.4091610610485077
+    },
+    {
+      "id": "e23",
+      "role": "text",
+      "name": "Dolores Chen",
+      "text": "Dolores Chen",
+      "bbox": {
+        "x": 0.1701388888888889,
+        "y": 0.31333333333333335,
+        "w": 0.05625,
+        "h": 0.022222222222222223
+      },
+      "source": "ocr",
+      "conf": 0.99993
+    },
+    {
+      "id": "e24",
+      "role": "text",
+      "name": "Riverside — 004",
+      "text": "Riverside — 004",
+      "bbox": {
+        "x": 0.3451388888888889,
+        "y": 0.31444444444444447,
+        "w": 0.06736111111111111,
+        "h": 0.021111111111111112
+      },
+      "source": "ocr",
+      "conf": 0.97575
+    },
+    {
+      "id": "e25",
+      "role": "text",
+      "name": "2011-04-18",
+      "text": "2011-04-18",
+      "bbox": {
+        "x": 0.5513888888888889,
+        "y": 0.31333333333333335,
+        "w": 0.04861111111111111,
+        "h": 0.022222222222222223
+      },
+      "source": "ocr",
+      "conf": 0.99995
+    },
+    {
+      "id": "e26",
+      "role": "button",
+      "name": "3",
+      "text": "3",
+      "bbox": {
+        "x": 0.868819597032335,
+        "y": 0.3154700385199653,
+        "w": 0.008402845594618055,
+        "h": 0.018993394639756946
+      },
+      "source": "omniparser",
+      "conf": 0.4915495812892914
+    },
+    {
+      "id": "e27",
+      "role": "button",
+      "name": "View",
+      "text": "View",
+      "bbox": {
+        "x": 0.882155015733507,
+        "y": 0.31569373236762155,
+        "w": 0.020722791883680557,
+        "h": 0.018349778917100695
+      },
+      "source": "omniparser",
+      "conf": 0.5399439930915833
+    }
+  ],
+  "url": "http://targetapp:8080/members?q=12345",
+  "frame_hash": "0996a723bb0c2e22",
+  "settled_by": "pixels",
+  "taken_at": "2026-09-01T23:31:04.904372+00:00"
+}

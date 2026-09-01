@@ -1,0 +1,195 @@
+{
+  "screenshot_path": "/tmp/cua-frames-9pysiavg/frame-0005.png",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "elements": [
+    {
+      "id": "e0",
+      "role": "control",
+      "name": "MERIDIAN CREDIT UNION · Member Services Console",
+      "text": "MERIDIAN CREDIT UNION · Member Services Console",
+      "bbox": {
+        "x": 0.1379694726732042,
+        "y": 0.00896397590637207,
+        "w": 0.11963853836059571,
+        "h": 0.016491785049438476
+      },
+      "source": "omniparser",
+      "conf": 0.30671966075897217
+    },
+    {
+      "id": "e1",
+      "role": "control",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 0.8365369160970052,
+        "y": 0.007743490007188585,
+        "w": 0.052098253038194445,
+        "h": 0.016380528344048396
+      },
+      "source": "omniparser",
+      "conf": 0.5353885293006897
+    },
+    {
+      "id": "e2",
+      "role": "control",
+      "name": "Teller: teller01 | Terminal 04-A | Sign out",
+      "text": "Teller: teller01 | Terminal 04-A | Sign out",
+      "bbox": {
+        "x": 0.8993181016710069,
+        "y": 0.008120179176330566,
+        "w": 0.05192108154296875,
+        "h": 0.015124534500969782
+      },
+      "source": "omniparser",
+      "conf": 0.7941476106643677
+    },
+    {
+      "id": "e3",
+      "role": "icon",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 0.9604205661349826,
+        "y": 0.008369979858398437,
+        "w": 0.03141632080078125,
+        "h": 0.015136239793565539
+      },
+      "source": "omniparser",
+      "conf": 0.7766497731208801
+    },
+    {
+      "id": "e4",
+      "role": "button",
+      "name": "Member Search",
+      "text": "Member Search",
+      "bbox": {
+        "x": 0.006173741817474365,
+        "y": 0.03533764097425673,
+        "w": 0.06616995202170478,
+        "h": 0.027184238433837892
+      },
+      "source": "omniparser",
+      "conf": 0.39836689829826355
+    },
+    {
+      "id": "e5",
+      "role": "icon",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 0.0749281406402588,
+        "y": 0.03696129692925347,
+        "w": 0.042256763246324325,
+        "h": 0.02424304962158203
+      },
+      "source": "omniparser",
+      "conf": 0.3420866131782532
+    },
+    {
+      "id": "e6",
+      "role": "button",
+      "name": "Transfers Holds",
+      "text": "Transfers Holds",
+      "bbox": {
+        "x": 0.1218395021226671,
+        "y": 0.03774361928304037,
+        "w": 0.0266399171617296,
+        "h": 0.023031056722005207
+      },
+      "source": "omniparser",
+      "conf": 0.34573784470558167
+    },
+    {
+      "id": "e7",
+      "role": "button",
+      "name": "Cards",
+      "text": "Cards",
+      "bbox": {
+        "x": 0.15443993674384224,
+        "y": 0.03888386620415581,
+        "w": 0.027520296308729382,
+        "h": 0.020737732781304252
+      },
+      "source": "omniparser",
+      "conf": 0.4607459604740143
+    },
+    {
+      "id": "e8",
+      "role": "button",
+      "name": "Reports",
+      "text": "Reports",
+      "bbox": {
+        "x": 0.18632977803548176,
+        "y": 0.03730768839518229,
+        "w": 0.03688653310139974,
+        "h": 0.02354985131157769
+      },
+      "source": "omniparser",
+      "conf": 0.5665199160575867
+    },
+    {
+      "id": "e9",
+      "role": "text",
+      "name": "Fault Panel",
+      "text": "Fault Panel",
+      "bbox": {
+        "x": 0.9465277777777777,
+        "y": 0.03777777777777778,
+        "w": 0.04722222222222222,
+        "h": 0.021111111111111112
+      },
+      "source": "ocr",
+      "conf": 0.99973
+    },
+    {
+      "id": "e10",
+      "role": "text",
+      "name": "Application Error",
+      "text": "Application Error",
+      "bbox": {
+        "x": 0.0125,
+        "y": 0.08333333333333333,
+        "w": 0.07222222222222222,
+        "h": 0.01888888888888889
+      },
+      "source": "ocr",
+      "conf": 0.99954
+    },
+    {
+      "id": "e11",
+      "role": "text",
+      "name": "An unexpected error occurred while processing your request.",
+      "text": "An unexpected error occurred while processing your request.",
+      "bbox": {
+        "x": 0.018055555555555554,
+        "y": 0.12444444444444444,
+        "w": 0.24861111111111112,
+        "h": 0.02
+      },
+      "source": "ocr",
+      "conf": 0.98556
+    },
+    {
+      "id": "e12",
+      "role": "text",
+      "name": "Reference: MCU-5031-A. Contact the service desk if this persists.",
+      "text": "Reference: MCU-5031-A. Contact the service desk if this persists.",
+      "bbox": {
+        "x": 0.018055555555555554,
+        "y": 0.15333333333333332,
+        "w": 0.22569444444444445,
+        "h": 0.017777777777777778
+      },
+      "source": "ocr",
+      "conf": 0.99956
+    }
+  ],
+  "url": "http://targetapp:8080/members/12345",
+  "frame_hash": "f54aa73de8d46675",
+  "settled_by": "pixels",
+  "taken_at": "2026-09-01T23:32:24.336162+00:00"
+}

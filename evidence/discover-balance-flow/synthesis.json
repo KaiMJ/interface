@@ -1,0 +1,26 @@
+{
+  "capability_id": "cap_get_account_balance",
+  "description": "Opens the profile for a given member ID and returns the current balance for the specified account nickname. The caller receives the balance amount along with account status and available balance.",
+  "success_text": "Member Profile",
+  "business_outcomes": [],
+  "business_outcomes_rejected": [
+    {
+      "name": "member_not_found",
+      "description": "No member exists with the supplied ID.",
+      "detector_text": "Try 12345, 22841, 30992, 44100, 57310 \u2014 or a surname.",
+      "rejected_because": "this text is on a frame the successful run passed through, so it cannot distinguish a different outcome"
+    },
+    {
+      "name": "member_access_denied",
+      "description": "The teller is not entitled to view the requested member.",
+      "detector_text": "Fault Panel",
+      "rejected_because": "this text is on a frame the successful run passed through, so it cannot distinguish a different outcome"
+    },
+    {
+      "name": "account_not_found",
+      "description": "The supplied account nickname does not exist for the member.",
+      "detector_text": "Accounts",
+      "rejected_because": "this text is on a frame the successful run passed through, so it cannot distinguish a different outcome"
+    }
+  ]
+}

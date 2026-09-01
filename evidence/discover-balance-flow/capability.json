@@ -1,0 +1,257 @@
+{
+  "schema_version": 1,
+  "id": "cap_get_account_balance",
+  "version": 1,
+  "status": "draft",
+  "goal": "open member 12345 and read the current balance of their Primary Savings account",
+  "description": "Opens the profile for a given member ID and returns the current balance for the specified account nickname. The caller receives the balance amount along with account status and available balance.",
+  "app": {
+    "name": "targetapp",
+    "base_url_pattern": "^http://targetapp:8080(/.*)?$"
+  },
+  "inputs": [
+    {
+      "name": "member_id",
+      "type": "string",
+      "required": true,
+      "description": "supplied as '12345' on the recording run",
+      "example": "12345",
+      "sensitive": false
+    },
+    {
+      "name": "account_nickname",
+      "type": "string",
+      "required": true,
+      "description": "supplied as 'Primary Savings' on the recording run",
+      "example": "Primary Savings",
+      "sensitive": false
+    }
+  ],
+  "outputs": [
+    {
+      "name": "balance",
+      "type": "number",
+      "description": "read from the screen during recording as '$18,204.55'",
+      "from_step": 5,
+      "normalize": [
+        "collapse_ws",
+        "strip_currency"
+      ],
+      "required": true
+    }
+  ],
+  "screens": [],
+  "steps": [
+    {
+      "id": 1,
+      "risk": "safe",
+      "on_error": "hard_fail",
+      "retries": 0,
+      "note": "entry point; the run started here",
+      "kind": "act",
+      "action": "navigate",
+      "value": "http://targetapp:8080"
+    },
+    {
+      "id": 2,
+      "risk": "safe",
+      "checkpoint": {
+        "kind": "text_present",
+        "value": "Member ID or Name",
+        "match": "contains",
+        "timeout_ms": 5000,
+        "normalize": [
+          "casefold",
+          "collapse_ws"
+        ]
+      },
+      "on_error": "hard_fail",
+      "retries": 0,
+      "kind": "act",
+      "action": "type",
+      "target": {
+        "intent": "type the member ID into the search field",
+        "target_desc": "the value to the right of 'Member ID or Name'",
+        "anchor_text": "Member ID or Name",
+        "anchor_match": "contains",
+        "role": "textbox",
+        "bbox": {
+          "x": 0.0964254273308648,
+          "y": 0.11800569322374133,
+          "w": 0.1545303874545627,
+          "h": 0.031406741672092016
+        },
+        "relation": "right_of",
+        "relation_index": 0,
+        "offset": [
+          0.5,
+          0.5
+        ],
+        "normalize": [
+          "casefold",
+          "collapse_ws"
+        ]
+      },
+      "value": "{{member_id}}"
+    },
+    {
+      "id": 3,
+      "risk": "safe",
+      "on_error": "hard_fail",
+      "retries": 0,
+      "note": "recorded without a checkpoint: the run expected 'Member Profile' here and the screen showed something else. Review before approving.",
+      "kind": "act",
+      "action": "click",
+      "target": {
+        "intent": "click the Search button after entering member ID {{member_id}}",
+        "target_desc": "Search",
+        "anchor_text": "Search",
+        "anchor_match": "contains",
+        "role": "button",
+        "name": "Search",
+        "bbox": {
+          "x": 0.2534206390380859,
+          "y": 0.11848776923285591,
+          "w": 0.05120472378200955,
+          "h": 0.031455603705512154
+        },
+        "relation": "self",
+        "relation_index": 0,
+        "offset": [
+          0.5,
+          0.5
+        ],
+        "normalize": [
+          "casefold",
+          "collapse_ws"
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "risk": "safe",
+      "checkpoint": {
+        "kind": "text_present",
+        "value": "Member Profile",
+        "match": "contains",
+        "timeout_ms": 5000,
+        "normalize": [
+          "casefold",
+          "collapse_ws"
+        ]
+      },
+      "on_error": "hard_fail",
+      "retries": 0,
+      "kind": "act",
+      "action": "click",
+      "target": {
+        "intent": "click the View button on the row for member {{member_id}} to open their profile",
+        "target_desc": "View",
+        "anchor_text": "View",
+        "anchor_match": "contains",
+        "role": "button",
+        "name": "View",
+        "bbox": {
+          "x": 0.8823517693413628,
+          "y": 0.27694766574435764,
+          "w": 0.02045711941189236,
+          "h": 0.01825103759765625
+        },
+        "relation": "self",
+        "relation_index": 0,
+        "offset": [
+          0.5,
+          0.5
+        ],
+        "normalize": [
+          "casefold",
+          "collapse_ws"
+        ]
+      }
+    },
+    {
+      "id": 5,
+      "risk": "safe",
+      "on_error": "hard_fail",
+      "retries": 0,
+      "kind": "find_and_act",
+      "scope": {
+        "intent": "the region below 'Accounts'",
+        "target_desc": "the region to search",
+        "anchor_text": "Accounts",
+        "anchor_match": "contains",
+        "relation": "self",
+        "relation_index": 0,
+        "offset": [
+          0.5,
+          0.5
+        ],
+        "normalize": [
+          "casefold",
+          "collapse_ws"
+        ]
+      },
+      "scope_extent": "below",
+      "predicate": {
+        "match": "row_contains_all",
+        "terms": [
+          "{{account_nickname}}"
+        ],
+        "normalize": [
+          "casefold",
+          "collapse_ws",
+          "strip_currency"
+        ]
+      },
+      "scan": {
+        "advance": "scroll",
+        "overlap": 0.15,
+        "max_advances": 10
+      },
+      "on_found_action": "extract",
+      "on_found_offset": [
+        0.5,
+        0.5
+      ],
+      "on_found_extract_as": "balance",
+      "on_found_extract_column": "Current Balance",
+      "collect_all": false,
+      "on_multiple": "escalate"
+    }
+  ],
+  "success": {
+    "kind": "text_present",
+    "value": "Member Profile",
+    "match": "contains",
+    "timeout_ms": 5000,
+    "normalize": [
+      "casefold",
+      "collapse_ws"
+    ]
+  },
+  "business_outcomes": [
+    {
+      "name": "member_not_found",
+      "description": "no member exists with that id",
+      "result_fields": {},
+      "verified": true
+    },
+    {
+      "name": "permission_denied",
+      "description": "the signed-in operator may not view this member",
+      "result_fields": {},
+      "verified": true
+    }
+  ],
+  "recording": {
+    "run_id": "discover-balance-flow",
+    "model": "xai/grok-4.3",
+    "surface": "browser",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "recorded_at": "2026-09-01T23:21:43.424326+00:00",
+    "step_count": 5
+  }
+}

@@ -90,6 +90,14 @@ python3 scripts/smoke_escalate.py
 See [evidence/README.md](evidence/README.md) for the saved discovery, replay, failure, recovery,
 and intervention runs.
 
+![Operator console](docs/console.png)
+
+The console reads the same evidence directory. On the left, every run and how it ended; on the
+right, one step of `replay-baseline` with the `elements` overlay on — each box is something
+perception found and the resolver could have been asked for. Step 5 here is the scan that locates
+the account row, which is why its scope reads *the region below 'Accounts'* rather than a
+coordinate.
+
 ## Architecture
 
 ```
@@ -114,6 +122,19 @@ goal + target
 
 The artifact’s targets use a resolution ladder: text plus spatial relation, then role/name, then
 recorded bounds. Replay logs the winning tier and refuses unresolved or ambiguous targets.
+
+![Architecture](docs/architecture.png)
+
+The working sketch, in more detail than the block above. Three parts are worth reading: the **step
+lifecycle** in the centre — every step verifies permission, resolves, verifies the target it landed
+on, acts, then verifies the effect, and no model is involved in any of it; the **perception panel**
+top right, where UI detection and OCR are merged into one element list that discovery draws marks
+on and replay indexes spatially; and the **resolver ladder** bottom right, which falls from anchor
+text to role/name to recorded bounds and reports which tier won.
+
+It is a design sketch rather than a map of what shipped: the `Router` at the top is the caller this
+system is built to serve, not a component in it — picking a capability for a goal is deliberately
+out of scope (REPORT §7), and the manifest is the boundary where someone else's router would attach.
 
 ## Safety and current limits
 
@@ -152,6 +173,7 @@ cua replay cap_get_account_balance \
 backend/       automation system
 targetapp/     deterministic mock credit-union back office
 console/       operator and debugging UI
+docs/          architecture sketch and console screenshot
 policies/      per-application guardrails
 artifacts/     versioned capabilities
 evidence/      saved demonstrations

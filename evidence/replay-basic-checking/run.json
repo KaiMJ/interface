@@ -1,0 +1,290 @@
+{
+  "run_id": "replay-basic-checking",
+  "capability": "cap_get_account_balance@v1",
+  "app": "targetapp",
+  "status": "success",
+  "inputs": {
+    "member_id": "30992",
+    "account_nickname": "Basic Checking"
+  },
+  "outputs": {
+    "balance": 95.12
+  },
+  "outcome": null,
+  "failure": null,
+  "intervention_id": null,
+  "steps": [
+    {
+      "step_id": 1,
+      "intent": "entry point; the run started here",
+      "status": "ok",
+      "resolution": "none",
+      "settled_by": "pixels",
+      "duration_ms": 3341,
+      "attempts": 1,
+      "expected": null,
+      "observed": null,
+      "recovery_applied": null,
+      "note": null,
+      "policy": {
+        "action": "navigate",
+        "declared_risk": "safe",
+        "effective_risk": "safe",
+        "disposition": "allow",
+        "rule": "allowlist",
+        "detail": null,
+        "promoted_from": null,
+        "intent": "entry point; the run started here"
+      },
+      "resolution_trace": null,
+      "phases": {
+        "observe_ms": 3283,
+        "observations": 2,
+        "resolve_ms": 0,
+        "act_ms": 54,
+        "verify_ms": 1
+      },
+      "model_turn": null,
+      "evidence": {
+        "screenshot": "/data/evidence/replay-basic-checking/frames/step-01.png",
+        "after": "/data/evidence/replay-basic-checking/frames/step-01.after.png",
+        "annotated_screenshot": null,
+        "observation": "/data/evidence/replay-basic-checking/observations/step-01.json"
+      }
+    },
+    {
+      "step_id": 2,
+      "intent": "type the member ID into the search field",
+      "status": "ok",
+      "resolution": "anchor_text",
+      "settled_by": "pixels",
+      "duration_ms": 1983,
+      "attempts": 1,
+      "expected": "text_present 'Member ID or Name'",
+      "observed": null,
+      "recovery_applied": null,
+      "note": null,
+      "policy": {
+        "action": "type",
+        "declared_risk": "safe",
+        "effective_risk": "safe",
+        "disposition": "allow",
+        "rule": "allowlist",
+        "detail": null,
+        "promoted_from": null,
+        "intent": "type the member ID into the search field"
+      },
+      "resolution_trace": {
+        "target_desc": "the value to the right of 'Member ID or Name'",
+        "anchor_text": "Member ID or Name",
+        "relation": "right_of",
+        "attempts": [
+          {
+            "tier": "anchor_text",
+            "outcome": "matched",
+            "candidates": 1,
+            "matched_text": "Member ID or Name",
+            "detail": null
+          }
+        ],
+        "tier": "anchor_text",
+        "candidates": 1,
+        "drift": false,
+        "bbox": {
+          "x": 0.0964254273308648,
+          "y": 0.11800569322374133,
+          "w": 0.1545303874545627,
+          "h": 0.031406741672092016
+        },
+        "point": [
+          0.17369062105814614,
+          0.13370906405978733
+        ]
+      },
+      "phases": {
+        "observe_ms": 1860,
+        "observations": 1,
+        "resolve_ms": 0,
+        "act_ms": 119,
+        "verify_ms": 1
+      },
+      "model_turn": null,
+      "evidence": {
+        "screenshot": "/data/evidence/replay-basic-checking/frames/step-02.png",
+        "after": "/data/evidence/replay-basic-checking/frames/step-02.after.png",
+        "annotated_screenshot": null,
+        "observation": "/data/evidence/replay-basic-checking/observations/step-02.json"
+      }
+    },
+    {
+      "step_id": 3,
+      "intent": "click the Search button after entering member ID 30992",
+      "status": "ok",
+      "resolution": "anchor_text",
+      "settled_by": "pixels",
+      "duration_ms": 2502,
+      "attempts": 1,
+      "expected": null,
+      "observed": null,
+      "recovery_applied": null,
+      "note": null,
+      "policy": {
+        "action": "click",
+        "declared_risk": "safe",
+        "effective_risk": "safe",
+        "disposition": "allow",
+        "rule": "allowlist",
+        "detail": null,
+        "promoted_from": null,
+        "intent": "click the Search button after entering member ID 30992"
+      },
+      "resolution_trace": {
+        "target_desc": "Search",
+        "anchor_text": "Search",
+        "relation": "self",
+        "attempts": [
+          {
+            "tier": "anchor_text",
+            "outcome": "matched",
+            "candidates": 1,
+            "matched_text": "Search",
+            "detail": null
+          }
+        ],
+        "tier": "anchor_text",
+        "candidates": 1,
+        "drift": false,
+        "bbox": {
+          "x": 0.25341866811116537,
+          "y": 0.11848559061686198,
+          "w": 0.05120766957600911,
+          "h": 0.03145878261990017
+        },
+        "point": [
+          0.2790225028991699,
+          0.13421498192681205
+        ]
+      },
+      "phases": {
+        "observe_ms": 2485,
+        "observations": 1,
+        "resolve_ms": 0,
+        "act_ms": 13,
+        "verify_ms": 1
+      },
+      "model_turn": null,
+      "evidence": {
+        "screenshot": "/data/evidence/replay-basic-checking/frames/step-03.png",
+        "after": "/data/evidence/replay-basic-checking/frames/step-03.after.png",
+        "annotated_screenshot": null,
+        "observation": "/data/evidence/replay-basic-checking/observations/step-03.json"
+      }
+    },
+    {
+      "step_id": 4,
+      "intent": "click the View button on the row for member 30992 to open their profile",
+      "status": "ok",
+      "resolution": "anchor_text",
+      "settled_by": "pixels",
+      "duration_ms": 3170,
+      "attempts": 1,
+      "expected": "text_present 'Member Profile'",
+      "observed": null,
+      "recovery_applied": null,
+      "note": null,
+      "policy": {
+        "action": "click",
+        "declared_risk": "safe",
+        "effective_risk": "safe",
+        "disposition": "allow",
+        "rule": "allowlist",
+        "detail": null,
+        "promoted_from": null,
+        "intent": "click the View button on the row for member 30992 to open their profile"
+      },
+      "resolution_trace": {
+        "target_desc": "View",
+        "anchor_text": "View",
+        "relation": "self",
+        "attempts": [
+          {
+            "tier": "anchor_text",
+            "outcome": "matched",
+            "candidates": 1,
+            "matched_text": "View",
+            "detail": null
+          }
+        ],
+        "tier": "anchor_text",
+        "candidates": 1,
+        "drift": false,
+        "bbox": {
+          "x": 0.8847222222222222,
+          "y": 0.27555555555555555,
+          "w": 0.025694444444444443,
+          "h": 0.022222222222222223
+        },
+        "point": [
+          0.8975694444444444,
+          0.2866666666666667
+        ]
+      },
+      "phases": {
+        "observe_ms": 3158,
+        "observations": 1,
+        "resolve_ms": 1,
+        "act_ms": 8,
+        "verify_ms": 2
+      },
+      "model_turn": null,
+      "evidence": {
+        "screenshot": "/data/evidence/replay-basic-checking/frames/step-04.png",
+        "after": "/data/evidence/replay-basic-checking/frames/step-04.after.png",
+        "annotated_screenshot": null,
+        "observation": "/data/evidence/replay-basic-checking/observations/step-04.json"
+      }
+    },
+    {
+      "step_id": 5,
+      "intent": "the region below 'Accounts'",
+      "status": "ok",
+      "resolution": "none",
+      "settled_by": "pixels",
+      "duration_ms": 6023,
+      "attempts": 1,
+      "expected": null,
+      "observed": "$95.12",
+      "recovery_applied": null,
+      "note": null,
+      "policy": {
+        "action": "extract",
+        "declared_risk": "safe",
+        "effective_risk": "safe",
+        "disposition": "allow",
+        "rule": "allowlist",
+        "detail": null,
+        "promoted_from": null,
+        "intent": "the region below 'Accounts'"
+      },
+      "resolution_trace": null,
+      "phases": {
+        "observe_ms": 6008,
+        "observations": 2,
+        "resolve_ms": 0,
+        "act_ms": 0,
+        "verify_ms": 3
+      },
+      "model_turn": null,
+      "evidence": {
+        "screenshot": "/data/evidence/replay-basic-checking/frames/step-05.png",
+        "after": "/data/evidence/replay-basic-checking/frames/step-05.after.png",
+        "annotated_screenshot": null,
+        "observation": "/data/evidence/replay-basic-checking/observations/step-05.json"
+      }
+    }
+  ],
+  "started_at": "2026-09-01T23:26:13.551439+00:00",
+  "finished_at": "2026-09-01T23:26:30.577511+00:00",
+  "duration_ms": 17026,
+  "evidence_dir": "/data/evidence/replay-basic-checking"
+}

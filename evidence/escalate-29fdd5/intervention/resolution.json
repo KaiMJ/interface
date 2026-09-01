@@ -1,0 +1,40 @@
+{
+  "id": "int_1f86fce2",
+  "outcome": "resume",
+  "operator": "smoke-operator",
+  "note": "verified with the member by phone",
+  "human_actions": [
+    {
+      "at": "2026-09-01T23:48:10.415149+00:00",
+      "kind": "move",
+      "x": 900,
+      "y": 250,
+      "detail": null
+    },
+    {
+      "at": "2026-09-01T23:48:10.568544+00:00",
+      "kind": "move",
+      "x": 1250,
+      "y": 700,
+      "detail": null
+    },
+    {
+      "at": "2026-09-01T23:48:10.722367+00:00",
+      "kind": "move",
+      "x": 1320,
+      "y": 820,
+      "detail": null
+    },
+    {
+      "at": "2026-09-01T23:48:10.876533+00:00",
+      "kind": "click",
+      "x": 1350,
+      "y": 840,
+      "detail": "button 1"
+    }
+  ],
+  "duration_ms": 0,
+  "resolved_at": "2026-09-01T23:48:11.441772+00:00",
+  "resumed_at_step": null,
+  "extra": {}
+}

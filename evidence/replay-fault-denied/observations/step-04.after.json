@@ -1,0 +1,209 @@
+{
+  "screenshot_path": "/tmp/cua-frames-ixz89x4f/frame-0005.png",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "elements": [
+    {
+      "id": "e0",
+      "role": "control",
+      "name": "MERIDIAN CREDIT UNION · Member Services Console",
+      "text": "MERIDIAN CREDIT UNION · Member Services Console",
+      "bbox": {
+        "x": 0.13774818844265407,
+        "y": 0.009189586639404296,
+        "w": 0.1201669692993164,
+        "h": 0.01631839328342014
+      },
+      "source": "omniparser",
+      "conf": 0.3538302779197693
+    },
+    {
+      "id": "e1",
+      "role": "control",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 0.8365989685058594,
+        "y": 0.008017401695251464,
+        "w": 0.05264019436306423,
+        "h": 0.015675818655225965
+      },
+      "source": "omniparser",
+      "conf": 0.5675063133239746
+    },
+    {
+      "id": "e2",
+      "role": "control",
+      "name": "Teller: teller01 | Terminal 04-A | Sign out",
+      "text": "Teller: teller01 | Terminal 04-A | Sign out",
+      "bbox": {
+        "x": 0.8989898681640625,
+        "y": 0.007979791429307726,
+        "w": 0.05234714084201389,
+        "h": 0.01543087641398112
+      },
+      "source": "omniparser",
+      "conf": 0.7616338729858398
+    },
+    {
+      "id": "e3",
+      "role": "icon",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 0.9603997124565973,
+        "y": 0.008379364013671875,
+        "w": 0.03147735595703125,
+        "h": 0.015216426849365234
+      },
+      "source": "omniparser",
+      "conf": 0.7649737596511841
+    },
+    {
+      "id": "e4",
+      "role": "button",
+      "name": "Member Search",
+      "text": "Member Search",
+      "bbox": {
+        "x": 0.005083245038986206,
+        "y": 0.03607732137044271,
+        "w": 0.06670303146044414,
+        "h": 0.026400600009494356
+      },
+      "source": "omniparser",
+      "conf": 0.6453007459640503
+    },
+    {
+      "id": "e5",
+      "role": "text",
+      "name": "1",
+      "text": "1",
+      "bbox": {
+        "x": 0.06666666666666667,
+        "y": 0.042222222222222223,
+        "w": 0.011805555555555555,
+        "h": 0.013333333333333334
+      },
+      "source": "ocr",
+      "conf": 0.52863
+    },
+    {
+      "id": "e6",
+      "role": "icon",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 0.07534343931410048,
+        "y": 0.037352290683322485,
+        "w": 0.04156467649671766,
+        "h": 0.02428963131374783
+      },
+      "source": "omniparser",
+      "conf": 0.5478724241256714
+    },
+    {
+      "id": "e7",
+      "role": "button",
+      "name": "TransfersHolds",
+      "text": "TransfersHolds",
+      "bbox": {
+        "x": 0.12198335859510634,
+        "y": 0.038042208353678386,
+        "w": 0.02611756854587131,
+        "h": 0.023194393581814236
+      },
+      "source": "omniparser",
+      "conf": 0.590927243232727
+    },
+    {
+      "id": "e8",
+      "role": "button",
+      "name": "s Cards",
+      "text": "s Cards",
+      "bbox": {
+        "x": 0.15451782014634874,
+        "y": 0.03889455159505208,
+        "w": 0.026702022552490233,
+        "h": 0.02185660892062717
+      },
+      "source": "omniparser",
+      "conf": 0.6086122393608093
+    },
+    {
+      "id": "e9",
+      "role": "button",
+      "name": "Reports",
+      "text": "Reports",
+      "bbox": {
+        "x": 0.18689371744791666,
+        "y": 0.03832667880588107,
+        "w": 0.036348046196831595,
+        "h": 0.02247286902533637
+      },
+      "source": "omniparser",
+      "conf": 0.5535163879394531
+    },
+    {
+      "id": "e10",
+      "role": "text",
+      "name": "Fault Panel",
+      "text": "Fault Panel",
+      "bbox": {
+        "x": 0.9472222222222222,
+        "y": 0.03888888888888889,
+        "w": 0.04583333333333333,
+        "h": 0.02
+      },
+      "source": "ocr",
+      "conf": 0.99924
+    },
+    {
+      "id": "e11",
+      "role": "text",
+      "name": "Member Inquiry",
+      "text": "Member Inquiry",
+      "bbox": {
+        "x": 0.011805555555555555,
+        "y": 0.08,
+        "w": 0.06666666666666667,
+        "h": 0.024444444444444446
+      },
+      "source": "ocr",
+      "conf": 0.99984
+    },
+    {
+      "id": "e12",
+      "role": "text",
+      "name": "You do not have permission to view this member record. Entitlement MBR_VIEW_RESTRICTED is required.",
+      "text": "You do not have permission to view this member record. Entitlement MBR_VIEW_RESTRICTED is required.",
+      "bbox": {
+        "x": 0.025,
+        "y": 0.13444444444444445,
+        "w": 0.4013888888888889,
+        "h": 0.01888888888888889
+      },
+      "source": "ocr",
+      "conf": 0.99762
+    },
+    {
+      "id": "e13",
+      "role": "text",
+      "name": "Member ID 12345 exists. Access is restricted by policy.",
+      "text": "Member ID 12345 exists. Access is restricted by policy.",
+      "bbox": {
+        "x": 0.018055555555555554,
+        "y": 0.17777777777777778,
+        "w": 0.18888888888888888,
+        "h": 0.017777777777777778
+      },
+      "source": "ocr",
+      "conf": 0.99261
+    }
+  ],
+  "url": "http://targetapp:8080/members/12345",
+  "frame_hash": "414e02f41878481d",
+  "settled_by": "pixels",
+  "taken_at": "2026-09-01T23:31:49.898982+00:00"
+}

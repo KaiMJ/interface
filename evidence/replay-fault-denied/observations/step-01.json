@@ -1,0 +1,195 @@
+{
+  "screenshot_path": "/tmp/cua-frames-ixz89x4f/frame-0001.png",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "elements": [
+    {
+      "id": "e0",
+      "role": "text",
+      "name": "MERIDIAN CREDIT UNION · Member Services Console",
+      "text": "MERIDIAN CREDIT UNION · Member Services Console",
+      "bbox": {
+        "x": 0.006944444444444444,
+        "y": 0.008888888888888889,
+        "w": 0.25069444444444444,
+        "h": 0.015555555555555555
+      },
+      "source": "ocr",
+      "conf": 0.99065
+    },
+    {
+      "id": "e1",
+      "role": "control",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 0.8365683661566841,
+        "y": 0.0073658180236816405,
+        "w": 0.05208375718858507,
+        "h": 0.01708843231201172
+      },
+      "source": "omniparser",
+      "conf": 0.3183237314224243
+    },
+    {
+      "id": "e2",
+      "role": "control",
+      "name": "Teller: teller01 | Terminal 04-A | Sign out",
+      "text": "Teller: teller01 | Terminal 04-A | Sign out",
+      "bbox": {
+        "x": 0.8989453633626302,
+        "y": 0.0077639420827229815,
+        "w": 0.05237859090169271,
+        "h": 0.015749616622924803
+      },
+      "source": "omniparser",
+      "conf": 0.671302080154419
+    },
+    {
+      "id": "e3",
+      "role": "icon",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 0.9604183620876736,
+        "y": 0.008178434371948241,
+        "w": 0.031423526340060765,
+        "h": 0.01543490833706326
+      },
+      "source": "omniparser",
+      "conf": 0.7471708059310913
+    },
+    {
+      "id": "e4",
+      "role": "text",
+      "name": "Member Search",
+      "text": "Member Search",
+      "bbox": {
+        "x": 0.00625,
+        "y": 0.03888888888888889,
+        "w": 0.06458333333333334,
+        "h": 0.01888888888888889
+      },
+      "source": "ocr",
+      "conf": 0.99994
+    },
+    {
+      "id": "e5",
+      "role": "text",
+      "name": "Transfers Holds",
+      "text": "Transfers Holds",
+      "bbox": {
+        "x": 0.07708333333333334,
+        "y": 0.03888888888888889,
+        "w": 0.07222222222222222,
+        "h": 0.01888888888888889
+      },
+      "source": "ocr",
+      "conf": 0.99881
+    },
+    {
+      "id": "e6",
+      "role": "text",
+      "name": "s Cards Reports",
+      "text": "s Cards Reports",
+      "bbox": {
+        "x": 0.1423611111111111,
+        "y": 0.03777777777777778,
+        "w": 0.0798611111111111,
+        "h": 0.022222222222222223
+      },
+      "source": "ocr",
+      "conf": 0.97914
+    },
+    {
+      "id": "e7",
+      "role": "text",
+      "name": "Fault Panel",
+      "text": "Fault Panel",
+      "bbox": {
+        "x": 0.9465277777777777,
+        "y": 0.03888888888888889,
+        "w": 0.04722222222222222,
+        "h": 0.02
+      },
+      "source": "ocr",
+      "conf": 0.99678
+    },
+    {
+      "id": "e8",
+      "role": "text",
+      "name": "Member Search",
+      "text": "Member Search",
+      "bbox": {
+        "x": 0.011805555555555555,
+        "y": 0.08333333333333333,
+        "w": 0.06597222222222222,
+        "h": 0.016666666666666666
+      },
+      "source": "ocr",
+      "conf": 0.99837
+    },
+    {
+      "id": "e9",
+      "role": "text",
+      "name": "Member ID or Name",
+      "text": "Member ID or Name",
+      "bbox": {
+        "x": 0.014583333333333334,
+        "y": 0.12222222222222222,
+        "w": 0.0798611111111111,
+        "h": 0.021111111111111112
+      },
+      "source": "ocr",
+      "conf": 0.99821
+    },
+    {
+      "id": "e10",
+      "role": "textbox",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 0.0964254273308648,
+        "y": 0.11800569322374133,
+        "w": 0.1545303874545627,
+        "h": 0.031406741672092016
+      },
+      "source": "omniparser",
+      "conf": 0.8944565653800964
+    },
+    {
+      "id": "e11",
+      "role": "button",
+      "name": "Search",
+      "text": "Search",
+      "bbox": {
+        "x": 0.25338982476128474,
+        "y": 0.11845213148328992,
+        "w": 0.051207945081922744,
+        "h": 0.03141803317599826
+      },
+      "source": "omniparser",
+      "conf": 0.9290611147880554
+    },
+    {
+      "id": "e12",
+      "role": "text",
+      "name": "Try 12345, 22841, 30992, 44100, 57310 — or a surname.",
+      "text": "Try 12345, 22841, 30992, 44100, 57310 — or a surname.",
+      "bbox": {
+        "x": 0.015277777777777777,
+        "y": 0.15666666666666668,
+        "w": 0.1986111111111111,
+        "h": 0.01888888888888889
+      },
+      "source": "ocr",
+      "conf": 0.99195
+    }
+  ],
+  "url": "http://targetapp:8080/members",
+  "frame_hash": "c2a914c258ca132a",
+  "settled_by": "pixels",
+  "taken_at": "2026-09-01T23:31:41.921894+00:00"
+}

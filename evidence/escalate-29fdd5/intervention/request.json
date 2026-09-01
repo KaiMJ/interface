@@ -1,0 +1,23 @@
+{
+  "id": "int_1f86fce2",
+  "run_id": "escalate-29fdd5",
+  "mode": "replay",
+  "capability": "fix_transfer_funds@v1",
+  "goal": "transfer funds between two accounts belonging to one member",
+  "reason": "risky_action_confirmation",
+  "failure_kind": null,
+  "step_id": 2,
+  "step_intent": "confirm and post the transfer",
+  "message": "risky action needs confirmation: confirm and post the transfer",
+  "expected": null,
+  "observed": null,
+  "state": "pending",
+  "evidence": {
+    "screenshot": "/data/evidence/escalate-29fdd5/frames/step-02.png",
+    "after": null,
+    "annotated_screenshot": null,
+    "observation": "/data/evidence/escalate-29fdd5/observations/step-02.json"
+  },
+  "vnc_url": "http://localhost:6080/vnc.html?autoconnect=1&resize=scale",
+  "raised_at": "2026-09-01T23:48:10.235716+00:00"
+}

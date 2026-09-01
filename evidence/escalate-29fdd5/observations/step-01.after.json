@@ -1,0 +1,195 @@
+{
+  "screenshot_path": "/tmp/cua-frames-fdfh4gc8/frame-0002.png",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "elements": [
+    {
+      "id": "e0",
+      "role": "text",
+      "name": "MERIDIAN CREDIT UNION · Member Services Console",
+      "text": "MERIDIAN CREDIT UNION · Member Services Console",
+      "bbox": {
+        "x": 0.00625,
+        "y": 0.0077777777777777776,
+        "w": 0.2513888888888889,
+        "h": 0.017777777777777778
+      },
+      "source": "ocr",
+      "conf": 0.99284
+    },
+    {
+      "id": "e1",
+      "role": "control",
+      "name": "Teller: teller01 | Terminal 04-A | Sign out",
+      "text": "Teller: teller01 | Terminal 04-A | Sign out",
+      "bbox": {
+        "x": 0.8989846971299913,
+        "y": 0.00756014347076416,
+        "w": 0.0523895263671875,
+        "h": 0.015689934094746907
+      },
+      "source": "omniparser",
+      "conf": 0.7664420008659363
+    },
+    {
+      "id": "e2",
+      "role": "icon",
+      "name": null,
+      "text": null,
+      "bbox": {
+        "x": 0.9604233635796441,
+        "y": 0.0077980687883165145,
+        "w": 0.03143768310546875,
+        "h": 0.015787411795722114
+      },
+      "source": "omniparser",
+      "conf": 0.7807172536849976
+    },
+    {
+      "id": "e3",
+      "role": "text",
+      "name": "Member Search",
+      "text": "Member Search",
+      "bbox": {
+        "x": 0.006944444444444444,
+        "y": 0.04111111111111111,
+        "w": 0.06388888888888888,
+        "h": 0.016666666666666666
+      },
+      "source": "ocr",
+      "conf": 0.99993
+    },
+    {
+      "id": "e4",
+      "role": "text",
+      "name": "Transfers",
+      "text": "Transfers",
+      "bbox": {
+        "x": 0.07708333333333334,
+        "y": 0.04111111111111111,
+        "w": 0.03958333333333333,
+        "h": 0.016666666666666666
+      },
+      "source": "ocr",
+      "conf": 0.99992
+    },
+    {
+      "id": "e5",
+      "role": "text",
+      "name": "Holds",
+      "text": "Holds",
+      "bbox": {
+        "x": 0.12222222222222222,
+        "y": 0.04111111111111111,
+        "w": 0.025694444444444443,
+        "h": 0.015555555555555555
+      },
+      "source": "ocr",
+      "conf": 0.99994
+    },
+    {
+      "id": "e6",
+      "role": "button",
+      "name": "Cards",
+      "text": "Cards",
+      "bbox": {
+        "x": 0.1520787239074707,
+        "y": 0.03498918533325195,
+        "w": 0.03221239513821072,
+        "h": 0.030084192487928603
+      },
+      "source": "omniparser",
+      "conf": 0.45836007595062256
+    },
+    {
+      "id": "e7",
+      "role": "button",
+      "name": "Reports",
+      "text": "Reports",
+      "bbox": {
+        "x": 0.18469518025716145,
+        "y": 0.03465467876858182,
+        "w": 0.03956993950737847,
+        "h": 0.029606418609619142
+      },
+      "source": "omniparser",
+      "conf": 0.34062460064888
+    },
+    {
+      "id": "e8",
+      "role": "text",
+      "name": "Fault Panel",
+      "text": "Fault Panel",
+      "bbox": {
+        "x": 0.9465277777777777,
+        "y": 0.03888888888888889,
+        "w": 0.04652777777777778,
+        "h": 0.02
+      },
+      "source": "ocr",
+      "conf": 0.99987
+    },
+    {
+      "id": "e9",
+      "role": "text",
+      "name": "Funds Transfer — Step 2 of 3 — Review",
+      "text": "Funds Transfer — Step 2 of 3 — Review",
+      "bbox": {
+        "x": 0.0125,
+        "y": 0.08333333333333333,
+        "w": 0.16111111111111112,
+        "h": 0.017777777777777778
+      },
+      "source": "ocr",
+      "conf": 0.98508
+    },
+    {
+      "id": "e10",
+      "role": "control",
+      "name": "Member Dolores Chen (12345) From Account 29883 — Checking — available $4,670.19 To Account 13455—Savings $25.00 Transfer Amount Immediate Effective Confirming posts the transfer immediately. Reversals require a supervisor override.",
+      "text": "Member Dolores Chen (12345) From Account 29883 — Checking — available $4,670.19 To Account 13455—Savings $25.00 Transfer Amount Immediate Effective Confirming posts the transfer immediately. Reversals require a supervisor override.",
+      "bbox": {
+        "x": 0.013014793395996094,
+        "y": 0.1084854973687066,
+        "w": 0.42154373592800565,
+        "h": 0.19470250447591145
+      },
+      "source": "omniparser",
+      "conf": 0.6264058351516724
+    },
+    {
+      "id": "e11",
+      "role": "button",
+      "name": "Confirm Transfer",
+      "text": "Confirm Transfer",
+      "bbox": {
+        "x": 0.01636622216966417,
+        "y": 0.23151316324869792,
+        "w": 0.09034995502895779,
+        "h": 0.03155429416232639
+      },
+      "source": "omniparser",
+      "conf": 0.8886339068412781
+    },
+    {
+      "id": "e12",
+      "role": "button",
+      "name": "Back",
+      "text": "Back",
+      "bbox": {
+        "x": 0.10981414582994249,
+        "y": 0.23413726806640625,
+        "w": 0.03574647903442383,
+        "h": 0.02659644232855903
+      },
+      "source": "omniparser",
+      "conf": 0.8231576085090637
+    }
+  ],
+  "url": "http://targetapp:8080/transfer/review?member=12345&from=29883&to=13455&amount=25.0",
+  "frame_hash": "33326f8db0e374a9",
+  "settled_by": "pixels",
+  "taken_at": "2026-09-01T23:48:10.232802+00:00"
+}
