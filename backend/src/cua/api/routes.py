@@ -24,6 +24,7 @@ from ..schema import (
     FailureDetail,
     FailureKind,
     InterventionResolution,
+    InterventionState,
     ReplayResult,
     RunStatus,
     Status,
@@ -41,8 +42,7 @@ class DiscoverRequest(BaseModel):
     # deployment's configured app.
     app: str | None = None
     # Also the parameter declaration: any recorded literal matching one of these
-    # becomes a placeholder at synthesis. How "who decided 12345 was a parameter?"
-    # gets a deterministic answer.
+    # becomes a placeholder at synthesis.
     inputs: dict[str, Any] = {}
     capability_id: str | None = None
 
@@ -67,10 +67,8 @@ class ResolveRequest(BaseModel):
 def _begin(rt: Any, run_id: str, is_run: bool = True) -> None:
     """Claim the session for a run, or refuse.
 
-    409, not a queue. There is one browser on one X display, so a second run would
-    not wait politely — it would drive the same pixels. An operator console makes
-    starting a second run one mis-click away, which is exactly why the refusal has
-    to live in the control plane rather than in the UI.
+    409, not a queue: there is one browser on one X display, so a second run would
+    drive the same pixels. Refused in the control plane rather than in the UI.
     """
     # Imported here rather than at module scope: `main` imports this module to
     # build the router, so a top-level import back into it is a cycle.
@@ -86,14 +84,11 @@ def _launch(rt: Any, run_id: str, coro: Any, summary: dict[str, Any]) -> None:
     """Run a coroutine in the background, releasing the session when it ends.
 
     The task is held on the runtime rather than fired and forgotten: an
-    unreferenced asyncio task can be garbage-collected mid-run, and a run that
-    vanishes with its evidence half-written is the worst possible failure for a
-    system whose whole argument is its audit trail.
+    unreferenced asyncio task can be garbage-collected mid-run.
 
-    `summary` makes the run visible from the moment it is accepted. Its first
-    seconds go on starting a browser and signing in, during which it has written
-    no evidence — and a console that answers 404 for a run the operator just
-    started is a console they stop believing.
+    `summary` makes the run visible from the moment it is accepted, through the
+    first seconds it spends starting a browser and signing in with no evidence
+    written yet.
     """
     rt.pending[run_id] = {
         "run_id": run_id,
@@ -125,9 +120,8 @@ def _rt(request: Request) -> Any:
 async def health(request: Request) -> dict[str, Any]:
     """Up, and what is happening.
 
-    `active_run` is here rather than on a route of its own because every client
-    that polls health wants it: there is one display, so "is the session free" is
-    part of "are you alive". The console greys its start button on it.
+    `active_run` is here rather than on a route of its own: there is one display,
+    so "is the session free" is part of "are you alive".
     """
     rt = _rt(request)
     return {
@@ -159,7 +153,10 @@ async def list_capabilities(request: Request, app: str | None = None) -> list[di
             "description": c.description,
             "inputs": {i.name: i.type.value for i in c.inputs},
             "outputs": {o.name: o.type.value for o in c.outputs},
-            "outcomes": [o.name for o in c.business_outcomes],
+            "outcomes": [
+                o.name if o.verified else f"{o.name} (unverified)"
+                for o in c.business_outcomes
+            ],
             "steps": len(c.steps),
         }
         for c in rt.catalog.list(app=app)
@@ -195,9 +192,7 @@ async def capability_history(
 
     The per-step drift signals — which resolver tier fired, how the frame settled —
     are only meaningful in aggregate. One run resolving by `recorded_bbox` is
-    noise; a capability whose last five runs did is an application that moved. That
-    reading had nowhere to live: the data was on disk, per step, per run, and
-    nothing ever put two runs side by side.
+    noise; a capability whose last five runs did is an application that moved.
     """
     rt = _rt(request)
     runs = [r for r in _runs(rt) if str(r.get("capability") or "").startswith(capability_id)]
@@ -242,18 +237,15 @@ async def capability_history(
             "statuses": statuses,
             "resolution_tiers": tiers,
             "settled_by": settled,
-            # Not a quality score: the share of runs that ended on the path the
-            # capability was recorded for. A business outcome is a correct answer and
-            # does not count against it.
+            # Not a quality score: the share of runs that ended on the recorded path.
+            # A business outcome is a correct answer and does not count against it.
             "success_rate": (statuses.get("success", 0) / total) if total else None,
             "median_duration_ms": _median(durations),
-            # Perception dominates everything else by two orders of magnitude, so
-            # "how much of this capability is OCR" is the only performance question
-            # worth a dashboard.
+            # Perception dominates everything else by two orders of magnitude.
             "observe_share": (observe_ms / step_ms) if step_ms else None,
             "observations_per_step": (observations / step_count) if step_count else None,
-            # The reading that matters: portable resolutions decaying into the
-            # recorded box, as a share so runs of different lengths compare.
+            # Portable resolutions decaying into the recorded box, as a share so runs
+            # of different lengths compare.
             "drift_share": (
                 tiers.get("recorded_bbox", 0) / sum(tiers.values()) if tiers else None
             ),
@@ -267,9 +259,7 @@ async def invoke(request: Request, capability_id: str, req: InvokeRequest) -> Re
 
     Returns 200 for all three legitimate results — success, business outcome, and
     escalation — with the distinction carried in `status`. A business outcome is
-    not an HTTP error: "no such member" is an answer, and encoding it as a 404
-    would push the caller into inspecting status codes to tell "you asked wrongly"
-    apart from "the record does not exist".
+    an answer, not an HTTP error.
 
     Hard failures return 500 with a populated `failure` block.
     """
@@ -281,8 +271,7 @@ async def invoke(request: Request, capability_id: str, req: InvokeRequest) -> Re
 
     if cap.status is not Status.APPROVED:
         # Refused here *and* in the engine: this gives a clean 403 without opening a
-        # run directory for something that never touched the app, and the engine's is
-        # the one a future call site cannot bypass.
+        # run directory, and the engine's check is the one no call site can bypass.
         raise HTTPException(
             status_code=403,
             detail=f"{cap.ref} is {cap.status.value}; unattended invocation needs approval",
@@ -293,16 +282,15 @@ async def invoke(request: Request, capability_id: str, req: InvokeRequest) -> Re
     # cannot execute an artifact under some other app's guardrails.
     _begin(rt, run_id)
     try:
-        # The one path that refuses a draft. Elsewhere a human is driving and
-        # replaying an unapproved recording is how it gets reviewed; here the caller
-        # is an agent, and nobody is watching.
+        # The one path that refuses a draft: the caller is an agent and nobody is
+        # watching. Elsewhere replaying an unapproved recording is how it is reviewed.
         result = await _replay(rt, run_id, cap, req.inputs, require_approved=True)
     finally:
         rt.end(run_id)
 
     if result.status is RunStatus.FAILURE:
-        # A failure is still a fully-formed result: the caller gets the step, the
-        # expectation and what was actually on screen, not a bare 500.
+        # A failure is still a fully-formed result: the step, the expectation and
+        # what was on screen, not a bare 500.
         raise HTTPException(status_code=500, detail=result.model_dump(mode="json"))
     return result
 
@@ -326,10 +314,9 @@ async def approve(
 async def discover(request: Request, req: DiscoverRequest) -> DiscoveryResult:
     """Run the LLM-driven loop and emit a draft capability.
 
-    Synchronous: the caller waits for the run. That is the right shape for the CLI
-    and for a script. The console uses `/runs/discover` instead, which is the same
-    work started in the background — a browser tab should not have to hold a
-    connection open for the length of a recording session to watch one.
+    Synchronous: the caller waits for the run, which is the right shape for the CLI
+    and for a script. The console uses `/runs/discover`, the same work started in
+    the background.
     """
     rt = _rt(request)
     run_id = f"discover-{uuid4().hex[:8]}"
@@ -353,8 +340,7 @@ async def _discover(rt: Any, run_id: str, req: DiscoverRequest) -> DiscoveryResu
 
     if result.status is RunStatus.SUCCESS:
         # The loop has written its terminal result, but synthesis still has to turn
-        # the recording into an artifact. Without this the console shows `success`
-        # with no capability for several seconds — done before the deliverable exists.
+        # the recording into an artifact, so the run is not done yet.
         loop.evidence.result(
             result.model_copy(
                 update={
@@ -371,14 +357,14 @@ async def _discover(rt: Any, run_id: str, req: DiscoverRequest) -> DiscoveryResu
                 capability_id=req.capability_id or "",
                 app=policy.app_ref(),
                 viewport=rt.settings.viewport,
+                policy=policy,
             )
             rt.catalog.save(cap)
             loop.evidence.capability(cap)
             result.capability_ref = cap.ref
         except Exception as e:  # noqa: BLE001 - the run must still report
-            # The flow was driven and only the contract could not be written.
-            # `success` would claim a capability nobody can call; a failed run would
-            # deny the model reached the goal. This says which part failed.
+            # The flow was driven and only the contract could not be written, which
+            # is neither a success nor a failed run; this says which part failed.
             result.status = RunStatus.FAILURE
             result.failure = FailureDetail(
                 kind=FailureKind.INTERNAL,
@@ -398,10 +384,8 @@ async def _discover(rt: Any, run_id: str, req: DiscoverRequest) -> DiscoveryResu
 async def start_discovery(request: Request, req: DiscoverRequest) -> dict[str, Any]:
     """Start a discovery run in the background and return its id immediately.
 
-    The console's prompt box. A discovery run takes a minute or more, and holding
-    the request open for it means the operator cannot watch the thing they just
-    started — the run's own evidence stream is how they watch it, and it exists
-    from the first step.
+    The console's prompt box: a discovery run takes a minute or more, and the
+    operator watches it over the run's own evidence stream.
     """
     rt = _rt(request)
     run_id = f"discover-{uuid4().hex[:8]}"
@@ -419,10 +403,9 @@ async def start_discovery(request: Request, req: DiscoverRequest) -> dict[str, A
 async def start_replay(request: Request, req: StartReplayRequest) -> dict[str, Any]:
     """Start a replay in the background and return its id immediately.
 
-    Deliberately a different route from `/capabilities/{id}/invoke` rather than a
-    flag on it. Invoke is the production contract an AI agent calls and it returns
-    a `ReplayResult`; changing what it returns based on a query parameter would
-    make that contract conditional. This one is the console's re-run button.
+    A different route from `/capabilities/{id}/invoke` rather than a flag on it:
+    invoke is the production contract an AI agent calls and always returns a
+    `ReplayResult`. This one is the console's re-run button.
     """
     rt = _rt(request)
     try:
@@ -469,13 +452,8 @@ async def list_runs(
     """Every run, not only the ones this process started.
 
     The evidence directory is the durable record; `rt.runs` is a live view of what
-    this process is running now. Listing only the latter is why a console watching
-    a CLI-driven run showed an empty list — the two most common ways to start a
-    run would each be invisible to the other.
-
-    Filters exist because "show me every run of this capability" is the question an
-    operator asks about a flow they are about to trust, and the answer used to be
-    "read the whole list and match the strings yourself".
+    this process is running now. Both are listed, so a CLI-driven run is visible
+    from the console and vice versa.
     """
     runs = _runs(_rt(request))
     if capability:
@@ -518,9 +496,8 @@ async def run_evidence(request: Request, run_id: str) -> dict[str, Any]:
     root = _run_dir(request, run_id)
     frames = root / "frames"
 
-    # Strict, because a directory of evidence is not a schema: anything that is
-    # not exactly `step-<n>.png` is some other artefact and is skipped rather than
-    # parsed hopefully.
+    # Strict: anything that is not exactly `step-<n>.png` is some other artefact and
+    # is skipped rather than parsed hopefully.
     steps = []
     for frame in sorted(frames.glob("step-*.png")):
         match = _STEP_FRAME.fullmatch(frame.name)
@@ -534,12 +511,10 @@ async def run_evidence(request: Request, run_id: str) -> dict[str, Any]:
             {
                 "step_id": step_id,
                 "frame": f"frames/{frame.name}",
-                # The numbered overlay is what the model was shown, and any
-                # argument about a decision it made is litigated against it.
+                # The numbered overlay is what the model was actually shown.
                 "annotated": f"frames/{annotated.name}" if annotated.exists() else None,
-                # What the step produced, as against what it acted on. The
-                # resolved target belongs on the first; a checkpoint was judged
-                # on the second.
+                # What the step produced, as against what it acted on: the resolved
+                # target belongs on the first, the checkpoint was judged on the second.
                 "after": f"frames/{after.name}" if after.exists() else None,
                 "observation": (
                     f"observations/{observation.name}" if observation.exists() else None
@@ -553,9 +528,8 @@ async def run_evidence(request: Request, run_id: str) -> dict[str, Any]:
         for name in ("handoff", "handback")
         if (intervention / f"{name}.png").exists()
     }
-    # The request and the resolution, not only the two frames. What the operator
-    # was told, what they decided, and what note they left is the record of a human
-    # touching regulated data — and it was on disk with nothing reading it.
+    # The request and the resolution, not only the two frames: what the operator was
+    # told, what they decided, and what note they left.
     request_json = _read_json(intervention / "request.json")
     resolution_json = _read_json(intervention / "resolution.json")
     if request_json or resolution_json:
@@ -576,9 +550,8 @@ async def run_evidence(request: Request, run_id: str) -> dict[str, Any]:
 async def run_evidence_file(request: Request, run_id: str, path: str) -> FileResponse:
     """One file from a run's evidence directory.
 
-    Resolved and then checked to be inside that directory. A run id and a relative
-    path both arrive from the network, and serving files by concatenation is how a
-    debugging surface starts returning /etc/passwd.
+    Resolved and then checked to be inside that directory: both the run id and the
+    relative path arrive from the network.
     """
     root = _run_dir(request, run_id)
     target = (root / path).resolve()
@@ -591,10 +564,8 @@ async def run_evidence_file(request: Request, run_id: str, path: str) -> FileRes
 async def policy(request: Request, app: str | None = None) -> dict[str, Any]:
     """The guardrails in force, read-only.
 
-    "What is this agent permitted to do" is the first question anyone asks about
-    an automation with a browser, and answering it should not require reading a
-    YAML file inside a container. Read-only on purpose: editing guardrails from a
-    debug console is a hole, not a feature.
+    Read-only on purpose: editing guardrails from a debug console is a hole, not a
+    feature.
     """
     from ..runtime import build_policy
 
@@ -637,10 +608,9 @@ async def policy(request: Request, app: str | None = None) -> dict[str, Any]:
 async def run_events(request: Request, run_id: str) -> Any:
     """SSE stream of step events. What the console tails.
 
-    Tails the run's own `steps.jsonl` rather than subscribing to an in-process
-    bus. The evidence file is written before the step that might not return, so
-    the stream and the audit trail cannot disagree — and a run started by the CLI
-    is watchable from the console for free.
+    Tails the run's own `steps.jsonl` rather than subscribing to an in-process bus,
+    so the stream and the audit trail cannot disagree and a CLI-started run is
+    watchable too.
     """
     root = Path(_rt(request).settings.evidence_dir) / run_id
     steps = root / "steps.jsonl"
@@ -664,10 +634,9 @@ async def run_events(request: Request, run_id: str) -> Any:
             else:
                 idle += 1
 
-            # The run record itself, whenever it changes. The engine rewrites it
-            # before every step, so this is how status, outputs and a failure reach
-            # the console without it re-polling the whole run — and how a run that
-            # ends between two step lines is seen to have ended at all.
+            # The run record itself, whenever it changes: how status, outputs and a
+            # failure reach the console, including for a run that ends between two
+            # step lines.
             try:
                 changed = run.stat().st_mtime
                 if changed != stamp:
@@ -677,10 +646,9 @@ async def run_events(request: Request, run_id: str) -> Any:
             except (OSError, ValueError):
                 pass
 
-            # Which step the run is waiting on the model for. Not part of the
-            # audit trail — it describes work that has not happened yet — but read
-            # from a file like everything else, so no in-process bus appears here
-            # for one event. The console discards it once that step lands.
+            # Which step the run is waiting on the model for. Not part of the audit
+            # trail — it describes work that has not happened yet — and discarded by
+            # the console once that step lands.
             try:
                 pondered = thinking.stat().st_mtime
                 if pondered != thought:
@@ -708,9 +676,8 @@ async def list_faults(request: Request, app: str | None = None) -> dict[str, Any
     """The demo app's injectable faults, if it has any.
 
     A property of the *application*, not of this system: the mock bank ships a
-    fault panel so §3.3's runtime conditions can be produced on demand, and a real
-    core banking system does not. An app whose policy declares no `fault_url` gets
-    an empty list here and no panel in the console.
+    fault panel, and a real core banking system does not. An app whose policy
+    declares no `fault_url` gets an empty list and no panel in the console.
     """
     from ..runtime import build_policy
 
@@ -723,10 +690,8 @@ async def list_faults(request: Request, app: str | None = None) -> dict[str, Any
     try:
         import httpx
 
-        # Read the catalogue of faults server-side. Their *state* is not readable
-        # from here and deliberately so: faults live in a cookie inside the
-        # automation's browser, which is what stops a reviewer's own tab from
-        # sharing them. What is armed is what we armed.
+        # The catalogue only. Fault *state* lives in a cookie inside the automation's
+        # browser, which is what stops a reviewer's own tab from sharing it.
         with httpx.Client(timeout=3.0) as client:
             available = dict(client.get(policy.fault_url).json().get("available", {}))
     except Exception:  # noqa: BLE001 - the app being down is not this route's problem
@@ -739,15 +704,13 @@ async def arm_faults(request: Request, req: FaultRequest, app: str | None = None
     """Arm a set of faults in the automation's own browser. Test harness only.
 
     Faults live in a cookie, so they cannot be set from outside the browser that
-    will be driven — which is exactly why this route exists rather than the
-    console calling the app directly. It drives the session there with the driver
-    and back, the same way `cua replay --fault` does.
+    will be driven; this route drives the session there and back with the driver,
+    the same way `cua replay --fault` does.
 
-    Two things make this safe to expose. It is refused while a run holds the
-    session, so it can never interleave with one. And the URL it navigates to is
-    outside the app's own allowlist by construction: this is something done *to*
-    the automation from outside it, never a step the agent can take — an agent
-    that could arm its own faults could disarm them.
+    Two things make it safe to expose: it is refused while a run holds the session,
+    so it can never interleave with one, and the URL it navigates to is outside the
+    app's own allowlist by construction, so arming is never a step the agent itself
+    can take.
     """
     from ..runtime import build_policy
 
@@ -786,12 +749,35 @@ async def list_interventions(
 ) -> list[dict[str, Any]]:
     """Pending escalations. The operator's queue.
 
-    `include_resolved` adds the ones already dealt with, so the console can show
-    what happened on this session as well as what still needs a person.
+    `include_resolved` adds the ones already dealt with, including escalations this
+    process never saw — every one raised from the CLI or a smoke script. The
+    registry is the live queue; `evidence/` is the durable record.
     """
-    registry = _rt(request).registry
+    rt = _rt(request)
+    registry = rt.registry
     found = registry.all() if include_resolved else registry.pending()
-    return [i.model_dump(mode="json") for i in found]
+    live = {i.id: i.model_dump(mode="json") for i in found}
+    if not include_resolved:
+        return list(live.values())
+
+    listed: dict[str, dict[str, Any]] = {}
+    for path in sorted(Path(rt.settings.evidence_dir).glob("*/intervention/request.json")):
+        try:
+            payload = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue  # mid-write; it will be there on the next poll
+        resolution = path.parent / "resolution.json"
+        if resolution.exists():
+            try:
+                payload["resolution"] = json.loads(resolution.read_text())
+                payload["state"] = InterventionState.RESOLVED.value
+            except (OSError, ValueError):
+                pass
+        listed[str(payload.get("id") or path.parent.parent.name)] = payload
+
+    # The live registry is authoritative for anything this process is running now.
+    listed.update(live)
+    return sorted(listed.values(), key=lambda i: str(i.get("raised_at") or ""), reverse=True)
 
 
 @router.get("/interventions/{intervention_id}")
@@ -807,9 +793,7 @@ async def take_control(request: Request, intervention_id: str, operator: str) ->
     """Operator claims the live session.
 
     Flips the control token to HUMAN and starts the X-layer action watcher. Until
-    this is called the automation has stopped but nobody holds control — which is
-    the state that makes "the agent clicked while I was typing" impossible rather
-    than unlikely.
+    this is called the automation has stopped but nobody holds control.
     """
     rt = _rt(request)
     control = _find(request, intervention_id)
@@ -820,10 +804,8 @@ async def take_control(request: Request, intervention_id: str, operator: str) ->
 
     watcher = HumanActionWatcher(rt.settings.display)
     watcher.start()
-    # Capture is best-effort and must never block the transfer. An operator who
-    # cannot take a session because the screenshotter failed is worse off than one
-    # who takes it with a gap in the evidence — and the gap is reported, not
-    # hidden.
+    # Capture is best-effort and must never block the transfer; a gap in the
+    # evidence is reported rather than hidden.
     note = watcher.unavailable or _snapshot(watcher, rt, control.run_id, "handoff")
     rt.watchers[intervention_id] = watcher
 
@@ -844,12 +826,10 @@ async def resolve_intervention(
     """Hand control back and resume, or abort the run.
 
     On resume the runner re-observes rather than trusting the frame it parked on,
-    because the human may have moved the app several screens. What it does *not*
-    do is search forward for the first step whose checkpoint already holds: it
-    does not need to, because the next step asserts its own screen and verifies
-    its own checkpoint, so an operator who left the application somewhere
-    unexpected produces a loud `WRONG_SCREEN` rather than a blind click. See
-    `escalation/control.py` for the two resume cases and why they differ.
+    because the human may have moved the app several screens. It does not search
+    forward for a satisfied step: the next step asserts its own screen, so an
+    operator who left the application somewhere unexpected produces `WRONG_SCREEN`
+    rather than a blind click. See `escalation/control.py`.
     """
     rt = _rt(request)
     control = _find(request, intervention_id)
@@ -953,11 +933,10 @@ _RUN_ID = re.compile(r"^[A-Za-z0-9._-]+$")
 def _run_dir(request: Request, run_id: str) -> Path:
     """One run's evidence directory, from a run id that arrived over the network.
 
-    The id is validated before it is joined, not after. The per-file check below
-    confines a *path* to this directory, but it confines it to whichever directory
-    this function returned — so an id that escapes here escapes the check too, and
-    `/runs/..%2F..%2Fetc/evidence/passwd` would be answered rather than refused.
-    A run id is a slug we generated; anything that is not one is a 404.
+    The id is validated before it is joined, not after: the per-file check below
+    confines a path to whichever directory this function returned, so an id that
+    escapes here escapes that check too. A run id is a slug we generated; anything
+    else is a 404.
     """
     if not _RUN_ID.match(run_id):
         raise HTTPException(status_code=404, detail=f"no evidence for {run_id!r}")

@@ -1,13 +1,10 @@
 """Perception unit tests.
 
-Everything here runs without torch, without an X server and without a model
-download: the pieces under test are the deterministic ones — row grouping, the
-merge rules, spatial queries and the settle loop — and those are exactly the
-pieces every later layer trusts blindly.
+Everything here runs without torch, without an X server and without a model download: the
+deterministic pieces — row grouping, the merge rules, spatial queries and the settle loop.
 
-The detector and text reader are stubbed with fakes rather than mocked, because
-what is being asserted is the *composition* (capture -> detect -> read -> merge),
-not that a particular call was made.
+The detector and text reader are fakes rather than mocks, because what is asserted is the
+*composition* (capture -> detect -> read -> merge), not that a particular call was made.
 """
 
 from __future__ import annotations
@@ -22,7 +19,8 @@ from cua.perception.index import ElementIndex
 from cua.perception.merge import infer_role, merge
 from cua.perception.ocr import group_rows
 from cua.perception.screen import ImageFileScreen
-from cua.schema import Bbox, Element, ElementSource, SettledBy, Viewport
+from cua.perception.som import annotate, candidate_digest, listed, unlisted
+from cua.schema import Bbox, Element, ElementSource, Observation, SettledBy, Viewport
 
 VIEWPORT = Viewport(width=1440, height=900)
 
@@ -65,9 +63,8 @@ def test_group_rows_clusters_a_table_row_and_keeps_reading_order() -> None:
 
 
 def test_group_rows_does_not_merge_adjacent_table_rows() -> None:
-    # Two rows 30px apart on a 900px display. Merging them would let
-    # `row_contains_all` match terms a human reads as two separate records —
-    # in a banking app, the wrong transaction.
+    # Two rows 30px apart on a 900px display. Merging them would let `row_contains_all` match
+    # terms a human reads as two separate records.
     rows = group_rows(
         [
             text("a1", 0.1, 0.200, 0.1, 0.018, "row one"),
@@ -107,10 +104,9 @@ def test_merge_gives_text_to_the_smallest_containing_control() -> None:
 
 
 def test_merge_labels_a_control_whose_box_is_tighter_than_the_ocr_line() -> None:
-    # Real geometry from the target app's "View" button: the detector boxes the
-    # glyphs (29x16 px), OCR boxes the padded line (41x23 px). Only 49% of the
-    # text is inside the control, so a containment-only rule would leave every
-    # button on the page anonymous.
+    # Real geometry from the target app's "View" button: the detector boxes the glyphs
+    # (29x16 px), OCR the padded line (41x23 px). Only 49% of the text is inside the control,
+    # so a containment-only rule leaves every button anonymous.
     button = control("d0", 474 / 1440, 264 / 900, 29 / 1440, 16 / 900)
     label = text("t0", 468 / 1440, 261 / 900, 41 / 1440, 23 / 900, "View")
     out = merge([button], [label])
@@ -163,6 +159,81 @@ def test_infer_role_separates_a_wide_row_from_a_button() -> None:
     assert infer_role(blank_field) == "textbox"
 
 
+def test_a_narrow_empty_field_is_not_called_an_icon() -> None:
+    # 96x26px at 1440x900: inside the icon size bound, too squat for the input ratio. Testing
+    # "small" first would make every PIN and quantity box an icon.
+    narrow_field = control("d0", 0.30, 0.20, 0.066, 0.029)
+    icon = control("d1", 0.94, 0.05, 0.016, 0.026)
+    assert infer_role(narrow_field) == "control"
+    assert infer_role(icon) == "icon"
+
+
+# ---------------------------------------------------------------------------
+# set-of-marks
+# ---------------------------------------------------------------------------
+
+
+def _marked(tmp_path: Path, elements: tuple[Element, ...], cap: int) -> bytes:
+    shot = tmp_path / f"shot-{len(elements)}-{cap}.png"
+    Image.new("RGB", (400, 300), "white").save(shot)
+    obs = Observation(
+        screenshot_path=str(shot),
+        viewport=VIEWPORT,
+        elements=elements,
+        frame_hash="abc123",
+        taken_at="2026-08-16T00:00:00+00:00",
+    )
+    out = annotate(obs, tmp_path / f"som-{len(elements)}-{cap}.png", cap)
+    return out.read_bytes()
+
+
+def test_every_element_is_marked_whatever_the_digest_lists(tmp_path: Path) -> None:
+    """A mark is an index into the observation and the lookup accepts any of them, so the
+    digest is a view over that space rather than a redefinition of it."""
+    five = tuple(control(f"d{i}", 0.1 * i, 0.1 * i, 0.05, 0.03) for i in range(5))
+
+    # Listing three of five still draws five: the overlay differs from one built from
+    # only the listed three.
+    assert _marked(tmp_path, five, 3) != _marked(tmp_path, five[:3], 3)
+    assert len(candidate_digest(five, 3)) == 3
+    assert unlisted(five, 3) == 2
+
+
+def test_the_digest_spends_its_budget_on_controls_first() -> None:
+    # Reading order alone lets a dense screen fill the list with static labels while a button
+    # below them goes unlisted.
+    elements = (
+        text("t0", 0.10, 0.10, 0.20, 0.02, "Member Services"),
+        text("t1", 0.10, 0.20, 0.20, 0.02, "Accounts"),
+        text("t2", 0.10, 0.30, 0.20, 0.02, "Transactions"),
+        control("d3", 0.60, 0.40, 0.05, 0.03),
+    )
+    assert listed(elements, 2) == [0, 3]
+    assert unlisted(elements, 2) == 2
+
+
+def test_an_unlisted_number_gives_way_to_a_listed_one(tmp_path: Path) -> None:
+    # An unreadable number is worse than none: overprinting a listed mark costs the one the
+    # prompt describes.
+    stacked = (control("d0", 0.30, 0.50, 0.05, 0.03), control("d1", 0.30, 0.50, 0.05, 0.03))
+    # Both boxes land on the same pixels, so with mark 1's number suppressed the overlay
+    # is byte-identical to one drawn from the listed element alone. Were it drawn, it
+    # would overprint mark 0 and the images would differ.
+    assert _marked(tmp_path, stacked, 1) == _marked(tmp_path, stacked[:1], 1)
+
+
+def test_a_listed_entry_carries_the_number_it_was_drawn_with() -> None:
+    # Selecting a subset leaves gaps in the numbering, and an entry renumbered 0..n would
+    # point the model at a different element than the one under that box.
+    elements = (
+        text("t0", 0.10, 0.10, 0.20, 0.02, "Member Services"),
+        text("t1", 0.10, 0.20, 0.20, 0.02, "Accounts"),
+        control("d2", 0.60, 0.40, 0.05, 0.03),
+    )
+    digest = candidate_digest(elements, 2)
+    assert [e["mark"] for e in digest] == [0, 2]
+
+
 # ---------------------------------------------------------------------------
 # spatial index
 # ---------------------------------------------------------------------------
@@ -192,10 +263,9 @@ def test_index_right_of_finds_the_value_beside_a_label() -> None:
 
 
 def test_index_right_of_does_not_cross_into_a_touching_row() -> None:
-    # Real OCR geometry from the accounts table: the padded line boxes of
-    # neighbouring rows touch, and one pixel of overlap used to be enough to
-    # return the row above's nickname and the row below's status as if they sat
-    # beside "Savings". A read capability would have returned the wrong account.
+    # Real OCR geometry from the accounts table: the padded line boxes of neighbouring rows
+    # touch, and one pixel of overlap is enough to return the row above's nickname as if it sat
+    # beside "Savings".
     index = ElementIndex(
         (
             text("e0", 161 / 1440, 259 / 900, 116 / 1440, 26 / 900, "Everyday Checking"),

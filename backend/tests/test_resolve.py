@@ -1,12 +1,8 @@
 """Resolver, normalizers and verification.
 
-This is the replay path's decision layer, so the tests are written as the
-questions a reviewer would ask of it: does it find the right control, does it
-admit when it is guessing, and does it refuse to act when what it is looking at
-is not what was recorded.
-
-Every case here runs on a synthetic observation. That is the point of the
-`Observation` seam — none of this needs pixels.
+The replay path's decision layer: does it find the right control, does it admit when it is
+guessing, and does it refuse to act when what it is looking at is not what was recorded. Every
+case runs on a synthetic observation — none of this needs pixels.
 """
 
 from __future__ import annotations
@@ -165,9 +161,7 @@ def test_render_substitutes_declared_inputs() -> None:
 
 
 def test_render_refuses_to_silently_drop_a_missing_parameter() -> None:
-    # An empty anchor matches the first row on the page. Failing loudly is the
-    # difference between "caller forgot an argument" and "acted on a stranger's
-    # account".
+    # An empty anchor matches the first row on the page, so this must fail loudly.
     with pytest.raises(MissingParam):
         render("member {{member_id}}", {})
 
@@ -225,6 +219,59 @@ def test_role_name_tier_when_the_anchor_is_gone() -> None:
     assert r.tier is ResolutionTier.ROLE_NAME
 
 
+def test_a_stale_role_does_not_veto_a_correct_name_match() -> None:
+    # Normalized thresholds, so a wider window reads the View button as "control" where
+    # the recording said "button". The name still identifies it.
+    observed = observation(
+        el("e0", 0.05, 0.20, 0.10, 0.02, "29883"),
+        el("e1", 0.60, 0.20, 0.04, 0.02, "View", role="control",
+           source=ElementSource.OMNIPARSER),
+    )
+    target = Target(
+        intent="click View",
+        target_desc="a View button",
+        anchor_text="Ver Detalles",
+        role="button",
+        name="View",
+    )
+    r = Resolver().resolve(target, observed)
+    assert r.tier is ResolutionTier.ROLE_NAME
+    assert r.bbox.x == pytest.approx(0.60)
+
+
+def test_role_still_narrows_when_both_are_declared() -> None:
+    # Advisory is not ignored: two same-named elements, and the role picks between them.
+    observed = observation(
+        el("e0", 0.20, 0.20, 0.06, 0.02, "View", role="text"),
+        el("e1", 0.60, 0.20, 0.04, 0.02, "View", role="button",
+           source=ElementSource.OMNIPARSER),
+    )
+    target = Target(
+        intent="click View",
+        target_desc="a View button",
+        anchor_text="Ver Detalles",
+        role="button",
+        name="View",
+    )
+    r = Resolver().resolve(target, observed)
+    assert r.tier is ResolutionTier.ROLE_NAME
+    assert r.bbox.x == pytest.approx(0.60)
+
+
+def test_role_alone_is_still_a_hard_filter() -> None:
+    # No name to fall back on, so role is the only key the tier has.
+    target = Target(
+        intent="click the export icon",
+        target_desc="the export icon",
+        anchor_text="Export",
+        role="icon",
+    )
+    # Nothing here is an icon and there is no recorded box, so every tier misses; degrading
+    # role would match all eight.
+    with pytest.raises(Unresolvable):
+        Resolver().resolve(target, ACCOUNTS)
+
+
 def test_recorded_bbox_is_the_last_tier_and_flags_drift() -> None:
     target = Target(
         intent="click the export icon",
@@ -234,8 +281,8 @@ def test_recorded_bbox_is_the_last_tier_and_flags_drift() -> None:
     )
     r = Resolver().resolve(target, ACCOUNTS)
     assert r.tier is ResolutionTier.RECORDED_BBOX
-    # The free drift signal: aggregated across runs, anchors decaying into boxes
-    # is an early warning long before a hard failure.
+    # The drift signal: aggregated across runs, anchors decaying into boxes is an early
+    # warning.
     assert r.drift is True
 
 
@@ -301,10 +348,9 @@ def test_verify_target_catches_a_recorded_box_now_pointing_elsewhere() -> None:
 
 
 def test_verify_target_refuses_to_click_through_an_overlay() -> None:
-    # A confirmation dialog has opened over the accounts table. Under vision that
-    # means the row's own text is no longer readable — the dialog is what is
-    # there now — so the anchor misses and the step falls through to the recorded
-    # coordinate, which is still 'correct' and would click the dialog.
+    # A confirmation dialog has opened over the accounts table, so the row's own text is no
+    # longer readable, the anchor misses, and the step falls through to a recorded coordinate
+    # that is still 'correct' and would click the dialog.
     obs = observation(
         el("e0", 0.10, 0.10, 0.30, 0.02, "Member Services"),
         el(
@@ -333,9 +379,8 @@ def test_verify_target_refuses_to_click_through_an_overlay() -> None:
 
 
 def test_verify_target_reports_an_overlay_when_there_is_nothing_to_assert() -> None:
-    # Same dialog, but the step targets an icon with no text of its own — nothing
-    # to compare, so the mismatch check cannot fire and the geometric one is all
-    # that stands between the automation and clicking the dialog.
+    # Same dialog, but the step targets an icon with no text of its own, so the mismatch check
+    # cannot fire and the geometric one is all that is left.
     obs = observation(
         el(
             "e0",
@@ -379,9 +424,8 @@ def test_text_absent_is_the_same_computation_inverted() -> None:
 
 
 def test_a_scoped_checkpoint_does_not_quietly_widen_to_the_whole_page() -> None:
-    # "$4,820.19 appears in the savings row" is false even though it appears on
-    # the page. A scope that silently widened would pass here and the capability
-    # would return the checking balance.
+    # "$4,820.19 appears in the savings row" is false even though it appears on the page; a
+    # scope that silently widened would pass.
     check = Checkpoint(
         kind=CheckKind.TEXT_PRESENT,
         value="4820.19",
@@ -408,8 +452,8 @@ def test_verify_effect_reports_expected_next_to_observed() -> None:
     assert not result.ok
     assert result.kind is FailureKind.CHECKPOINT_FAILED
     assert "Transfer complete" in (result.expected or "")
-    # The observed side is what the screen actually said — the whole debugging
-    # story for a failed replay is these two strings side by side.
+    # The observed side is what the screen actually said; the two strings side by side are the
+    # debugging story for a failed replay.
     assert "Everyday Checking" in (result.observed or "")
 
 
@@ -420,11 +464,9 @@ def test_checkpoint_parameters_are_substituted_before_matching() -> None:
 
 
 def test_a_value_inside_a_longer_number_is_not_parameterized() -> None:
-    """Synthesis rewrites recorded literals into placeholders by exact match. A
-    bare string replace does that inside longer runs of digits too, so an account
-    number that happens to contain the member id becomes a URL that exists for
-    nobody — an artifact that is wrong in a way no checkpoint catches, because it
-    navigates somewhere perfectly valid.
+    """Synthesis rewrites recorded literals into placeholders by exact match. A bare string
+    replace does that inside longer runs of digits too, so an account number containing the
+    member id becomes a URL that exists for nobody — and navigates somewhere valid.
     """
     params = {"member_id": "12345"}
 
@@ -477,11 +519,8 @@ def _read(target: Target) -> str | None:
 
 
 def test_counting_cells_reads_the_wrong_one_when_the_anchor_is_ambiguous() -> None:
-    """The failure this exists to prevent, reproduced.
-
-    `Checking` matches the Type cell and `Free Checking` alike. The count starts from
-    whichever one resolved, and one column of drift lands on the status.
-    """
+    """`Checking` matches the Type cell and `Free Checking` alike, so a count starts from
+    whichever one resolved and one column of drift lands on the status."""
     counted = Target(
         intent="read the balance",
         target_desc="the value to the right of 'Checking'",
@@ -536,10 +575,9 @@ def test_a_column_that_is_not_on_this_screen_falls_back_to_the_count() -> None:
 def test_an_anchor_that_renders_empty_stops_rather_than_degrades() -> None:
     """No needle is not the same as no anchor.
 
-    Both used to return "skipped" from the same branch, and the ladder read that as
-    permission to try the tiers below — which answer a different question. `role_name`
-    matches any text element on the frame; the recorded box is where another record
-    sat. Either can return a plausible number for a caller who named nothing.
+    The lower tiers answer a different question: `role_name` matches any text element on the
+    frame, and the recorded box is where another record sat. Either returns a plausible number
+    for a caller who named nothing.
     """
     target = Target(
         intent="read the balance",
@@ -555,12 +593,8 @@ def test_an_anchor_that_renders_empty_stops_rather_than_degrades() -> None:
 
 
 def test_a_record_that_is_absent_is_not_looked_for_by_position() -> None:
-    """The banner case, and every other page shift.
-
-    The anchor is a template, so it names a row rather than a control. Absent means
-    absent: falling to the recorded coordinates returns whichever record has moved
-    into that position, with no signal that it is the wrong one.
-    """
+    """The anchor is a template, so it names a row rather than a control. Absent means absent:
+    falling to the recorded coordinates returns whichever record moved into that position."""
     target = Target(
         intent="read the balance",
         target_desc="the value to the right of the account",
@@ -577,11 +611,8 @@ def test_a_record_that_is_absent_is_not_looked_for_by_position() -> None:
 
 
 def test_a_control_still_degrades_the_way_it_always_did() -> None:
-    """The rule keys on the template, not on extraction.
-
-    A button carries no placeholder: it is one control that exists on every run, so
-    a miss really is drift and the lower rungs are the right answer.
-    """
+    """The rule keys on the template, not on extraction: a button carries no placeholder and
+    exists on every run, so a miss really is drift and the lower rungs are right."""
     target = Target(
         intent="click View",
         target_desc="View",
@@ -590,6 +621,5 @@ def test_a_control_still_degrades_the_way_it_always_did() -> None:
         bbox=Bbox(x=0.017, y=0.28, w=0.033, h=0.02),
     )
     found = Resolver(allow_vlm=False).resolve(target, ACCOUNTS_TABLE, {})
-    # Which lower rung caught it is not the claim — that it was allowed to fall past
-    # the anchor at all is, and a data target no longer is.
+    # The claim is that it was allowed to fall past the anchor at all, not which rung caught it.
     assert found.tier is not ResolutionTier.ANCHOR_TEXT

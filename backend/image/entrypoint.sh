@@ -18,6 +18,20 @@ log() { echo "[entrypoint] $*" >&2; }
 mkdir -p "${HOME:-/tmp/home}/.cache" "${HOME:-/tmp/home}/.config" 2>/dev/null || true
 mkdir -p "${CUA_MODELS_DIR:-/models}/ultralytics/Ultralytics" 2>/dev/null || true
 
+# RapidOCR's package directory is a symlink into the models volume (see Dockerfile).
+# Restore anything the wheel shipped that the volume does not already have, so a
+# first run against an empty ./models has its ONNX weights without a download, and
+# a rebuild never costs the torch weights someone already fetched. `-n` so a file
+# already in the volume always wins over the seed.
+seed_rapidocr() {
+    local dst="${CUA_MODELS_DIR:-/models}/rapidocr"
+    [ -d /opt/rapidocr-seed ] || return 0
+    mkdir -p "$dst" 2>/dev/null || { log "cannot write $dst — OCR weights will not persist"; return 0; }
+    cp -rn /opt/rapidocr-seed/. "$dst"/ 2>/dev/null || true
+    log "OCR weights in $dst: $(ls -1 "$dst" 2>/dev/null | wc -l) file(s)"
+}
+seed_rapidocr
+
 wait_for_x() {
     for _ in $(seq 1 50); do
         if xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; then return 0; fi

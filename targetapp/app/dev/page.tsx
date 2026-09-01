@@ -1,9 +1,8 @@
 /**
  * Fault panel — not part of the simulated bank, but the control surface that makes
- * evidence producible on demand. `targetapp.yaml` excludes `/dev`, so a capability
- * that navigated here would be stopped with POLICY_DENIED: injecting a fault is done
- * *to* the automation by the harness driving its browser, never something the
- * automation can do to itself.
+ * evidence producible on demand. `targetapp.yaml` excludes `/dev`, so a capability that
+ * navigated here is stopped with POLICY_DENIED: a fault is injected *to* the automation
+ * by the harness driving its browser, never by the automation itself.
  */
 
 import { redirect } from "next/navigation";

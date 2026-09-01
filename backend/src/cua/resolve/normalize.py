@@ -1,12 +1,9 @@
 """Text normalization applied before any comparison.
 
-The normalizer list lives in the artifact, not in this module's defaults. That is
-the difference between "replay compares strings the way the recording did" and
-"replay compares strings the way whatever version of the engine is deployed today
-does". Same reason a migration records its schema version.
-
-Every function here is total and idempotent: `f(f(x)) == f(x)`, and no input
-raises. A normalizer that can throw turns a text comparison into a crash.
+The normalizer list lives in the artifact, not in this module's defaults — the difference
+between "replay compares strings the way the recording did" and "the way whatever engine is
+deployed today does". Every function here is total and idempotent: `f(f(x)) == f(x)`, and no
+input raises, because a normalizer that can throw turns a text comparison into a crash.
 """
 
 from __future__ import annotations
@@ -46,10 +43,8 @@ def casefold(s: str) -> str:
 
 
 def collapse_ws(s: str) -> str:
-    """Runs of whitespace to a single space, trimmed.
-
-    OCR line boxes routinely include column padding as spaces.
-    """
+    """Runs of whitespace to a single space, trimmed. OCR line boxes routinely include column
+    padding as spaces."""
     return _WS.sub(" ", s).strip()
 
 
@@ -58,9 +53,8 @@ def strip_currency(s: str) -> str:
     parenthesized negatives, which US financial UIs use for debits."""
     t = s.strip()
 
-    # `($441.56)` is minus four hundred and forty-one dollars. Only treat the
-    # parentheses as a sign when what they wrap is actually a number — otherwise
-    # "(see reverse)" would normalize to "-see reverse".
+    # `($441.56)` is minus four hundred and forty-one dollars, but only when the parentheses
+    # wrap a number — otherwise "(see reverse)" normalizes to "-see reverse".
     negative = False
     wrapped = _PARENTHESIZED.match(t)
     if wrapped:
@@ -78,9 +72,9 @@ def strip_currency(s: str) -> str:
 def strip_punct(s: str) -> str:
     """Drop punctuation, keeping letters, digits and single spaces.
 
-    Blunt by design: it exists for comparing labels ("Member ID:" vs "Member ID"),
-    not values. Applying it to money deletes the decimal point, which is why
-    `strip_currency` is declared before it in every artifact that uses both.
+    Blunt by design, and for labels ("Member ID:" vs "Member ID") rather than values: applied
+    to money it deletes the decimal point, which is why `strip_currency` is declared before it
+    in every artifact using both.
     """
     return collapse_ws(
         "".join(" " if unicodedata.category(c).startswith("P") else c for c in s)
@@ -88,12 +82,11 @@ def strip_punct(s: str) -> str:
 
 
 def strip_ellipsis(s: str) -> str:
-    """Drops a trailing `...` or `…`.
+    """Drops a trailing `...` or `…`, the most common reason a correct predicate fails to match.
 
-    Truncated cell text is the single most common reason a correct predicate fails
-    to match. Note the asymmetry this implies: after stripping, a truncated value
-    can only ever be compared by prefix, never by equality — `cell_equals` against
-    a truncated cell is unanswerable and must not silently return False.
+    Note the asymmetry: after stripping, a truncated value can only be compared by prefix, never
+    by equality — `cell_equals` against a truncated cell is unanswerable and must not silently
+    return False.
     """
     return _ELLIPSIS.sub("", s).rstrip()
 
@@ -103,12 +96,9 @@ def digits_only(s: str) -> str:
 
 
 def date_iso(s: str) -> str:
-    """Best-effort date normalization to `YYYY-MM-DD`.
-
-    US back-office apps mix `MM/DD/YYYY`, `MM-DD-YY` and `Mon D, YYYY`, often on
-    the same screen. Returns the input unchanged when it cannot parse — a
-    normalizer must not invent data.
-    """
+    """Best-effort date normalization to `YYYY-MM-DD`. US back-office apps mix `MM/DD/YYYY`,
+    `MM-DD-YY` and `Mon D, YYYY` on one screen. Returns the input unchanged when it cannot
+    parse: a normalizer must not invent data."""
     t = collapse_ws(s)
     for fmt in _DATE_FORMATS:
         try:

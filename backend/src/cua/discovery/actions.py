@@ -1,10 +1,8 @@
 """The discovery agent's action space.
 
-The most consequential decision in the discovery design: the action space is exactly the
-set of primitives an artifact can contain, so the model cannot express anything replay
-cannot execute. The alternative — let it click freely and infer intent from the
-transcript afterwards — makes replayability a post-hoc inference rather than a property
-of construction.
+Exactly the set of primitives an artifact can contain, so the model cannot express anything
+replay cannot execute and replayability is a property of construction rather than a post-hoc
+inference over a transcript.
 """
 
 from __future__ import annotations
@@ -31,6 +29,8 @@ from ..schema import (
     Target,
 )
 
+# One line each: the rules behind `expect`, `anchor` and `risk` live in the system prompt
+# rather than being restated — and re-billed — per tool.
 _MARK = {
     "type": "integer",
     "description": "The number drawn on the element in the screenshot.",
@@ -45,39 +45,15 @@ _INTENT = {
 _EXPECT = {
     "type": "string",
     "description": (
-        "Text that will be LITERALLY ON THE SCREEN after this action — it is matched "
-        "as a substring of what is read off the screen, so it must be words the "
-        "application renders. Good: a heading, a panel title, a button label, a "
-        "confirmation line — 'Step 2 of 3'. Bad, and it will not match: 'the "
-        "record is shown', 'search results appear' — nothing renders those words. "
-        "It must ALSO be true the next time this runs, for a DIFFERENT record. This "
-        "recording is replayed with other inputs, so words belonging to the record "
-        "in front of you make an assertion that is false for everyone else. AVOID a "
-        "balance, an amount, a date, a person's name, a count, a status. Prefer what "
-        "the application says about itself no matter who is on screen. "
-        "Good: 'Member Profile' / 'Accounts' / 'Transfer submitted'. "
-        "Bad: '$18,204.55' (right now, and wrong for the next member), "
-        "'Marcus Webb', '2019-11-02'. "
-        "It is checked: an amount or a date is dropped and the step is recorded with "
-        "no checkpoint at all, which is weaker than one you chose well. "
-        "Keep it short: a few words, not a sentence."
+        "A few words that will be literally on the screen after this action, and "
+        "still true for a different record. Your instructions give the full rule."
     ),
 }
 _ANCHOR = {
     "type": "string",
     "description": (
-        "OPTIONAL. The shortest text ON THIS ELEMENT that will still identify it "
-        "next month. An element's full text is often part durable and part "
-        "volatile, and only the durable part belongs in a recording. Prefer an "
-        "id, a code, an account or reference number, a fixed label. AVOID "
-        "anything that moves: a balance, a date, a count, a status, a relative "
-        "time. If the whole visible text is already stable, give that. "
-        "Good: '29883' / 'View' / 'Primary Savings'. "
-        "Bad: '29883 - Checking - $4,820.19' (the balance changes, and this "
-        "recording is replayed after it has), 'Updated 2 minutes ago'. "
-        "It is checked: it must be text actually on the element you chose, and "
-        "it must still pick out that same element. If it does not, it is dropped "
-        "and the full text is recorded instead."
+        "OPTIONAL. The shortest durable text on this element. Your instructions "
+        "give the full rule."
     ),
 }
 _SCOPE_ANCHOR = {
@@ -102,10 +78,7 @@ _NOT_FOUND_OUTCOME = {
 _RISK = {
     "type": "string",
     "enum": ["safe", "risky"],
-    "description": (
-        "risky if this action changes the institution's records or is hard to undo "
-        "— submitting a transfer, confirming, deleting. safe otherwise."
-    ),
+    "description": "risky if this changes records or is hard to undo. safe otherwise.",
 }
 
 
@@ -172,8 +145,7 @@ TOOLS: list[dict[str, Any]] = [
     ),
     _tool(
         "scroll",
-        "Scroll the page. Prefer find_and_click or find_and_extract when you are "
-        "looking for a record.",
+        "Scroll the page.",
         {
             "amount": {
                 "type": "number",
@@ -184,23 +156,13 @@ TOOLS: list[dict[str, Any]] = [
         },
         ["amount", "intent", "expect"],
     ),
-    # Two tools rather than one with an `action` enum, and the reason is `expect`.
-    # Finding-and-clicking changes the screen, so an expectation about the screen
-    # after it is a real check. Finding-and-reading changes nothing, so the only
-    # honest answer to "what will be on screen after this" is the value just read —
-    # and requiring one produced a recorded capability asserting `$18,204.55`, which
-    # was true for the member it was recorded on and false for every other. The
-    # field is not described better here; it is absent, so the answer cannot be given.
+    # Two tools rather than one with an `action` enum, because of `expect`. Find-and-click
+    # changes the screen, so an expectation about it is a real check; find-and-read changes
+    # nothing, so the only honest answer is the value just read — one record's data, and a
+    # checkpoint false for every other input. The field is absent here, not merely discouraged.
     _tool(
         "find_and_click",
-        (
-            "Find the row matching a predicate inside a region and click it. Use "
-            "this instead of scrolling and clicking whenever the thing you want is "
-            "identified by its content rather than its position — a member, a "
-            "transaction, an account. It records WHAT you were looking for, which "
-            "is what makes the recording work again tomorrow when the list has "
-            "changed."
-        ),
+        "Find the row matching a predicate inside a region and click it.",
         {
             "scope_anchor": _SCOPE_ANCHOR,
             "terms": _TERMS,
@@ -215,11 +177,8 @@ TOOLS: list[dict[str, Any]] = [
         "find_and_extract",
         (
             "Find the row matching a predicate inside a region and read it into the "
-            "capability's result. Same search as find_and_click — content, not "
-            "position — for when you want the value on the row rather than to open "
-            "it. Reading does not change the screen, so there is nothing to expect "
-            "afterwards: finding the row IS the check, and replay fails the step if "
-            "no row matches."
+            "capability's result. Reading changes nothing, so there is no `expect`: "
+            "finding the row is the check, and replay fails the step if none matches."
         ),
         {
             "scope_anchor": _SCOPE_ANCHOR,
@@ -247,11 +206,10 @@ TOOLS: list[dict[str, Any]] = [
     _tool(
         "extract",
         (
-            "Read the value of a numbered element into the capability's result. For a "
-            "value in a TABLE, prefer find_and_extract: this tool records the value's "
-            "position relative to a neighbour, and a position counted on this record "
-            "is wrong on a record with a column filled in differently. find_and_extract "
-            "records the row's content and the column's header instead."
+            "Read the value of a numbered element into the capability's result. In a "
+            "TABLE prefer find_and_extract: this records a position relative to a "
+            "neighbour, which is wrong on a record whose columns are filled in "
+            "differently."
         ),
         {
             "mark": _MARK,
@@ -290,11 +248,9 @@ TOOLS: list[dict[str, Any]] = [
     ),
 ]
 
-# Which primitive each tool records as, for the policy check. `finish` and
-# `escalate` end the run and touch nothing, so they are not in the map.
-# The tools that search by content, and what each does with the row it finds. An
-# extract is a read, and was policy-checked as a click while both shapes shared one
-# tool name — two names let the guardrail see which it is.
+# Which primitive each tool records as, for the policy check. `finish` and `escalate` end the
+# run and touch nothing, so they are absent.
+# The tools that search by content. An extract is a read, and is policy-checked as one.
 FIND_TOOLS: dict[str, Primitive] = {
     "find_and_click": Primitive.CLICK,
     "find_and_extract": Primitive.EXTRACT,
@@ -316,10 +272,8 @@ META = ("finish", "escalate")
 def tool_definitions(allowed: frozenset[str]) -> list[dict[str, Any]]:
     """Build the tool list, filtered by policy.
 
-    Filtered rather than checked-after: an action the policy forbids is not
-    offered to the model at all. Cheaper than refusing it later, and it keeps the
-    model from spending turns trying to do something it will never be permitted to
-    do.
+    Filtered rather than checked-after: an action the policy forbids is not offered to the
+    model at all, so no turn is spent on one that would be refused.
     """
     return [
         tool
@@ -329,8 +283,7 @@ def tool_definitions(allowed: frozenset[str]) -> list[dict[str, Any]]:
     ]
 
 
-# Below this a "row" is a heading or a stray label, not a table header. Three is the
-# narrowest thing that still reads as a table on the target app's screens.
+# Below this a "row" is a heading or a stray label, not a table header.
 MIN_HEADER_CELLS = 3
 
 _MONEY = re.compile(r"[$£€]\s*[\d,]*\d|\b\d[\d,]*\.\d{2}\b")
@@ -344,24 +297,20 @@ def durable_expect(
 ) -> str | None:
     """`expect` if it can still be true next month, otherwise None.
 
-    A checkpoint answers "am I on the right screen". The model is asked for text that
-    will be on screen *after* the action, and the truest answer to that question is
-    often the record it is looking at — which makes an assertion that holds for this
-    member and no other. Measured: a recording of `get_account_balance` asserted
-    `$18,204.55` at its final step and failed on every replay for a different member,
-    having navigated perfectly.
+    A checkpoint answers "am I on the right screen", but the truest answer to "what will be on
+    screen after this action" is often the record being looked at — an assertion that holds for
+    this member and no other.
 
-    Two things are refuted, both facts rather than judgment: an amount or a date, which
-    are the classes `_ANCHOR` already warns against by name, and anything this run has
-    already read off the screen, which is by definition one record's data.
+    Two things are refuted, both facts rather than judgment: an amount or a date, and anything
+    this run has already read off the screen, which is by definition one record's data.
 
-    A **declared input** is deliberately not refuted. `expect: '12345'` after typing the
-    member id is a real check that the keystrokes landed, and `parameterize` rewrites it
-    to `{{member_id}}`, which generalizes — refuting it would delete a working assertion.
+    A **declared input** is deliberately not refuted: `expect: '12345'` after typing the member
+    id is a real check that the keystrokes landed, and `parameterize` rewrites it to
+    `{{member_id}}`, which generalizes.
 
-    The residual, stated: a name, a branch, a status. `Marcus Webb` is durable-looking
-    text that identifies one record, and one frame cannot tell it from a heading. What
-    catches that is the reviewer at `approve`, and a second run with different inputs.
+    The residual, stated: a name, a branch, a status. One frame cannot tell durable-looking
+    text that identifies one record from a heading. What catches that is the reviewer at
+    `approve`, and a second run with different inputs.
     """
     text = (expect or "").strip()
     if not text:
@@ -388,21 +337,17 @@ def to_step(
     """Turn one model tool-call into a typed artifact step.
 
     The model supplies a mark id; the element behind that mark supplies role, name, text and
-    bbox, so `Target` is written from measured data rather than the model's description of
-    what it thought it was clicking. Its own words go into `intent` and `target_desc`, which
-    is what risk classification and pre-click verification need and a coordinate cannot
-    support. `identifiers` are the run's declared inputs, which is what makes "the balance
-    beside {{account_nickname}}" come out of a recording instead of "the balance beside
-    Active".
+    bbox, so `Target` is written from measured data rather than the model's description of what
+    it thought it was clicking. Its own words go into `intent` and `target_desc`, which risk
+    classification and pre-click verification need. `identifiers` are the run's declared inputs,
+    which is what makes "the balance beside {{account_nickname}}" come out of a recording.
     """
     intent = str(tool_input.get("intent", tool_name))
-    # A read has no `expect` in its schema, and is given none here either — belt to the
-    # schema's braces, so the guarantee holds against a provider that ignores
-    # `additionalProperties: false`. `extract` was always shaped this way; splitting
-    # `find_and_act` is what made the row-reading half agree with it.
+    # A read has no `expect` in its schema and is given none here either, so the guarantee
+    # holds against a provider that ignores `additionalProperties: false`.
     reads = tool_name == "extract" or FIND_TOOLS.get(tool_name) is Primitive.EXTRACT
-    # Otherwise the model proposes an expectation and `durable_expect` tries to refute
-    # it before it becomes an assertion, as `_shorter_anchor` does for a proposed anchor.
+    # Otherwise `durable_expect` tries to refute the proposal before it becomes an assertion,
+    # as `_shorter_anchor` does for a proposed anchor.
     expect = (
         None
         if reads
@@ -489,16 +434,15 @@ def _target_for(
     """Write the target from what was actually on screen.
 
     Anchor text first, since it survives relayout and rebranding; role and name next; the
-    recorded box last, logging a drift event when it is used. Two cases need the anchor to
-    come from a *neighbour*, and both were found by reading a recorded artifact: an empty
-    control has no text to anchor on, and anchoring an extraction on the value it read
-    identifies that balance only until the balance changes. Which neighbour is measured here
-    rather than guessed by the model.
+    recorded box last, logging a drift event when it is used. Two cases need the anchor to come
+    from a *neighbour*: an empty control has no text to anchor on, and anchoring an extraction
+    on the value it read identifies that balance only until the balance changes. Which
+    neighbour is measured here rather than guessed by the model.
 
     A third case needs the anchor to be *part* of the element's own text — "29883 - Checking -
     $4,820.19" is durable in one half and volatile in the other. That is semantic rather than
     geometric, so the model is asked, and its answer is falsified against the frame it was
-    proposed on: a proposal not on the element, or that no longer picks it out, is dropped.
+    proposed on.
     """
     if element is None:
         return None
@@ -543,21 +487,16 @@ def _shorter_anchor(
 ) -> str | None:
     """A durable substring of `label`, or None to keep the whole thing.
 
-    Two candidates, and the order between them is the design. A value the **caller declared**
-    as an input wins, because naming it as the thing that varies per invocation is exactly
-    what "identifies this record" means; only when the durable part is not a declared input do
-    we fall back to what the **model** proposed.
+    A value the **caller declared** as an input wins, since naming what varies per invocation
+    is what "identifies this record" means; only when the durable part is not a declared input
+    does the **model's** proposal apply. Fact before judgment: on `29883 - Checking -
+    $4,820.19` a model may answer `$4,820.19`, which is on the element, unique on the frame,
+    and passes every check here, while "will this still be true next month" is not answerable
+    from one frame. Both candidates face `_identifies`: the text must be on the chosen element,
+    and resolving it against this frame must land back on that element.
 
-    Fact before judgment, because judgment can be wrong in a way this function cannot detect:
-    asked for an anchor on `29883 - Checking - $4,820.19`, a model may answer `$4,820.19`,
-    which is on the element, unique on the frame, and passes every check here — "will this
-    still be true next month" is not answerable from one frame, and the declared input `29883`
-    is. Both candidates face `_identifies`: the text must be on the chosen element, and
-    resolving it against this frame must land back on that element.
-
-    The residual, stated: when the durable part is not a declared input *and* the model picks
-    the volatile half, this accepts it. What catches it is the reviewer, then the
-    resolution-tier drift signal in production.
+    The residual, stated: when the durable part is not a declared input and the model picks the
+    volatile half, this accepts it. The reviewer and the resolution-tier drift signal catch it.
     """
     from ..resolve import Resolver
 
@@ -569,8 +508,7 @@ def _shorter_anchor(
 
     for candidate in candidates:
         text = candidate.strip()
-        # No point replacing a string with itself, and a "shorter" anchor that is
-        # the whole label is just the label.
+        # A "shorter" anchor that is the whole label is just the label.
         if not text or len(text) >= len(label):
             continue
         if text.casefold() not in lowered:
@@ -593,31 +531,25 @@ def _identifies(resolver: Any, text: str, element: Element, obs: Any) -> bool:
         found = resolver.resolve(probe, obs)
     except Exception:  # noqa: BLE001 - any failure to resolve is a rejection
         return False
-    # `_pick` breaks ties by nearest-to-the-recorded-box, so a resolution that
-    # merely landed here by proximity is not evidence. Require the anchor to have
-    # matched exactly one candidate.
+    # `_pick` breaks ties by nearest-to-the-recorded-box, so a resolution that landed here by
+    # proximity is not evidence; require exactly one candidate.
     return found.candidates == 1 and found.tier is ResolutionTier.ANCHOR_TEXT
 
 
 def _column_over(element: Element, obs: Any) -> str | None:
     """The header of the column this element sits under, if it sits in one.
 
-    Measured, not asked: the header row is found above the element and the column is
-    the band between one header and the next, so a value belongs to the header whose
-    band contains it — the way a person reads a table, and the same rule replay uses
-    to find the cell again.
+    Measured, not asked: the header row is found above the element and the column is the band
+    between one header and the next, which is the same rule replay uses to find the cell again.
 
-    Recorded alongside `relation_index` rather than instead of it. The index still
-    resolves a value that is merely *beside* a label rather than under a header, and
-    a screen with no header row returns None here and loses nothing.
+    Recorded alongside `relation_index` rather than instead of it, since the index still
+    resolves a value merely beside a label; a screen with no header row returns None.
     """
     from ..perception import ElementIndex, cell_in_column, column_span
 
     index = ElementIndex(obs.elements)
-    # The element has to be in a table row itself. A navigation bar is a row of three
-    # or more texts and sits above everything, so without this the search box on the
-    # member page took "Member Search" — a nav item — as its column, and replay typed
-    # into whatever sat in that band. Measured on a live run: the query went out empty.
+    # The element must be in a table row itself: a nav bar is three or more texts sitting above
+    # everything, and would otherwise read as a header row.
     own = next((r for r in index.rows() if any(e.id == element.id for e in r)), [element])
     if len(own) < MIN_HEADER_CELLS:
         return None
@@ -627,19 +559,18 @@ def _column_over(element: Element, obs: Any) -> str | None:
         if len(row) >= MIN_HEADER_CELLS
         and max(e.bbox.y + e.bbox.h for e in row) <= element.bbox.y + 1e-6
     ]
-    # Nearest first: a page can carry several tables, and the one above this element
-    # is the one whose columns it is in.
-    for row in sorted(header_rows, key=lambda r: -max(e.bbox.y for e in r)):
-        for header in row:
-            name = (header.text or header.name or "").strip()
-            if not name:
-                continue
-            span = column_span(obs, name, above=element.bbox.y)
-            if span is not None and cell_in_column([element], span) is not None:
-                return name
-        # The nearest header row is the one that governs. Falling through to a row
-        # further up would name a column from a different table.
+    # A page can carry several tables, and only the nearest header row governs: falling
+    # through to one further up would name a column from a different table.
+    nearest = max(header_rows, key=lambda r: max(e.bbox.y for e in r), default=None)
+    if nearest is None:
         return None
+    for header in nearest:
+        name = (header.text or header.name or "").strip()
+        if not name:
+            continue
+        span = column_span(obs, name, above=element.bbox.y)
+        if span is not None and cell_in_column([element], span) is not None:
+            return name
     return None
 
 
@@ -653,12 +584,9 @@ def _relative_target(
     """Anchor on the text to the left that best identifies this element.
 
     Nearest is not best: in an accounts grid the cell immediately left of a balance is its
-    status, and "Active" is on every row — anchoring there means replay picks a row by
-    proximity to a recorded coordinate, which is what anchoring was supposed to stop doing.
+    status, and "Active" is on every row, so anchoring there picks a row by proximity again.
     Two things beat proximity, in order: text the caller declared as an input, which becomes
-    `{{account_nickname}}` at synthesis and makes the step data-dependent; then text that
-    appears exactly once on the screen, uniqueness being the cheapest available proxy for
-    "this identifies the row".
+    `{{account_nickname}}` at synthesis; then text that appears exactly once on the screen.
     """
     from ..perception import ElementIndex
 
@@ -689,9 +617,8 @@ def _relative_target(
             anchor_match=MatchMode.CONTAINS,
             relation=Relation.RIGHT_OF,
             relation_index=position,
-            # Only for a value being read. A column addresses a cell in a grid; an
-            # empty control beside a label is neither, and asking the question there
-            # is how a nav bar gets mistaken for a header row.
+            # Only for a value being read: a column addresses a cell in a grid, and an empty
+            # control beside a label is not one.
             column=_column_over(element, obs) if in_table else None,
             role=element.role,
             bbox=element.bbox,

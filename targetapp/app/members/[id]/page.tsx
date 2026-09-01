@@ -1,14 +1,12 @@
 /**
- * Member detail: profile, accounts, and a long transaction history. Four
- * distinguishable results live on this one route, and telling them apart is most of
- * the point: member not found (a business outcome), restricted member (a permission
- * denial, which is not "not found"), the error500 fault (a hard failure), and the
- * slow fault (recoverable by waiting).
+ * Member detail: profile, accounts, and a long transaction history. Four distinguishable
+ * results live on this one route: member not found (a business outcome), restricted
+ * member (a permission denial, which is not "not found"), the error500 fault (a hard
+ * failure), and the slow fault (recoverable by waiting).
  *
  * The history is long enough to require scrolling, which makes find_and_act a real
- * requirement. Balance and Available differ by holds on some accounts — an
- * extraction that grabs the first currency-looking string gets the wrong number and
- * looks correct.
+ * requirement. Balance and Available differ by holds on some accounts, so an extraction
+ * that grabs the first currency-looking string gets the wrong number and looks correct.
  */
 
 import Link from "next/link";

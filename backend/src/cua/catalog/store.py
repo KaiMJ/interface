@@ -1,14 +1,11 @@
 """The capability catalog.
 
-Files on disk: `artifacts/<capability_id>.v<n>.json`. No database — read once per
-invocation, written once per discovery run, and an index would be infrastructure in
-search of a problem at this size.
+Files on disk: `artifacts/<capability_id>.v<n>.json`. No database — read once per invocation,
+written once per discovery run. Filename versioning rather than in-file only, so old versions
+are retained by construction.
 
-Filename versioning rather than in-file only, so old versions are retained by
-construction and a v2/v3 diff is `git diff` rather than a feature.
-
-Also the natural home for the stretch-goal capability interface: `list()` plus
-`Capability.inputs`/`outputs` is already a tool catalog an agent can call by name.
+Also the agent-facing capability interface: `list()` plus `Capability.inputs`/`outputs` is a
+tool catalog an agent can call by name.
 """
 
 from __future__ import annotations
@@ -22,9 +19,8 @@ from ..schema import Capability, InputSpec, Status, ValueType
 
 _FILENAME = re.compile(r"^(?P<id>.+)\.v(?P<version>\d+)\.json$")
 
-# ValueType -> JSON Schema, for the tool manifest. Small and explicit rather than
-# generated, because this is a published contract: a silent change in how a type
-# is exposed would change what calling agents send us.
+# ValueType -> JSON Schema, for the tool manifest. Explicit rather than generated, because
+# this is a published contract: a change here changes what calling agents send.
 _JSON_TYPES: dict[ValueType, str] = {
     ValueType.STRING: "string",
     ValueType.NUMBER: "number",
@@ -46,9 +42,8 @@ class Catalog:
     def save(self, cap: Capability) -> Path:
         """Write a new version. Never overwrites an existing (id, version).
 
-        A discovery run that re-records an existing capability produces v(n+1) in
-        `draft`, leaving the approved version in place. Re-recording must not be
-        able to silently replace what production is calling.
+        A discovery run that re-records an existing capability produces v(n+1) in `draft`,
+        leaving the approved version production is calling in place.
         """
         self.root.mkdir(parents=True, exist_ok=True)
         path = self._path(cap.id, cap.version)
@@ -82,9 +77,8 @@ class Catalog:
     def list(
         self, status: Status | None = None, app: str | None = None
     ) -> Sequence[Capability]:
-        # Sequence, not list: a catalog listing is read-only, and naming a method
-        # `list` shadows the builtin inside this class body -- so the annotation
-        # has to avoid it anyway.
+        # Sequence, not list: a catalog listing is read-only, and `list` is shadowed inside
+        # this class body anyway.
         caps = [Capability.model_validate_json(p.read_text()) for p in self._files()]
         caps.sort(key=lambda c: (c.app.name, c.id, c.version))
         return [
@@ -96,16 +90,14 @@ class Catalog:
     def approve(self, capability_id: str, version: int, approver: str) -> Capability:
         """draft -> approved.
 
-        The gate on unattended replay. Synthesis proposes outputs, checkpoints and
-        business outcomes with a model's help, and that is exactly the part that
-        should not go to production unreviewed. Putting the human here is more
-        honest than pretending synthesis is reliable.
+        The gate on unattended replay: synthesis proposes outputs, checkpoints and business
+        outcomes with a model's help, and that is the part that should not reach production
+        unreviewed.
         """
         cap = self.load(capability_id, version)
         approved = cap.model_copy(update={"status": Status.APPROVED})
-        # Rewriting in place is the one legitimate overwrite: the flow did not
-        # change, a human vouched for it. The approver is recorded in the run log,
-        # not in the artifact, so the artifact stays a description of the flow.
+        # The one legitimate overwrite: the flow did not change, a human vouched for it. The
+        # approver goes in the run log, so the artifact stays a description of the flow.
         self._path(capability_id, version).write_text(
             approved.model_dump_json(indent=2, exclude_none=True)
         )
@@ -114,22 +106,19 @@ class Catalog:
     def tool_manifest(self, app: str | None = None) -> Sequence[dict[str, object]]:
         """Approved capabilities as function-calling tool definitions.
 
-        The agent-facing surface: name, description, JSON-schema inputs derived
-        from `InputSpec`, and the declared output shape plus business outcomes so
-        a calling agent knows every result it can receive.
+        The agent-facing surface: name, description, JSON-schema inputs derived from
+        `InputSpec`, and the declared output shape plus business outcomes, so a calling agent
+        knows every result it can receive.
 
-        Only approved capabilities appear. A draft is a proposal a human has not
-        vouched for, and an agent that could call one would be running unreviewed
-        automation against member accounts.
+        Only approved capabilities appear: a draft is a proposal no human has vouched for.
         """
         return [
             {
                 "name": cap.id,
                 "description": cap.description or cap.goal,
                 "version": cap.version,
-                # Which application this drives. A calling agent holding tools for
-                # several back-office systems needs it to disambiguate; it is also
-                # the only field here that says where the guardrails came from.
+                # Which application this drives: an agent holding tools for several
+                # back-office systems needs it, and it names where the guardrails came from.
                 "app": cap.app.name,
                 "parameters": {
                     "type": "object",
@@ -146,11 +135,17 @@ class Catalog:
                         for o in cap.outputs
                     },
                 },
-                # Declared alternatives, so a calling agent can branch on "no such
-                # member" instead of treating it as a failed call.
+                # Declared alternatives, so a calling agent can branch on "no such member"
+                # instead of treating it as a failed call.
+                #
+                # Verified ones only: an undemonstrated outcome is a guess at the application's
+                # wording, and advertising it invites an agent to branch on a result that can
+                # never arrive. It stays visible in the catalog and the artifact, for a
+                # reviewer to demonstrate.
                 "outcomes": [
                     {"name": o.name, "description": o.description}
                     for o in cap.business_outcomes
+                    if o.verified
                 ],
             }
             for cap in self.list(status=Status.APPROVED, app=app)
@@ -188,8 +183,8 @@ def _json_schema(spec: InputSpec) -> dict[str, object]:
 
 
 def write_manifest(catalog: Catalog, path: Path) -> Path:
-    """Dump the manifest to disk — the stretch-goal agent-facing surface, as a
-    file an agent framework can load without running this service."""
+    """Dump the manifest to disk, as a file an agent framework can load without running this
+    service."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(list(catalog.tool_manifest()), indent=2))
     return path

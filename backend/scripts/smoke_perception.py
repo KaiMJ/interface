@@ -5,13 +5,12 @@ Run inside the desktop container:
 
     docker compose exec desktop python3 scripts/smoke_perception.py
 
-This deliberately does NOT import `cua.perception` — those modules are stubs. It
-exercises the two external dependencies directly, because they are the ones that
-can fail in ways our code cannot fix: wrong weights format, a CUDA/driver
-mismatch, an incompatible paddle pairing, a model that silently downloads to a
-path that is not persisted.
+This deliberately does NOT import `cua.perception`. It exercises the two external
+dependencies directly, since they fail in ways our code cannot fix: wrong weights format, a
+CUDA/driver mismatch, an incompatible paddle pairing, a model downloading to a path that is
+not persisted.
 
-Checks, in order of how expensive they are to discover later:
+Checks:
 
   1. torch imports, and reports whether the GPU is actually visible in here
   2. the OmniParser icon_detect checkpoint loads as a YOLO model
@@ -57,21 +56,17 @@ try:
     if torch.cuda.is_available():
         ok(f"cuda visible: {torch.cuda.get_device_name(0)}")
     else:
-        # Not fatal. The detector falls back to CPU; it is just slower per
-        # observation. But if the compose GPU reservation is present and this
-        # still says no, the container toolkit is not wired up and it is worth
-        # knowing now rather than wondering why every run is sluggish.
+        # Not fatal: the detector falls back to CPU, just slower. If the compose GPU
+        # reservation is present and this still says no, the container toolkit is not wired up.
         print("  warn  no CUDA device visible — detector will run on CPU")
 except Exception as e:  # noqa: BLE001
     bad(f"torch import failed: {e!r}")
 
 # ---------------------------------------------------------------------------
 step("OmniParser icon_detect weights")
-# Fetched from HuggingFace into HF_HOME (=/models/hf, bind-mounted) on first use.
-# NOT the local weights/icon_detect_v3/model.pt: that file is a TorchScript
-# archive of the same network, which ultralytics refuses to load and which would
-# require hand-written decode + NMS. The upstream release is a real ultralytics
-# checkpoint, so the whole postprocessing stage comes for free.
+# Fetched from HuggingFace into HF_HOME (=/models/hf, bind-mounted) on first use. NOT the
+# local weights/icon_detect_v3/model.pt: that is a TorchScript archive ultralytics refuses to
+# load, and decoding it would mean hand-writing decode + NMS.
 detector = None
 try:
     from huggingface_hub import hf_hub_download

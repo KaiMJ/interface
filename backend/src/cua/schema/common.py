@@ -1,9 +1,8 @@
 """Primitives shared by artifacts, observations, and results.
 
-Coordinates are normalized to 0..1 of the recording viewport, and the viewport is
-recorded alongside them. Absolute pixels would make an artifact unreadable to a
-human reviewer and unusable at any other geometry; normalized coordinates plus a
-declared viewport keep both properties.
+Coordinates are normalized to 0..1 of the recording viewport, which is recorded alongside
+them. Absolute pixels would make an artifact unreadable to a reviewer and unusable at any
+other geometry.
 """
 
 from __future__ import annotations
@@ -44,11 +43,11 @@ class Bbox(Frozen):
         return self.x <= p.x <= self.x + self.w and self.y <= p.y <= self.y + self.h
 
     def contained_by(self, other: Bbox) -> float:
-        """Fraction of *this* box that lies inside `other`. 1.0 means enclosed.
+        """Fraction of *this* box that lies inside `other`; 1.0 means enclosed.
 
-        Distinct from `iou` on purpose: a text line inside a large button has a
-        tiny IoU with it and a containment of 1.0, and it is containment that
-        decides whether the line is that button's label.
+        Distinct from `iou` on purpose: a text line inside a large button has a tiny IoU with
+        it and a containment of 1.0, and containment is what decides whether the line is that
+        button's label.
         """
         ix = max(0.0, min(self.x + self.w, other.x + other.w) - max(self.x, other.x))
         iy = max(0.0, min(self.y + self.h, other.y + other.h) - max(self.y, other.y))
@@ -71,9 +70,8 @@ class Viewport(Frozen):
 class ValueType(str, Enum):
     """Types an artifact's inputs and outputs may declare.
 
-    Deliberately small. There is no `secret_ref` type: secrets are resolved in the
-    action layer from the environment and never travel through a typed field that
-    something might serialize.
+    Deliberately small, and with no `secret_ref`: secrets are resolved in the action layer from
+    the environment, never travelling through a typed field something might serialize.
     """
 
     STRING = "string"
@@ -87,9 +85,8 @@ class ValueType(str, Enum):
 class Normalizer(str, Enum):
     """Text transforms applied before any comparison.
 
-    Recorded in the artifact rather than hardcoded in the engine, so that a replay
-    compares strings exactly the way the recording did. `$1,234.56` vs `1234.56`
-    and `ACME Corp...` vs `ACME Corporation` are the everyday cases.
+    Recorded in the artifact rather than hardcoded in the engine, so replay compares strings
+    exactly the way the recording did. `$1,234.56` vs `1234.56` is the everyday case.
     """
 
     CASEFOLD = "casefold"
@@ -108,16 +105,14 @@ class MatchMode(str, Enum):
 
 
 class Risk(str, Enum):
-    """Whether an action can be taken back.
-
-    Classifiable only because every step carries a declared intent. `click(0.42,
-    0.71)` cannot be judged reversible or not; "submit the transfer" can.
-    """
+    """Whether an action can be taken back. Classifiable only because every step carries a
+    declared intent: `click(0.42, 0.71)` cannot be judged reversible, "submit the transfer"
+    can."""
 
     SAFE = "safe"          # read-only or trivially reversible: navigate, read, type
     RISKY = "risky"        # mutates state at the institution: submit, confirm, delete
 
 
-# A string that may contain `{{param}}` placeholders resolved from the caller's
-# inputs at replay time. Kept as a plain str so artifacts stay readable as JSON.
+# A string that may contain `{{param}}` placeholders resolved from the caller's inputs at
+# replay time. A plain str so artifacts stay readable as JSON.
 Template = str

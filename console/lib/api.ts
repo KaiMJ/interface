@@ -1,13 +1,4 @@
-/**
- * Client for the automation control plane.
- *
- * Every read degrades rather than throws: the console is most useful precisely when
- * the backend is unhealthy, so a fetch failure has to render as "backend
- * unreachable" and not as a blank page. Anything the operator *initiated* — starting
- * a run, taking control, approving — goes through `send` instead and returns the
- * failure, because a silent null there means they believe they did something they
- * did not do.
- */
+/** Client for the automation control plane. */
 
 export const API = process.env.NEXT_PUBLIC_CUA_API ?? "http://localhost:8000";
 export const NOVNC = process.env.NEXT_PUBLIC_NOVNC_URL ?? "http://localhost:6080";
@@ -19,7 +10,6 @@ export type RunStatus =
   | "failure"
   | "running";
 
-/** What the guardrail decided about one step, allow or deny alike. */
 export interface PolicyDecision {
   action: string;
   declared_risk: string;
@@ -27,7 +17,6 @@ export interface PolicyDecision {
   disposition: string;
   rule?: string | null;
   detail?: string | null;
-  /** Set when policy raised a step the recording declared safe. */
   promoted_from?: string | null;
   intent: string;
 }
@@ -40,7 +29,6 @@ export interface TierAttempt {
   detail?: string | null;
 }
 
-/** The resolver ladder walk for one target — every rung, not just the winner. */
 export interface ResolutionTrace {
   target_desc: string;
   anchor_text?: string | null;
@@ -53,40 +41,29 @@ export interface ResolutionTrace {
   point?: [number, number] | null;
 }
 
-/** What the model was shown and what it chose. Discovery only. */
 export interface ModelTurn {
   call: string;
-  /** What the model said alongside the call — its own reasoning, verbatim. */
   text?: string;
-  /** The chain of thought behind the call. Usually the only populated one of the
-   *  two: a forced tool call leaves `text` empty on a reasoning model. */
   reasoning?: string;
-  /** What the model was shown for this step: goal, inputs, the candidate list off
-   *  this frame, and the run's history. The system prompt is per-run, not here. */
   prompt?: string;
-  /** The tool call's arguments exactly as emitted. */
   arguments?: Record<string, unknown>;
   intent: string;
   expect?: string | null;
   mark?: number | null;
   element_id?: string | null;
   element_label?: string | null;
-  /** What became a checkpoint. Absent beside a present `expect` is a refutation:
-   *  an assertion true of the recorded record and false for the next one. */
   expect_recorded?: string | null;
   anchor_proposed?: string | null;
   anchor_recorded?: string | null;
-  candidates_shown: number;
-  candidates_truncated: number;
+  candidates_marked: number;
+  candidates_listed: number;
   latency_ms: number;
   verdict: string;
   detail?: string | null;
 }
 
-/** Where a step's wall clock went. Sums to slightly less than `duration_ms`. */
 export interface Phases {
   observe_ms: number;
-  /** How many full perceptions this step paid for. Two used to be the floor. */
   observations: number;
   resolve_ms: number;
   act_ms: number;
@@ -98,17 +75,12 @@ export interface StepRow {
   intent: string;
   status: string;
   resolution: string;
-  /** pixels | text | unset — the other free drift signal beside `resolution`. */
   settled_by?: string;
   duration_ms: number;
-  /** How many times the step was executed. >1 means a declared retry or a
-   *  recovery that cleared while the checkpoint still had not held. */
   attempts?: number;
   expected?: string | null;
   observed?: string | null;
   recovery_applied?: string | null;
-  /** What the engine did that the artifact does not say: an interstitial cleared
-   *  before acting, a wait for a screen, a URL rebased onto this deployment. */
   note?: string | null;
   policy?: PolicyDecision | null;
   resolution_trace?: ResolutionTrace | null;
@@ -116,12 +88,10 @@ export interface StepRow {
   model_turn?: ModelTurn | null;
 }
 
-/** What `/runs` lists. Enough to choose one; not enough to render it. */
 export interface RunSummary {
   run_id: string;
   kind: "discovery" | "replay";
   status: RunStatus;
-  /** Which application this run drove. One policy file per app; see /policy. */
   app?: string | null;
   capability?: string | null;
   goal?: string | null;
@@ -138,7 +108,6 @@ export interface Bbox {
   h: number;
 }
 
-/** What `/runs/{id}` returns: a ReplayResult or a DiscoveryResult. */
 export interface Run {
   run_id: string;
   status: RunStatus;
@@ -155,8 +124,7 @@ export interface Run {
     message: string;
     expected?: string | null;
     observed?: string | null;
-    /** Normalised 0..1 box of the thing that went wrong, when we know where it is. */
-    region?: Bbox | null;
+  region?: Bbox | null;
   } | null;
   intervention_id?: string | null;
   duration_ms?: number;
@@ -164,7 +132,6 @@ export interface Run {
   finished_at?: string;
   stop_reason?: string;
   capability_ref?: string | null;
-  /** Discovery only: what it cost. */
   model?: string;
   llm_calls?: number;
   steps_taken?: number;
@@ -173,11 +140,8 @@ export interface Run {
 
 export interface EvidenceStep {
   step_id: number;
-  /** The screen the step acted on — the one its target was resolved against. */
   frame: string;
-  /** What the action produced. The checkpoint was judged on this one. */
   after: string | null;
-  /** The numbered overlay the model was shown. Absent on replay runs. */
   annotated: string | null;
   observation: string | null;
 }
@@ -212,7 +176,6 @@ export interface Evidence {
   synthesis: Record<string, unknown> | null;
 }
 
-/** One perceive() cycle, as written to `observations/step-NN.json`. */
 export interface Observation {
   screenshot_path: string;
   viewport: { width: number; height: number };
@@ -335,10 +298,8 @@ async function call<T>(path: string, init?: RequestInit): Promise<T | null> {
 }
 
 /**
- * A call the operator made on purpose. Failures come back, they do not vanish.
- *
- * The control plane answers 409 when a run already holds the session and 404 for
- * an unknown capability; both are things the person who just clicked needs told.
+ * A call the operator made on purpose. Failures come back rather than degrading:
+ * a 409 for a session already held, a 404 for an unknown capability.
  */
 async function send<T>(path: string, init?: RequestInit): Promise<T | Failed> {
   try {
@@ -440,7 +401,7 @@ export const api = {
 
 /**
  * The run is waiting on the model for this step. Not evidence — it describes work
- * that has not happened yet, and the step whose id it carries is what retires it.
+ * that has not happened yet — and the step whose id it carries retires it.
  */
 export interface Thinking {
   step_id: number;
@@ -451,11 +412,10 @@ export interface Thinking {
 /**
  * Tail a run's evidence as it is written.
  *
- * The stream reads the run's own `steps.jsonl` and `run.json` server-side, which
- * is why it works for a run started from the CLI as well as one started here —
- * and why what the console shows and what the audit trail says cannot diverge.
- * Polling remains as the fallback: EventSource does not report why it failed, and
- * a console that goes blank when a proxy buffers SSE is worse than a slow one.
+ * The stream reads the run's own `steps.jsonl` and `run.json` server-side, so it
+ * works for a CLI-started run and cannot diverge from the audit trail. Polling
+ * stays as the fallback: EventSource does not report why it failed, and a proxy
+ * that buffers SSE would otherwise leave the console blank.
  */
 export function runEvents(
   runId: string,

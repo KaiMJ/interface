@@ -1,15 +1,14 @@
 "use client";
 
 /**
- * The live session, streamed from the automation container's X display. Not a mock
- * of the handoff — the same pixels the agent is driving, and `viewOnly` is the
- * control token made visible: true while the automation holds control, so an
- * operator's clicks go nowhere rather than racing it on a live banking screen;
- * false once they take over, reaching the same Chromium process and the same
- * half-filled form.
+ * The live session, streamed from the automation container's X display: the same pixels
+ * the agent is driving. `viewOnly` is the control token made visible — true while the
+ * automation holds control, so an operator's clicks go nowhere rather than racing it;
+ * false once they take over, reaching the same Chromium process and the same half-filled
+ * form.
  *
- * Toggling the property rather than reconnecting makes clear that nothing about the
- * session changed — only who may touch it.
+ * Toggled rather than reconnected, because nothing about the session changed — only who
+ * may touch it.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -29,10 +28,9 @@ export function NoVncScreen({
   const host = useRef<HTMLDivElement>(null);
   const rfb = useRef<RFBType | null>(null);
   const [status, setStatus] = useState<Status>("connecting");
-  // Bumping this re-runs the connect effect. A dropped VNC used to be permanent:
-  // the panel froze on its last frame and every run after that looked like an
-  // automation that had stopped moving. The session outlives any one run by
-  // design, so the view of it has to outlive a network blip.
+  // Bumping this re-runs the connect effect. Without it a dropped VNC is permanent and
+  // the panel freezes on its last frame; the session outlives any one run, so the view
+  // of it has to outlive a network blip.
   const [attempt, setAttempt] = useState(0);
 
   const report = useCallback(
@@ -79,11 +77,9 @@ export function NoVncScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, attempt]);
 
-  // Retry on its own, slowly. The common causes are a restarted container and a
-  // websocket dropped while nothing was watching, and both fix themselves — so
-  // the panel should recover without anyone reloading the page. Three seconds is
-  // chosen to be unobtrusive rather than fast: nothing is lost by reconnecting a
-  // moment late, because the session is still there.
+  // Retry on its own, slowly. The common causes — a restarted container, a websocket
+  // dropped while nothing was watching — fix themselves, and nothing is lost by
+  // reconnecting a moment late.
   useEffect(() => {
     if (status === "connected" || status === "connecting") return;
     const t = setTimeout(() => setAttempt((n) => n + 1), 3000);

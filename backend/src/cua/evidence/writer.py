@@ -36,16 +36,13 @@ class EvidenceWriter:
     ) -> Evidence:
         """Persist a screenshot (+ optional overlay) and the observation JSON.
 
-        Copied out of the working directory rather than referenced in place: the
-        perceiver reuses one path per run for the live frame, so a reference would
-        point at whatever the screen looked like several steps later. Evidence
-        that changes after the fact is not evidence.
+        Copied out of the working directory rather than referenced in place: the perceiver
+        reuses one path per run for the live frame, so a reference would point at whatever the
+        screen looked like several steps later.
 
-        `after=True` writes the post-action frame under its own name instead of
-        overwriting the one the step acted on. Those are different pictures with
-        different meanings — the target was resolved against the first and the
-        checkpoint evaluated against the second — and writing both to one path
-        loses whichever the step cared about.
+        `after=True` writes the post-action frame under its own name instead of overwriting the
+        one the step acted on: the target was resolved against the first and the checkpoint
+        evaluated against the second.
         """
         self.open()
         name = f"step-{step_id:02d}" + (".after" if after else "")
@@ -82,11 +79,8 @@ class EvidenceWriter:
             f.write(result.model_dump_json() + "\n")
 
     def result(self, result: Any) -> None:
-        """Rewrite run.json. Called after every step, not only at the end.
-
-        A run that dies at step 9 is exactly the run whose evidence matters most,
-        so the file has to be current *before* the step that might not return.
-        """
+        """Rewrite run.json. Called after every step, not only at the end, so the file is
+        current before the step that might not return."""
         self.open()
         (self.dir / "run.json").write_text(result.model_dump_json(indent=2))
 
@@ -112,8 +106,7 @@ class EvidenceWriter:
     def note(self, name: str, payload: dict[str, Any]) -> Path:
         """Anything else worth keeping — the model transcript, a policy denial.
 
-        Deliberately generic: the alternative is a method per artifact type and a
-        writer edited every time a run learns to record something new.
+        Deliberately generic, so recording something new does not mean editing this writer.
         """
         self.open()
         path = self.dir / f"{name}.json"

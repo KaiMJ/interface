@@ -1,13 +1,10 @@
 """The discovery loop and artifact synthesis.
 
-The model is scripted here, so what is under test is everything around it: that a
-mark becomes a typed step, that a step whose expectation did not come true is
-discarded rather than recorded, that policy is enforced on this path too, and that
-what synthesis emits is an artifact the replay engine can actually execute.
-
-The last test is the one that matters most. It records a capability with a
-scripted model and then replays it through the real engine — the whole thread,
-discover -> synthesize -> replay, with no browser and no API key.
+The model is scripted, so what is under test is everything around it: that a mark becomes a
+typed step, that a step whose expectation did not come true is discarded rather than recorded,
+that policy is enforced on this path too, and that what synthesis emits is an artifact the
+replay engine can execute — the whole thread, discover -> synthesize -> replay, with no
+browser and no API key.
 """
 
 from __future__ import annotations
@@ -54,11 +51,9 @@ INPUTS = {"member_id": "12345", "account_nickname": "Primary Savings"}
 class ApprovingOperator(RunControl):
     """A control token whose human always says yes, immediately.
 
-    Discovery now parks on a risky action exactly as replay does, so without an
-    operator every test whose intent trips the policy's mutation-verb promotion
-    would deadlock. These tests are about the loop, not about the handoff — the
-    parking itself is asserted separately, below, with a real `RunControl` and a
-    real await.
+    Discovery parks on a risky action exactly as replay does, so without an operator every
+    test whose intent trips the policy's mutation-verb promotion would deadlock. The parking
+    itself is asserted separately, below, with a real `RunControl`.
     """
 
     async def escalate(self, req: Any) -> Any:
@@ -161,8 +156,7 @@ async def test_a_step_whose_expectation_failed_is_discarded_and_explained(
     # navigation survives.
     assert result.steps_taken == 1
     assert result.status is RunStatus.ESCALATED
-    # And the model was told what is actually there, which is what lets it adapt
-    # rather than repeat itself.
+    # And the model was told what is actually there, so it adapts rather than repeating.
     assert "DISCARDED" in llm.prompts[-1]
     assert "Member Profile" in llm.prompts[-1]
 
@@ -170,9 +164,8 @@ async def test_a_step_whose_expectation_failed_is_discarded_and_explained(
 async def test_an_action_that_changed_the_screen_is_kept_without_its_checkpoint(
     tmp_path: Path,
 ) -> None:
-    # Wrong about *what* would appear, not about whether the action did something.
-    # Dropping it leaves the recording missing a state transition the flow made, and
-    # replay then starts from a screen it never reaches.
+    # Wrong about *what* would appear, not about whether the action did something. Dropping
+    # it would leave the recording missing a state transition the flow made.
     loop, _, llm, _control = build(
         tmp_path,
         [MEMBER, ACCOUNTS],
@@ -197,8 +190,8 @@ async def test_an_action_that_changed_the_screen_is_kept_without_its_checkpoint(
     assert result.status is RunStatus.SUCCESS
     assert result.steps_taken == 2
     recorded = loop.state.steps[1]
-    # Kept, so the flow reproduces; checkpointless, because an assertion the run
-    # could not verify has no business in an artifact; and flagged for review.
+    # Kept, so the flow reproduces; checkpointless, because the run could not verify the
+    # assertion; and flagged for review.
     assert recorded.checkpoint is None
     assert "Review before approving" in (recorded.note or "")
     assert "you expected" in llm.prompts[-1]
@@ -263,8 +256,8 @@ async def test_a_stuck_run_escalates_before_the_step_budget_runs_out(tmp_path: P
 
     assert result.status is RunStatus.ESCALATED
     assert "not making progress" in result.stop_reason or "repeated" in result.stop_reason
-    # The point of detecting it early: an operator gets told what went wrong
-    # instead of receiving twenty near-identical screenshots at max-steps.
+    # Detected early, so an operator is told what went wrong rather than handed twenty
+    # near-identical screenshots at max-steps.
     assert result.steps_taken < 6
 
 
@@ -284,8 +277,7 @@ def test_parameterize_substitutes_declared_inputs_longest_first() -> None:
     rewritten, specs = parameterize(steps, {"member_id": "12345", "branch": "123"})
 
     assert rewritten[0].value == "http://targetapp:8080/members/{{member_id}}"
-    # `branch` never appeared, so it is not a parameter of this flow. Declaring it
-    # would tell a calling agent it can steer something it cannot.
+    # `branch` never appeared, so it is not a parameter of this flow.
     assert [s.name for s in specs] == ["member_id"]
     assert specs[0].type is ValueType.STRING
 
@@ -295,7 +287,7 @@ def test_prune_drops_a_navigation_immediately_superseded() -> None:
         ActStep(id=1, action=Primitive.NAVIGATE, value="http://targetapp:8080/members"),
         ActStep(id=2, action=Primitive.NAVIGATE, value="http://targetapp:8080/members/12345"),
     ]
-    assert [s.value for s in prune(steps, [])] == ["http://targetapp:8080/members/12345"]
+    assert [s.value for s in prune(steps)] == ["http://targetapp:8080/members/12345"]
 
 
 async def test_synthesis_rejects_a_success_phrase_that_is_not_on_the_final_screen(
@@ -327,8 +319,8 @@ async def test_synthesis_rejects_a_success_phrase_that_is_not_on_the_final_scree
 async def test_a_recorded_capability_replays(tmp_path: Path) -> None:
     """The whole thread: a scripted run, synthesized, then executed by the engine.
 
-    No browser, no key, no hand-written artifact — if the shape discovery emits
-    were not the shape replay consumes, this is where it would show.
+    No browser, no key, no hand-written artifact, so a mismatch between what discovery emits
+    and what replay consumes shows up here.
     """
     loop, _, llm, _control = build(
         tmp_path,
@@ -469,11 +461,9 @@ async def test_a_recorded_capability_reports_the_outcome_it_declared(
 async def test_a_recording_declares_no_screens_it_cannot_justify(tmp_path: Path) -> None:
     """One run cannot tell an application's chrome from one record's data.
 
-    A first version derived screens from a single run by taking the longest line
-    unique to each frame. It named the member profile `riverside_004` — after the
-    member's branch — which identifies the record rather than the screen, so the
-    capability would have refused to run for anybody else. Declaring nothing is
-    the honest answer; see `synthesize` for where derivation belongs.
+    Deriving a screen name from the longest line unique to each frame names the member profile
+    after the member's branch, which identifies the record rather than the screen. Declaring
+    nothing is the honest answer; see `synthesize` for where derivation belongs.
     """
     loop, _, llm, _control = build(
         tmp_path,
@@ -534,9 +524,8 @@ async def test_a_step_on_the_wrong_screen_says_where_it_is(tmp_path: Path) -> No
         success=Checkpoint(kind=CheckKind.TEXT_PRESENT, value="Member Profile", timeout_ms=50),
     )
 
-    # The session timed out and the app bounced to sign-on. Without the screen
-    # claim this reads "the target was not found", which sends an operator hunting
-    # for a layout change that never happened.
+    # The session timed out and the app bounced to sign-on. Without the screen claim this
+    # reads "the target was not found", which is a different fix.
     perceiver = FakePerceiver([frame("Meridian Credit Union", "Staff Sign-On", "User ID")])
     engine = ReplayEngine(
         perceiver=perceiver,
@@ -574,12 +563,8 @@ async def _until_parked(task: Any, control: RunControl) -> None:
 async def test_discovery_parks_on_a_risky_action_and_proceeds_when_approved(
     tmp_path: Path,
 ) -> None:
-    """A risky action is risky whoever is driving.
-
-    Replay parks before a risky step; so does discovery. Letting a recording
-    session submit a transfer because a human is notionally watching a VNC
-    window is a guardrail that binds only the path that needs it least.
-    """
+    """A risky action is risky whoever is driving: replay parks before a risky step, and so
+    does discovery."""
     loop, driver, llm, _ = build(
         tmp_path,
         [MEMBER, ACCOUNTS],
@@ -622,11 +607,8 @@ async def test_discovery_parks_on_a_risky_action_and_proceeds_when_approved(
 
 
 async def test_a_declined_risky_action_ends_the_recording(tmp_path: Path) -> None:
-    """Abort is not "skip the step" — the recording stops.
-
-    A capability recorded around a step a human refused would be a capability
-    that omits the one action they objected to.
-    """
+    """Abort is not "skip the step" — the recording stops, rather than producing a capability
+    that omits the action a human refused."""
     loop, driver, llm, _ = build(
         tmp_path,
         [MEMBER, ACCOUNTS],
@@ -661,11 +643,8 @@ async def test_a_declined_risky_action_ends_the_recording(tmp_path: Path) -> Non
 
 
 async def test_a_loop_with_no_operator_refuses_rather_than_proceeding(tmp_path: Path) -> None:
-    """"Nobody can be asked" reads as no, not as yes.
-
-    A DiscoveryLoop built without a control token cannot raise an intervention.
-    The safe reading is that the risky action does not happen.
-    """
+    """"Nobody can be asked" reads as no: a DiscoveryLoop built without a control token cannot
+    raise an intervention, so the risky action does not happen."""
     loop, driver, llm, _ = build(
         tmp_path,
         [MEMBER, ACCOUNTS],
@@ -725,10 +704,8 @@ def _anchor(anchor: str | None, obs: Observation = OPTION_FRAME, mark: str = "e1
 def test_a_declared_input_beats_the_rest_of_the_cell() -> None:
     """The floor, with no model involved at all.
 
-    The caller named `29883` as an input for this run, which is the caller
-    saying "this is the thing that varies per invocation" — i.e. the thing that
-    identifies the record. Recording the balance beside it would tie the
-    capability to one moment.
+    The caller named `29883` as an input for this run, which is what identifies the record.
+    Recording the balance beside it would tie the capability to one moment.
     """
     assert _anchor(None) == "29883"
 
@@ -744,21 +721,14 @@ def test_a_model_proposal_that_matches_several_elements_is_dropped() -> None:
 
 
 def test_a_declared_input_beats_a_model_proposal_of_the_volatile_half() -> None:
-    """The case that decided the ordering.
-
-    `$4,820.19` is on the element and unique on the frame, so every check here
-    passes — "will this still be true next month" is not answerable from one
-    observation. A declared input is answerable, and it wins.
-    """
+    """The case that decides the ordering: `$4,820.19` is on the element and unique on the
+    frame, so every check here passes. A declared input is the answerable one, and it wins."""
     assert _anchor("$4,820.19") == "29883"
 
 
 def test_the_model_supplies_the_anchor_when_the_code_has_nothing() -> None:
-    """No declared input appears in this text, so the proposal is the only source.
-
-    This is the case a pure code heuristic cannot cover: the merchant name is
-    what identifies the row, and nobody declared it.
-    """
+    """No declared input appears in this text, so the model's proposal is the only source — the
+    case a pure code heuristic cannot cover."""
     obs = OPTION_FRAME.model_copy(
         update={
             "elements": (
@@ -823,13 +793,8 @@ def test_the_model_names_the_capability_when_the_name_is_usable() -> None:
 
 
 def test_a_name_carrying_a_parameter_value_is_refused() -> None:
-    """The one rejection worth making mechanically.
-
-    `12345` is what varies per invocation — it is the argument, not the flow — so
-    a capability parameterised by member id must not have a member id in its name.
-    A run that recorded it would produce an artifact whose name is a lie the second
-    time it is called.
-    """
+    """`12345` is the argument, not the flow, so a capability parameterised by member id must
+    not have a member id in its name."""
     from cua.discovery.synthesize import _name
 
     chosen, why = _name(
@@ -845,8 +810,8 @@ def test_a_name_carrying_a_parameter_value_is_refused() -> None:
 def test_an_unusable_name_falls_back_to_the_goal() -> None:
     from cua.discovery.synthesize import _name
 
-    # "!!" is the interesting one: it normalises to nothing, and the slug helper's
-    # own fallback would otherwise ship a capability literally called "capability".
+    # "!!" normalises to nothing, and the slug helper's fallback would otherwise ship a
+    # capability literally called "capability".
     for proposed in ("", "!!", "x", "Cap With Spaces And A Very Long Name" * 3):
         chosen, why = _name(proposed, {}, "read a balance")
         assert chosen == "read_a_balance", proposed
@@ -858,8 +823,7 @@ def test_the_callers_own_id_is_never_second_guessed(tmp_path: Path) -> None:
     overrides that — the refutation is for a name nobody chose."""
     from cua.discovery.synthesize import _name
 
-    # _name is not consulted at all in that path; this pins the precedence that
-    # `synthesize` implements: caller, then model, then slug.
+    # Pins the precedence `synthesize` implements: caller, then model, then slug.
     assert _name("cap_x", {}, "goal")[0] == "cap_x"
 
 
@@ -869,12 +833,8 @@ def test_the_callers_own_id_is_never_second_guessed(tmp_path: Path) -> None:
 
 
 def test_an_expectation_that_is_this_records_money_is_refused() -> None:
-    """The measured failure, in one line.
-
-    A recording of `get_account_balance` asserted `$18,204.55` at its final step.
-    Every replay for a different member navigated perfectly and then failed that
-    assertion, because the assertion was about the member it was recorded on.
-    """
+    """An amount is about the record, not the screen: asserting `$18,204.55` navigates
+    perfectly for every other member and then fails."""
     assert tools.durable_expect("$18,204.55") is None
 
 
@@ -892,12 +852,8 @@ def test_the_applications_own_words_survive() -> None:
 
 
 def test_a_declared_input_is_not_refused() -> None:
-    """Deliberately exempt, and the reason is `parameterize`.
-
-    `expect: '12345'` after typing the member id is a real check that the
-    keystrokes landed, and synthesis rewrites it to `{{member_id}}`, which is true
-    for every invocation. Refuting it would delete a working assertion.
-    """
+    """Deliberately exempt, because `parameterize` rewrites it: `expect: '12345'` after typing
+    the member id is a real check that the keystrokes landed, and becomes `{{member_id}}`."""
     assert tools.durable_expect("12345", identifiers=["12345"]) == "12345"
 
 
@@ -908,12 +864,8 @@ def test_an_expectation_the_run_already_read_off_the_screen_is_refused() -> None
 
 
 def test_a_name_survives_and_that_is_the_known_residual() -> None:
-    """Stated rather than hidden.
-
-    `Marcus Webb` identifies one record and one frame cannot tell it from a
-    heading. What catches it is the reviewer at `approve`, and a second run with
-    different inputs — not this function.
-    """
+    """The residual, stated: `Marcus Webb` identifies one record and one frame cannot tell it
+    from a heading. The reviewer at `approve` catches it, not this function."""
     assert tools.durable_expect("Marcus Webb") == "Marcus Webb"
 
 
@@ -922,10 +874,8 @@ async def test_a_step_keeps_its_action_and_loses_only_the_bad_expectation(
 ) -> None:
     """Refuted, not rejected — and the model is told, mid-run.
 
-    The click worked and the balance really was on the next screen, so discarding
-    the step would lose a state transition the flow made. What is dropped is the
-    assertion, and the model hears about it in time to choose better on the step
-    after this one.
+    The click worked and the balance really was on the next screen, so discarding the step
+    would lose a state transition. What is dropped is the assertion.
     """
     loop, _, llm, _control = build(
         tmp_path,
@@ -949,8 +899,8 @@ async def test_a_step_keeps_its_action_and_loses_only_the_bad_expectation(
     # Kept: navigate, then the click.
     assert result.steps_taken == 2
     assert loop.state.steps[1].checkpoint is None
-    # Both halves on the record, so a reviewer sees the refutation and not just a
-    # step that happens to have no checkpoint.
+    # Both halves on the record, so a reviewer sees the refutation rather than a step that
+    # happens to have no checkpoint.
     turn = result.steps[-1].model_turn
     assert turn is not None
     assert turn.expect == "$18,204.55"
@@ -974,13 +924,9 @@ def _find(tool_name: str, **extra: Any) -> Any:
 
 
 def test_reading_a_row_cannot_carry_an_expectation_at_all() -> None:
-    """The structural half of the fix.
-
-    Extraction does not change the screen, so "what will be on screen after this"
-    has no answer but the value just read. The field is absent from the tool rather
-    than described better, which is what makes it unavailable to a model that has
-    not read the description.
-    """
+    """Extraction does not change the screen, so "what will be on screen after this" has no
+    answer but the value just read. The field is absent from the tool, not merely
+    discouraged."""
     schemas = {t["function"]["name"]: t["function"]["parameters"] for t in tools.TOOLS}
     assert "expect" not in schemas["find_and_extract"]["properties"]
     assert "expect" in schemas["find_and_click"]["properties"]
@@ -992,11 +938,8 @@ def test_reading_a_row_cannot_carry_an_expectation_at_all() -> None:
 
 
 def test_a_read_is_given_no_checkpoint_even_if_one_is_supplied() -> None:
-    """Belt to the schema's braces.
-
-    `additionalProperties: false` is the provider's job to enforce, and a provider
-    that does not would put the field back. The recorded step is the same either way.
-    """
+    """Belt to the schema's braces: `additionalProperties: false` is the provider's to enforce,
+    and the recorded step is the same either way."""
     step = _find("find_and_extract", output_name="balance", expect="$18,204.55")
     assert step.checkpoint is None
 
@@ -1010,13 +953,11 @@ def test_clicking_a_row_still_carries_one() -> None:
 
 
 def test_a_row_read_can_name_its_column() -> None:
-    """The gap that made a correct recording impossible.
+    """A recorded row-read names its column.
 
-    `on_found_extract_column` has always worked in replay — the cell is located by
-    its header and horizontal overlap, the way a person reads a table. No discovery
-    tool ever exposed it, so every recorded row-read returned the whole row, the
-    declared output type failed to coerce, and the failure surfaced at the caller
-    instead of at the read.
+    Replay locates the cell by its header and horizontal overlap; without the tool exposing it,
+    a recorded row-read returns the whole row and the declared output type fails to coerce at
+    the caller rather than at the read.
     """
     schemas = {t["function"]["name"]: t["function"]["parameters"] for t in tools.TOOLS}
     assert "column" in schemas["find_and_extract"]["properties"]
@@ -1067,9 +1008,8 @@ ACCOUNTS_GRID = Observation(
 def test_a_recorded_extraction_names_the_column_it_read() -> None:
     """Both addresses, from one frame, with no model involved.
 
-    The anchor is still the declared input — that is what makes the step
-    data-dependent — but the cell is now the one under 'Current Balance' rather than
-    the second thing to the right, which is a count of this row's filled-in cells.
+    The anchor is still the declared input, which is what makes the step data-dependent, and
+    the cell is the one under 'Current Balance' rather than a count of filled-in cells.
     """
     step = tools.to_step(
         "extract",
@@ -1085,12 +1025,8 @@ def test_a_recorded_extraction_names_the_column_it_read() -> None:
 
 
 def test_a_section_heading_is_not_mistaken_for_a_column() -> None:
-    """A row of one spans the full width, so it contains every cell on the screen.
-
-    Without a floor on what counts as a header row, the heading above the grid would
-    be named as the column for every value under it — and would then resolve to
-    whatever cell happened to be leftmost.
-    """
+    """A row of one spans the full width, so without a floor on what counts as a header row the
+    heading above the grid is named as the column for every value under it."""
     titled = Observation(
         screenshot_path="/nonexistent.png",
         viewport=Viewport(width=1440, height=900),
@@ -1115,13 +1051,11 @@ def test_a_section_heading_is_not_mistaken_for_a_column() -> None:
 
 
 def test_a_form_field_under_a_navigation_bar_records_no_column() -> None:
-    """The regression this cost a live run to find.
+    """A nav bar has the same shape as a header row.
 
-    A nav bar is a row of three or more texts sitting above everything on the page,
-    which is the same shape as a header row. The search box took "Member Search" — a
-    nav item — as its column, replay resolved the band that name spans, and the query
-    went out empty. Two things rule it out: a column addresses a cell being *read*,
-    and the element has to be in a table row itself.
+    Without a guard, a search box takes the nav item "Member Search" as its column and the
+    query goes out empty. Two things rule it out: a column addresses a cell being *read*, and
+    the element has to be in a table row itself.
     """
     page = Observation(
         screenshot_path="/nonexistent.png",

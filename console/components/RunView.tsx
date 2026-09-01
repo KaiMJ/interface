@@ -2,10 +2,9 @@
 
 /**
  * The run, as a bar and a rail. `RunBar` is one line of identity and one of result;
- * everything else a run carries is a detail you open, because you read it once per
- * run and the rest of the time it is noise between you and the frame. `StepRail`
+ * everything else a run carries opens in a drawer, being read once per run. `StepRail`
  * lays five to thirty steps out horizontally, status in the colour and detail in the
- * tooltip, so the shape of the run is legible at a glance for the cost of one row.
+ * tooltip, so the shape of the run is legible for the cost of one row.
  */
 
 import { Chip, Field, Json, StatusDot, ms, statusColor } from "./ui";

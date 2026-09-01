@@ -1,9 +1,9 @@
 """The perception seam.
 
-`observe()` is the only way anything here learns what is on the screen. Everything
-above it consumes `Observation` and knows nothing about screenshots, OmniParser,
-OCR, DOM or accessibility APIs — so a frameset app or a desktop application is a new
-`Detector`/`Screen` pair and nothing else. (REPORT §4.)
+`observe()` is the only way anything above here learns what is on screen. Callers consume
+`Observation` and know nothing about screenshots, OmniParser, OCR, DOM or accessibility APIs,
+so a frameset app or a desktop application is a new `Detector`/`Screen` pair and nothing else.
+(REPORT §4.)
 """
 
 from __future__ import annotations
@@ -25,10 +25,8 @@ class Screen(Protocol):
     """Something that can be photographed."""
 
     def capture(self, out_path: Path) -> tuple[Viewport, str]:
-        """Write a screenshot; return its geometry and a content hash.
-
-        The hash is what settle-detection compares between frames.
-        """
+        """Write a screenshot; return its geometry and the content hash settle-detection
+        compares between frames."""
         ...
 
 
@@ -51,16 +49,15 @@ class TextReader(Protocol):
 
 
 class Unsettled(Exception):
-    """Never stopped changing within the timeout. Terminal for the step, rather
-    than "carry on with the last frame": resolving against a page that is still
-    laying out is how a click lands on the wrong control."""
+    """Never stopped changing within the timeout. Terminal for the step rather than "carry on
+    with the last frame": a page still laying out resolves to the wrong control."""
 
 
 class Perceiver:
     """Composes a screen, a detector and a text reader into one observation.
 
-    Concrete rather than a protocol: capture, detect, read, merge is the same for
-    every surface. Only the three collaborators change.
+    Concrete rather than a protocol: capture, detect, read, merge is the same on every surface.
+    Only the three collaborators change.
     """
 
     def __init__(
@@ -78,12 +75,12 @@ class Perceiver:
         self.reader = reader
         self.merge_iou = merge_iou
         self.containment = containment
-        # A callable, not a value, so perception never holds a browser reference —
-        # and a desktop surface passes nothing.
+        # A callable, not a value, so perception never holds a browser reference; a desktop
+        # surface passes nothing.
         self.url_provider = url_provider
-        # Lines expected to change while nothing is happening: a countdown, a clock,
-        # a "last refreshed" stamp. Declared in app policy — what counts as motion
-        # is perception's job, which lines tick is the application's.
+        # Lines that change while nothing is happening: a countdown, a clock, a "last
+        # refreshed" stamp. Declared in app policy — what counts as motion is perception's job,
+        # which lines tick is the application's.
         self._volatile = tuple(re.compile(p) for p in volatile)
 
     def _reads_the_same(self, a: Observation, b: Observation) -> bool:
@@ -93,36 +90,32 @@ class Perceiver:
     def observe(self, out_path: Path, region: Bbox | None = None) -> Observation:
         """Capture and interpret one frame.
 
-        `region` restricts *text reading* only — detection stays full-frame,
-        because a control partly outside the region still matters for overlay
-        detection. Element ids are meaningless across observations; do not persist.
+        `region` restricts *text reading* only; detection stays full-frame, because a control
+        partly outside the region still matters for overlay detection. Element ids are
+        meaningless across observations — do not persist them.
         """
         viewport, frame_hash = self.screen.capture(out_path)
         return self._interpret(out_path, viewport, frame_hash, region)
 
     def settle(self, out_path: Path, timeout_ms: int, poll_ms: int) -> Observation:
-        """Observe repeatedly until the surface stops changing.
+        """Observe repeatedly until the surface stops changing — the deterministic replacement
+        for `sleep()`.
 
-        The deterministic replacement for `sleep()`. Two definitions of "stopped", in order:
-        two consecutive frames hash-equal, which is cheapest and fires on a static enterprise
-        screen; then two consecutive *observations* whose text and boxes match, ignoring
-        declared-volatile lines. The fallback exists because a caret, a spinner or a clock means
-        no two frames are byte-identical — identical pixels was only ever a proxy for the property
-        the resolver depends on, that the words and boxes have stopped moving.
+        Two definitions of "stopped", in order: two consecutive frames hash-equal, cheapest and
+        enough on a static enterprise screen; then two consecutive *observations* whose text and
+        boxes agree, for a caret or a spinner that keeps no two frames byte-identical.
 
-        A session countdown defeats *both*, since `14:59` to `14:58` changes pixels and text, so
-        every step would burn two timeouts on a screen that was ready throughout; `volatile`
-        excludes those lines from this comparison and from nothing else. Which test fired is
-        recorded, because settling by text on every step says something about the surface.
+        A session countdown defeats both, changing pixels *and* text on a screen that is ready.
+        `volatile` excludes those lines from this comparison and nothing else. Which test fired
+        is recorded.
         """
         deadline = monotonic_ms() + timeout_ms
         previous: str | None = None
         while True:
             viewport, frame_hash = self.screen.capture(out_path)
             if previous is not None and frame_hash == previous:
-                # Interpret the frame we already have rather than capturing a
-                # third time: detection and OCR must describe the exact image
-                # whose stability we just established.
+                # Interpret the frame we already have rather than capturing a third time:
+                # detection and OCR must describe the exact image we just proved stable.
                 return self._interpret(
                     out_path, viewport, frame_hash, None, SettledBy.PIXELS
                 )
@@ -134,14 +127,9 @@ class Perceiver:
     def peek(self, out_path: Path) -> str:
         """The frame's hash, without interpreting it.
 
-        Two orders of magnitude cheaper than an observation — a screen grab and a
-        digest against ~2.4s of text recognition on a dense page — and it answers
-        one question exactly: *has anything at all changed?*
-
-        That is enough for a poll loop. A checkpoint evaluated against a
-        byte-identical frame cannot reach a different verdict, so re-interpreting
-        one is work whose answer is already known. This is what makes waiting on a
-        slow page cost roughly nothing instead of a full perception per poll.
+        A screen grab and a digest against ~2.4s of text recognition on a dense page. Enough
+        for a poll loop: a checkpoint evaluated against a byte-identical frame cannot reach a
+        different verdict.
         """
         return self.screen.capture(out_path)[1]
 
@@ -150,9 +138,8 @@ class Perceiver:
     ) -> Observation:
         """Fallback: settled when what the frame *says* stops changing.
 
-        Bounded by the same budget again rather than by a new one, so the worst
-        case is twice the declared timeout and not an open-ended wait. Two
-        observations that agree is the minimum: one is not evidence of anything.
+        Bounded by the same budget again, so the worst case is twice the declared timeout rather
+        than an open-ended wait. Two agreeing observations is the minimum; one is not evidence.
         """
         deadline = monotonic_ms() + timeout_ms
         previous: Observation | None = None
@@ -197,15 +184,10 @@ def _reading(
 ) -> frozenset[tuple[str, int, int]]:
     """A screen reduced to what "has it stopped moving" should be asked about.
 
-    Quantized boxes rather than raw ones: OCR box edges wobble by a pixel or two
-    between identical frames, and an exact comparison would report a static page as
-    never settling — the failure the text fallback exists to avoid. Quantizing to
-    0.5% of the frame (~7px wide, ~4px tall at 1440x900) is well inside a line of
-    text and well outside that jitter.
-
-    Declared-volatile lines are dropped entirely rather than blanked, because a
-    countdown does not only change its text — it changes its width, and therefore
-    the boxes beside it.
+    Boxes are quantized, not raw: OCR edges wobble a pixel or two between identical frames, so
+    an exact comparison would report a static page as never settling. 0.5% of the frame (~7px
+    at 1440x900) is inside a line of text and outside that jitter. Volatile lines are dropped
+    entirely rather than blanked — a countdown changes its width, and the boxes beside it.
     """
     reading = set()
     for element in obs.elements:

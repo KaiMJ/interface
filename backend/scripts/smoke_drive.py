@@ -14,18 +14,17 @@ by hand so that a failure here is unambiguous:
                                                           |
                                                      verify_effect
 
-What it proves, in order of how expensive each would be to discover later:
+What it proves:
 
-  1. Chromium comes up headful on the Xvfb display and the display we photograph
-     is the page the browser is rendering — one coordinate space, no offset.
+  1. Chromium comes up headful on the Xvfb display and the display we photograph is the page
+     the browser is rendering — one coordinate space, no offset.
   2. A click resolved from *text on screen* lands on the control that text names.
-     This is the single assumption every capability rests on.
-  3. `relation=right_of` finds the input beside a label, which is how a form is
-     filled without a DOM.
+  3. `relation=right_of` finds the input beside a label, which is how a form is filled
+     without a DOM.
   4. Checkpoints see the state the actions produced.
 
-It signs in (credentials from config, never from an artifact), opens a member,
-and reads a balance the same way a recorded capability would.
+It signs in (credentials from config, never from an artifact), opens a member, and reads a
+balance the same way a recorded capability would.
 """
 
 from __future__ import annotations
@@ -38,7 +37,7 @@ from cua.action.browser import BrowserDriver
 from cua.config import settings
 from cua.perception import ElementIndex, Perceiver
 from cua.perception.detect import build_detector
-from cua.perception.ocr import OnnxTextReader
+from cua.perception.ocr import RapidOcrTextReader
 from cua.perception.screen import XDisplayScreen
 from cua.resolve import Resolver, Unresolvable, evaluate, verify_target
 from cua.runtime import build_policy, entry_url
@@ -85,13 +84,11 @@ async def main() -> int:
         screen=XDisplayScreen(cfg.display, cfg.viewport),
         detector=build_detector(
             cfg.detector,
-            cfg.models_dir,
             cfg.omniparser_repo,
             cfg.omniparser_repo_file,
             cfg.detect_conf_threshold,
         ),
-        reader=OnnxTextReader(
-            cfg.models_dir,
+        reader=RapidOcrTextReader(
             conf_threshold=cfg.ocr_conf_threshold,
             det_side_len=cfg.ocr_det_side_len,
         ),
@@ -152,9 +149,8 @@ async def main() -> int:
 
         # -------------------------------------------------------------------
         step("fill a form with no DOM")
-        # The field has no text of its own. It is found as "the thing to the right
-        # of the words User ID" — which is also how it stays findable when the
-        # form is restyled.
+        # The field has no text of its own; it is found as "the thing to the right of the
+        # words User ID", which survives a restyle.
         user_field = Target(
             intent="type the teller id",
             target_desc="the User ID input, right of its label",
@@ -206,8 +202,7 @@ async def main() -> int:
             else:
                 bad(name)
 
-        # The output an artifact would declare: the value beside the account's
-        # nickname, read positionally rather than by guessing at a number.
+        # The output an artifact would declare: the value beside the account's nickname.
         anchor = next(
             (e for e in obs.elements if "primary savings" in (e.text or "").lower()), None
         )

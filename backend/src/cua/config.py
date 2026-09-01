@@ -10,10 +10,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .schema import Viewport
 
-# The container mounts everything under /app and /data; outside it those paths do
-# not exist, so each default falls back to the same file in the repository. A default
-# that works in only one of the two places sends people to the config reference to
-# run the demo.
+# The container mounts everything under /app and /data; outside it those paths do not exist,
+# so each default falls back to the same file in the repository.
 _REPO = Path(__file__).resolve().parents[3]
 
 
@@ -26,9 +24,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CUA_", env_file=".env", extra="ignore")
 
     # --- LLM (discovery only; replay runs with all of this unset) ------------
-    # Provider-qualified model string; LiteLLM reads the credential env var
-    # directly. Deliberately not copied onto this object — a key in a pydantic
-    # model is a key that reaches a serialized settings dump.
+    # Provider-qualified model string; LiteLLM reads the credential env var directly, and it
+    # is deliberately not copied onto this object — a key here reaches a settings dump.
     #
     # Must support vision AND tool calling: screenshots in, one tool call out.
     model: str = "xai/grok-4"
@@ -42,19 +39,15 @@ class Settings(BaseSettings):
     display: str = Field(default=":1", alias="DISPLAY")
     display_width: int = 1440
     display_height: int = 900
-    # Where this deployment's install lives; empty means "whatever the policy
-    # declares". The split is the tenant seam: the policy is a fact about the vendor
-    # product and shared, the URL is a fact about one institution's install.
+    # Where this deployment's install lives; empty means "whatever the policy declares". The
+    # tenant seam: the policy describes the vendor product, this URL one institution's install.
     target_base_url: str = ""
 
     # --- Storage --------------------------------------------------------------
     artifacts_dir: Path = Field(default_factory=lambda: _path("/data/artifacts", "artifacts"))
     evidence_dir: Path = Field(default_factory=lambda: _path("/data/evidence", "evidence"))
-    models_dir: Path = Field(default_factory=lambda: _path("/models", "models"))
-    # One file per application, selected by `--app`. At the repository root beside
-    # `artifacts/` and `evidence/` — the system's data in the order it moves: what a
-    # human authors, what the system records, what it did. Mounted rather than baked
-    # into the image: a guardrail that needs a rebuild to change is one nobody edits.
+    # One file per application, selected by `--app`. Mounted rather than baked into the image,
+    # so changing a guardrail does not need a rebuild.
     policies_dir: Path = Field(
         default_factory=lambda: _path("/app/policies", "policies")
     )
@@ -66,27 +59,22 @@ class Settings(BaseSettings):
     # `omniparser` is the real one; `ocr_only` lets replay and the tests run
     # without a 2GB torch install.
     detector: str = "omniparser"
-    # Fetched from HuggingFace on first use, so the image never carries ~300MB of
-    # weights. The upstream release rather than the TorchScript archive, which
-    # ultralytics refuses to load and would mean hand-writing decode + NMS.
+    # Fetched from HuggingFace on first use, so the image never carries ~300MB of weights.
+    # The upstream release, not the TorchScript archive, which ultralytics refuses to load.
     omniparser_repo: str = "microsoft/OmniParser-v2.0"
     omniparser_repo_file: str = "icon_detect/model.pt"
     detect_conf_threshold: float = 0.30
     merge_iou_threshold: float = 0.60
-    # `onnxruntime` is the CPU default; `torch` runs the same PP-OCR models through
-    # the detector's torch install, the only way to reach the GPU — onnxruntime-gpu
-    # ships CUDA 12 wheels against this image's CUDA 13, so its provider loads and
-    # registers no device. A setting rather than a swap because OCR is ~95% of a
-    # replay's wall clock: the largest performance decision in the system, and it
-    # should be visible as one. `scripts/bench_perception.py` measures both.
+    # `onnxruntime` is the CPU default; `torch` runs the same PP-OCR models through the
+    # detector's torch install, the only way to reach the GPU — onnxruntime-gpu ships CUDA 12
+    # wheels against this image's CUDA 13 and registers no device. OCR is ~95% of a replay's
+    # wall clock; `scripts/bench_perception.py` measures both.
     ocr_engine: str = "onnxruntime"
     # Below this a line is unreadable rather than text. Anchors and checkpoints both
     # compare against OCR, so a confidently wrong string is worse than a missing one.
     ocr_conf_threshold: float = 0.50
-    # Longest side PP-OCR's detector sees. Its default downscales 1440x900 far
-    # enough to lose small coloured text — measured on the permission-denial banner,
-    # the default read it as noise and 1600 reads it exactly. ~20% per frame, and the
-    # difference between detecting a declared condition and reporting a bad checkpoint.
+    # Longest side PP-OCR's detector sees. Its default downscales 1440x900 far enough to lose
+    # small coloured text, such as the permission-denial banner. ~20% cost per frame.
     ocr_det_side_len: int = 1600
 
     # --- Determinism ----------------------------------------------------------
@@ -108,9 +96,8 @@ class Settings(BaseSettings):
     def policy_path(self, app: str | None = None) -> Path:
         """The guardrail file for one application.
 
-        Raises rather than falling back to a default policy: running an app under
-        another app's allowlist is the one configuration mistake here that could
-        let an agent act somewhere it was never permitted.
+        Raises rather than falling back to a default policy: running an app under another
+        app's allowlist would let an agent act somewhere it was never permitted.
         """
         name = app or self.default_app
         path = self.policies_dir / f"{name}.yaml"

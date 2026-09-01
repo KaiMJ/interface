@@ -19,15 +19,10 @@ def _area(b: Bbox) -> float:
 def _labels(text: Bbox, control: Bbox, containment: float) -> bool:
     """Does this text line describe this control?
 
-    Two cases, and the second one is not a nicety — it is the common case on real
-    screens. A detector trained on pixels draws a box around the glyphs; OCR draws
-    one around the line including its padding. Measured on the target app's "View"
-    buttons: detector 29x16, OCR 41x23, containment of text-in-control only 0.49.
-    Requiring the text to sit inside the control would leave every one of those
-    buttons unlabelled and the model looking at an anonymous box.
-
-    The reverse test needs a size guard, though, or an icon sitting inside a table
-    row's text line would claim the entire row as its name.
+    Two cases, and the second is the common one: a pixel detector boxes the glyphs while OCR
+    boxes the line including padding — 29x16 against 41x23 on the same button — so requiring
+    text inside the control leaves it unlabelled. The reverse test needs a size guard, or an
+    icon inside a table row's text line claims the whole row as its name.
     """
     if text.contained_by(control) >= containment:
         return True
@@ -38,12 +33,9 @@ def _labels(text: Bbox, control: Bbox, containment: float) -> bool:
 
 
 def _dedupe(controls: list[Element], iou_threshold: float) -> list[Element]:
-    """Greedy non-maximum suppression, highest confidence first.
-
-    OmniParser routinely emits a button and its label as two nearly-identical
-    boxes; keeping both would make the same control appear twice in the
-    set-of-marks list and give the model two marks that mean one thing.
-    """
+    """Greedy non-maximum suppression, highest confidence first. OmniParser routinely emits a
+    button and its label as two near-identical boxes, and keeping both gives the model two
+    marks that mean one thing."""
     kept: list[Element] = []
     for el in sorted(controls, key=lambda e: (-e.conf, _area(e.bbox))):
         if all(el.bbox.iou(k.bbox) < iou_threshold for k in kept):
@@ -59,15 +51,13 @@ def merge(
 ) -> list[Element]:
     """Return one deduplicated, text-annotated element list.
 
-    Ids are reassigned here (`e0`, `e1`, ...) in reading order — top-to-bottom then
-    left-to-right — so that a set-of-marks overlay numbers things the way a person
-    would scan them, which measurably helps the model refer to them correctly.
+    Ids are reassigned (`e0`, `e1`, ...) in reading order, top-to-bottom then left-to-right, so
+    a set-of-marks overlay numbers things the way a person would scan them.
     """
     kept = _dedupe(controls, iou_threshold)
 
-    # Each text goes to the *smallest* control that contains it. A button inside a
-    # card is contained by both; the button is what a person would say they
-    # clicked, and it is what the artifact should record.
+    # Each text goes to the *smallest* control containing it: a button inside a card is
+    # contained by both, and the button is what was clicked.
     owned: dict[int, list[Element]] = {}
     orphans: list[Element] = []
     for text in texts:
@@ -91,12 +81,12 @@ def merge(
         el = control.model_copy(
             update={"text": joined or None, "name": joined or control.name}
         )
-        # Re-infer now that the box has words: geometry alone cannot separate "a
-        # small wide box" from "the Transfer button".
+        # Re-infer now the box has words: geometry alone cannot separate "a small wide box"
+        # from "the Transfer button".
         merged.append(el.model_copy(update={"role": infer_role(el)}))
 
-    # Text with no enclosing control is not clickable, but it is exactly what
-    # checkpoints and anchors match against, so it survives as its own element.
+    # Text with no enclosing control is not clickable, but it is what checkpoints and anchors
+    # match against, so it survives as its own element.
     merged.extend(orphans)
 
     ordered = [el for row in group_rows(merged) for el in row]
@@ -106,10 +96,13 @@ def merge(
 def infer_role(el: Element) -> str:
     """Guess a coarse role from geometry and text when the detector gives none.
 
-    Heuristic and openly so: short text in a small wide box near other such boxes
-    is a button; a wide short box with no text is an input. Wrong sometimes. The
-    resolver treats `role` as a hint that narrows candidates, never as the sole
-    matching key, so a bad guess costs a little precision and never correctness.
+    Openly heuristic, and wrong sometimes. The resolver treats `role` as a hint that narrows
+    candidates and never as the sole matching key, so a bad guess costs precision, not
+    correctness.
+
+    Thresholds are normalized and application chrome is not — a button stays ~32px tall as the
+    window grows — so these boundaries are sound only near the viewport they were measured at
+    (REPORT §7).
     """
     if el.source is ElementSource.OCR:
         return "text"
@@ -119,10 +112,13 @@ def infer_role(el: Element) -> str:
     text = (el.text or "").strip()
 
     if not text:
-        if w <= 0.05 and h <= 0.06:
-            return "icon"
+        # Input first, and icons kept near-square: a 96x26px PIN box is small enough for the
+        # icon bound and too squat for the input ratio, and calling it an icon loses a field a
+        # step types into. Between the two, `control`.
         if ratio >= 4.0 and h <= 0.06:
             return "textbox"
+        if w <= 0.05 and h <= 0.06 and ratio <= 2.5:
+            return "icon"
         return "control"
     if w >= 0.45 and ratio >= 10.0:
         return "row"

@@ -7,13 +7,11 @@ A write capability that moves money. Its confirm step is `risky`, the app policy
 disposition for risky is `confirm`, so the run stops before pressing the one
 button in this application that cannot be taken back — and waits for a person.
 
-What this exercises is the part §3.6 asks for and the part that is easy to fake:
+What this exercises:
 
-  1. the run parks on the *same* session, browser alive, form filled, nothing
-     torn down
-  2. control is a token with exactly one holder, and between the automation
-     stopping and the operator arriving it is held by nobody — which is what makes
-     "the agent clicked while I was typing" impossible rather than unlikely
+  1. the run parks on the *same* session, browser alive, form filled, nothing torn down
+  2. control is a token with exactly one holder, held by nobody between the automation
+     stopping and the operator arriving
   3. the driver refuses to act while a human holds it, checked here by trying
   4. what the operator did is captured at the X layer, not by asking them
   5. control comes back and the run finishes on the same session
@@ -67,10 +65,9 @@ def bad(msg: str) -> None:
 def transfer_capability(base_url: str) -> Capability:
     """Move money between two of a member's accounts. Hand-written.
 
-    Step 1 goes straight to the review screen with the transfer's parameters. The
-    form before it is three `<select>` elements, and driving those is a perception
-    problem worth solving separately from the escalation mechanism this script
-    exists to prove."""
+    Step 1 goes straight to the review screen with the transfer's parameters: the form before
+    it is three `<select>` elements, a perception problem separate from the escalation
+    mechanism this script proves."""
     text = (CAPABILITIES / "transfer_funds.json").read_text()
     text = text.replace("http://targetapp:8080", base_url)
     return Capability.model_validate_json(text)
@@ -137,11 +134,9 @@ async def main() -> int:
         except ControlError:
             ok("the automation is refused while a human holds control")
 
-        # A person looking at the screen: pointer moves and a click on empty space.
-        # xdotool is the stand-in for a hand on the mouse. Deliberately away from
-        # the controls — this script is proving that the handoff is recorded, and
-        # an operator who confirms the transfer themselves would leave the
-        # automation clicking a page that has already moved on.
+        # A person looking at the screen: pointer moves and a click on empty space, with
+        # xdotool standing in for a hand on the mouse. Away from the controls on purpose — an
+        # operator who confirmed the transfer would leave the automation on a page that moved.
         for x, y in ((900, 250), (1250, 700), (1320, 820)):
             subprocess.run(
                 ["xdotool", "mousemove", str(x), str(y)],

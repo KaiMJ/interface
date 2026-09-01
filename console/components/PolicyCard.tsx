@@ -1,13 +1,11 @@
 "use client";
 
 /**
- * The guardrails in force, read-only — editing policy from a debug console is a
- * hole, not a feature, while seeing it means "what is this agent permitted to do"
- * does not require reading a YAML file inside a container.
+ * The guardrails in force, read-only: editing policy from a debug console is a hole,
+ * not a feature.
  *
- * Fetched for the *selected run's* application: showing the wrong app's allowlist
- * beside a run is worse than showing none, being a confident answer to the wrong
- * question.
+ * Fetched for the *selected run's* application — the wrong app's allowlist beside a run
+ * is a confident answer to the wrong question.
  */
 
 import { Chip, Empty, Field, Json, Panel } from "./ui";

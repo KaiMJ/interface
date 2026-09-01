@@ -1,12 +1,10 @@
 /**
  * Seed data for the mock back office, deterministic by construction: transaction
  * histories come from a seeded PRNG keyed on the account number, so the same account
- * always shows the same rows. Replay asserts against this data, and a random history
- * would make every checkpoint flaky in a way that looks like a bug in the
- * automation.
+ * always shows the same rows and a checkpoint asserting against them is not flaky.
  *
- * Balances live in a module-level ledger so a transfer visibly moves money. None of
- * it is real.
+ * Balances live in a module-level ledger so a transfer visibly moves money. None of it
+ * is real.
  */
 
 export type AccountKind = "Checking" | "Savings" | "Money Market" | "Certificate";
@@ -65,8 +63,8 @@ export const MEMBERS: Member[] = [
   },
   {
     id: "30992",
-    // No savings account at all. A "get the savings balance" capability must
-    // return a typed business outcome here, not a crash and not a wrong number.
+    // No savings account at all: a "get the savings balance" capability must return a
+    // typed business outcome here, not a crash and not a wrong number.
     name: "Priya Raghunathan",
     since: "2023-06-27",
     branch: "Eastgate — 007",
@@ -77,9 +75,8 @@ export const MEMBERS: Member[] = [
   },
   {
     id: "44100",
-    // Restricted. Exists, is findable, and viewing it is denied — which is a
-    // different result from "not found" and the caller has to be able to tell
-    // them apart.
+    // Restricted: exists, is findable, and viewing it is denied — a different result
+    // from "not found".
     name: "Alan Osei",
     since: "2008-02-11",
     branch: "Downtown — 001",
@@ -93,9 +90,8 @@ export const MEMBERS: Member[] = [
   {
     id: "57310",
     name: "Ruth Okonkwo-Fairbairn",
-    // A long name, on purpose: it wraps to two lines in the detail header and
-    // pushes everything below it down. Exactly the "variance within an unchanged
-    // version" case that anchor-relative targeting exists to survive.
+    // A long name, on purpose: it wraps to two lines in the detail header and pushes
+    // everything below it down — variance within an unchanged version.
     since: "2016-08-30",
     branch: "Riverside — 004",
     phone: "(503) 555-0102",
@@ -216,8 +212,8 @@ export function transactionsFor(accountNumber: string, count = 22): Txn[] {
     const d = new Date(start.getTime() - i * 86400000 * (1 + Math.floor(rand() * 2)));
     const posted = new Date(d.getTime() + 86400000);
     out.push({
-      // MM/DD/YYYY, because that is what these systems actually render, and a
-      // normalizer that assumes ISO will quietly mis-sort.
+      // MM/DD/YYYY, what these systems actually render; a normalizer assuming ISO
+      // mis-sorts.
       date: fmtUS(d),
       posted: fmtUS(posted),
       description,

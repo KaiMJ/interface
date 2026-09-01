@@ -1,13 +1,10 @@
 "use client";
 
 /**
- * One step, taken apart — one stage at a time, in the order the step went through
- * them: decide, permit, resolve, verify. A tab with nothing to say is disabled
- * rather than hidden, because "this step consulted no resolver" is itself
- * information, and a strip that changes shape per step is one you re-read every
- * time.
- *
- * Everything here is a record the system already made and used to discard.
+ * One step, taken apart in the order it went through: decide, permit, resolve,
+ * verify. A tab with nothing to say is disabled rather than hidden — "this step
+ * consulted no resolver" is itself information, and a strip that changes shape per
+ * step is one you re-read every time.
  */
 
 import { useState } from "react";
@@ -20,9 +17,8 @@ type Tab = (typeof TABS)[number];
 
 export function Inspector({ step }: { step: StepRow | null }) {
   const [tab, setTab] = useState<Tab>("decision");
-  // Collapsible because vertical space is the real constraint on a laptop: the
-  // frame and the inspector are both trying to be the main thing, and which one
-  // is depends on whether you are watching a run or debugging one.
+  // Collapsible because vertical space is the constraint on a laptop, and which of the
+  // frame and the inspector is the main thing depends on watching versus debugging.
   const [open, setOpen] = useState(true);
 
   if (!step) {
@@ -36,8 +32,8 @@ export function Inspector({ step }: { step: StepRow | null }) {
   const turn = step.model_turn;
   const policy = step.policy;
   const trace = step.resolution_trace;
-  // A replay step has no model turn; landing on an empty tab every time you click
-  // through a replay is the kind of small friction that makes a tool tiring.
+  // A replay step has no model turn, so clicking through a replay must not land on an
+  // empty tab every time.
   const active: Tab = tab === "decision" && !turn ? "guardrail" : tab;
 
   return (
@@ -148,9 +144,9 @@ export function Inspector({ step }: { step: StepRow | null }) {
               ) : null}
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 <Chip tone={turn.verdict}>{turn.verdict || "—"}</Chip>
-                <Chip title="candidates the model was shown; the rest were truncated in reading order">
-                  {turn.candidates_shown} shown
-                  {turn.candidates_truncated ? ` · ${turn.candidates_truncated} cut` : ""}
+                <Chip title="elements marked on the screenshot, any of which the model could choose; the listed ones also had their text described">
+                  {turn.candidates_marked} marked
+                  {turn.candidates_listed ? ` · ${turn.candidates_listed} listed` : ""}
                 </Chip>
                 <Chip>{ms(turn.latency_ms)}</Chip>
               </div>
@@ -264,9 +260,8 @@ export function Inspector({ step }: { step: StepRow | null }) {
               </div>
             </>
           ) : turn ? (
-            // Discovery does not resolve. The model picks from an enumerated set
-            // of marks, so there is never a "where is this thing" question — which
-            // is also why the VLM tier is unreachable on the replay path.
+            // Discovery does not resolve: the model picks from an enumerated set of
+            // marks, so there is never a "where is this thing" question.
             <Empty>
               Nothing to resolve: the model chose a numbered mark, and the element behind it
               supplied the anchor and box this step recorded. Replay is what resolves them.
@@ -307,13 +302,10 @@ export function Inspector({ step }: { step: StepRow | null }) {
 /**
  * Where the step's time went.
  *
- * Perception dominates and nothing else is close — on a dense back-office screen
- * an observation is ~2.4s of text recognition against ~30ms of GPU detection and
- * single-digit milliseconds of everything else. The bar exists so that stays a
- * measurement rather than a belief, and so the two changes that attack it are
- * visible in the data: `observations` per step (the frame a step ends on is the
- * next step's starting frame, so it should read 1 rather than 2) and the drop
- * when text recognition moves onto the GPU.
+ * Perception dominates: on a dense back-office screen an observation is ~2.4s of text
+ * recognition against ~30ms of GPU detection. The bar keeps that a measurement, and
+ * shows the two things that move it — `observations` per step (1 rather than 2, from
+ * the frame reuse) and text recognition running on the GPU.
  */
 function Cost({ step }: { step: StepRow }) {
   const p = step.phases;
@@ -363,12 +355,9 @@ function Cost({ step }: { step: StepRow }) {
 }
 
 /**
- * A long record, collapsed to one line until asked for.
- *
- * A turn prompt is thousands of characters — the whole candidate list off the
- * frame, plus the run's history — and the inspector is the shortest panel on the
- * screen. Shown open it buries every field below it; shown as a summary with its
- * size it stays one click away and says how much there is.
+ * A long record, collapsed to one line until asked for. A turn prompt is thousands of
+ * characters and the inspector is the shortest panel on the screen, so it shows as a
+ * summary with its size.
  */
 function Detail({
   summary,

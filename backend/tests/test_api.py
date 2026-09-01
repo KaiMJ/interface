@@ -1,12 +1,10 @@
 """The control plane.
 
-Three callers, and the tests follow them: an agent reading the catalog and
-invoking a capability, an operator working the intervention queue, and the
-console watching a run.
+Three callers, and the tests follow them: an agent reading the catalog and invoking a
+capability, an operator working the intervention queue, and the console watching a run.
 
-The browser is not involved. `Runtime` holds the session pool as a collaborator
-precisely so a test can hand it something else — here, a pool that returns a
-session made of the same fakes the engine tests use.
+No browser: `Runtime` holds the session pool as a collaborator, so a test hands it a pool
+returning a session made of the same fakes the engine tests use.
 """
 
 from __future__ import annotations
@@ -86,9 +84,8 @@ def test_health_answers_before_a_browser_exists(client: Any) -> None:
     # display start turns into a restart loop.
     body = client.get("/health").json()
     assert body["status"] == "ok"
-    # And it says whether the one display is free. Every client that polls health
-    # wants that: with a single session, "are you alive" and "can I start a run"
-    # are the same question.
+    # And whether the one display is free: with a single session, "are you alive" and "can I
+    # start a run" are the same question.
     assert body["active_run"] is None
 
 
@@ -105,8 +102,7 @@ def test_the_tool_manifest_only_offers_approved_capabilities(client: Any) -> Non
     catalog = client.app.state.runtime.catalog
     catalog.save(capability())
 
-    # A draft is a proposal nobody has vouched for. An agent that could call one
-    # would be running unreviewed automation against member accounts.
+    # A draft is a proposal nobody has vouched for.
     assert client.get("/capabilities/manifest").json() == []
 
     client.post(
@@ -123,11 +119,10 @@ def test_the_tool_manifest_only_offers_approved_capabilities(client: Any) -> Non
 def test_an_agent_cannot_invoke_a_draft(client: Any) -> None:
     """The approval gate, on the one path where it is load-bearing.
 
-    Absent from the manifest is not the same as unreachable: a caller that knows
-    the id can name it. `/invoke` is the agent-facing path — nobody is watching —
-    so it refuses anything a human has not signed off, and the engine refuses it
-    again for any call site added later. The console and the CLI deliberately do
-    not: replaying a draft is how it gets reviewed.
+    Absent from the manifest is not unreachable: a caller that knows the id can name it.
+    `/invoke` is the agent-facing path, so it refuses anything a human has not signed off, and
+    the engine refuses it again. The console and the CLI do not: replaying a draft is how it
+    gets reviewed.
     """
     catalog = client.app.state.runtime.catalog
     catalog.save(capability())
@@ -187,9 +182,7 @@ def test_a_pending_intervention_carries_enough_context_to_act_on(client: Any) ->
     assert queue[0]["step_intent"] == "submit the transfer"
     assert queue[0]["reason"] == "risky_action_confirmation"
     assert queue[0]["vnc_url"]
-    # Nobody holds control between the automation stopping and an operator
-    # arriving. That interval is what makes a race impossible rather than
-    # unlikely.
+    # Nobody holds control between the automation stopping and an operator arriving.
     assert control.holder is Controller.NOBODY
 
 
@@ -271,8 +264,7 @@ def test_runs_can_be_filtered_by_the_capability_they_ran(client: Any) -> None:
     filtered = client.get("/runs", params={"capability": "cap_get_savings_balance"}).json()
 
     assert len(everything) == 2
-    # "show me every run of the flow I am about to approve" is the question, and
-    # answering it used to mean matching strings by eye.
+    # "show me every run of the flow I am about to approve", answered server-side.
     assert [r["run_id"] for r in filtered] == ["replay-aaa"]
 
 
@@ -287,16 +279,14 @@ def test_capability_history_aggregates_the_drift_signal(client: Any) -> None:
     assert len(body["runs"]) == 2
     agg = body["aggregate"]
     assert agg["statuses"] == {"success": 1, "business_outcome": 1}
-    # One run resolving by the recorded box is noise; the share across runs is the
-    # early warning that the application moved. It only exists in aggregate.
+    # One run resolving by the recorded box is noise; the share across runs is the signal.
     assert agg["resolution_tiers"] == {"anchor_text": 2, "recorded_bbox": 2}
     assert agg["drift_share"] == 0.5
     # A business outcome is a correct answer and deliberately does not count as a
     # failure against the flow.
     assert agg["success_rate"] == 0.5
-    # Perception dominates everything else by two orders of magnitude, so it is the
-    # only number worth aggregating. `observations_per_step` shows the frame reuse
-    # working: one perception per step, not two.
+    # Perception dominates everything else by two orders of magnitude.
+    # `observations_per_step` shows the frame reuse working: one perception per step, not two.
     assert agg["observe_share"] == 0.9
     assert agg["observations_per_step"] == 1.0
 
@@ -307,16 +297,15 @@ def test_a_second_run_is_refused_while_one_holds_the_session(client: Any) -> Non
 
     refused = client.post("/runs/discover", json={"goal": "do a thing"})
 
-    # 409, not a queue. There is one browser on one display, and a second run
-    # would not wait politely — it would drive the same pixels.
+    # 409, not a queue: there is one browser on one display, and a second run would drive the
+    # same pixels.
     assert refused.status_code == 409
     assert "replay-already-running" in refused.json()["detail"]
 
 
 def test_a_run_is_visible_the_moment_it_is_accepted(client: Any) -> None:
-    # Its first seconds go on starting a browser and signing in, during which it
-    # has written no evidence. A console that answers 404 for a run the operator
-    # just started is a console they stop believing.
+    # Its first seconds go on starting a browser and signing in, during which it has written
+    # no evidence — and must still be visible.
     rt = client.app.state.runtime
     rt.begin("discover-pending")
     rt.pending["discover-pending"] = {
@@ -364,7 +353,7 @@ def test_evidence_carries_the_handoff_record_not_only_its_frames(client: Any) ->
 
     body = client.get("/runs/run-1/evidence").json()
 
-    # What the operator was told and what they decided is the record of a human
-    # touching regulated data. It was on disk with nothing reading it.
+    # What the operator was told and what they decided: the record of a human touching
+    # regulated data.
     assert body["intervention"]["request"]["reason"] == "risky_action_confirmation"
     assert body["intervention"]["resolution"]["note"] == "confirmed with the member"

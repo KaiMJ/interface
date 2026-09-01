@@ -1,12 +1,10 @@
 """The `find_and_act` scan loop.
 
-The step type the design leans on hardest: a record's position in a list is a
-function of the data, so recording `scroll, scroll, click(y)` is wrong four ways
-and recording the predicate is right in all four.
+A record's position in a list is a function of the data, so the predicate is recorded rather
+than a scroll-and-click.
 
-The load-bearing behaviour is termination, and it is what these tests are mostly
-about. "I scanned the whole list and it is not there" is an answer the caller
-acts on. "I ran out of budget while the list was still moving" is not, and
+The load-bearing behaviour is termination. "I scanned the whole list and it is not there" is an
+answer the caller acts on; "I ran out of budget while the list was still moving" is not, and
 reporting the second as the first is the mistake the brief calls out by name.
 """
 
@@ -128,9 +126,8 @@ async def test_seeing_the_whole_list_without_a_match_is_exhaustion() -> None:
 
 
 async def test_running_out_of_budget_while_the_list_moves_is_not_an_answer() -> None:
-    # Every advance shows something new and the budget runs out. We do not know
-    # whether the record is absent, and saying "not found" would be a confidently
-    # wrong answer — so the engine reports SCAN_INCONCLUSIVE instead.
+    # Every advance shows something new and the budget runs out, so whether the record is
+    # absent is unknown and the engine reports SCAN_INCONCLUSIVE.
     screens = Screens(
         [
             screen(HEADERS, [(f"ROW {i}", 0.29, 0.10)], hash_=f"h{i}")
@@ -146,9 +143,8 @@ async def test_running_out_of_budget_while_the_list_moves_is_not_an_answer() -> 
 
 
 async def test_a_list_that_bounces_back_to_the_top_still_terminates() -> None:
-    # Compared against every frame seen, not just the last one: a list that
-    # returns to a screen already visited has been seen, and comparing only
-    # against the previous frame would scroll forever.
+    # Compared against every frame seen, not just the last: a list that bounces back to a
+    # screen already visited would otherwise scroll forever.
     a = screen(HEADERS, [("ROW A", 0.29, 0.10)], hash_="a")
     b = screen(HEADERS, [("ROW B", 0.29, 0.10)], hash_="b")
     screens = Screens([a, b, a, b, a, b])
@@ -193,9 +189,8 @@ async def test_the_predicate_is_parameterized_by_the_callers_inputs() -> None:
 
 
 def test_equality_against_a_truncated_cell_is_unanswerable() -> None:
-    # After strip_ellipsis a truncated value can only be compared by prefix.
-    # Returning False would report a record as absent because its name was too
-    # long for the column.
+    # After strip_ellipsis a truncated value can only be compared by prefix; returning False
+    # would report a record as absent because its name was too long for the column.
     row = [el("e0", 0.29, 0.2, 0.16, 0.02, "CROSSROADS HARDWARE & SUPPL...")]
     predicate = Predicate(
         match="cell_equals",
@@ -212,10 +207,9 @@ def test_equality_against_a_truncated_cell_is_unanswerable() -> None:
 
 
 def test_a_column_is_the_span_between_its_header_and_the_next() -> None:
-    # Real geometry from the transaction table: the header "Amount" renders
-    # left-aligned at x=1223 and its values right-aligned at x=1336, inside one
-    # column. Their text boxes never overlap, so matching header-to-cell by
-    # overlap read the description column instead.
+    # Real geometry from the transaction table: the header "Amount" renders left-aligned at
+    # x=1223 and its values right-aligned at x=1336 inside one column, so their text boxes
+    # never overlap and matching header-to-cell by overlap reads the wrong column.
     obs = screen(
         [("Date", 22 / 1440, 43 / 1440), ("Amount", 1223 / 1440, 57 / 1440)],
         [("08/10/2026", 25 / 1440, 73 / 1440), ("($441.56)", 1336 / 1440, 61 / 1440)],
@@ -239,10 +233,9 @@ def test_a_header_below_the_row_is_not_that_rows_header() -> None:
 def test_a_header_whose_box_overlaps_the_row_is_still_its_header() -> None:
     """Real geometry, taken off a live frame.
 
-    Detected boxes are taller than the gap between rows, so a header's box ends
-    below the top of the row beneath it — here by about a pixel. Requiring the
-    header to clear the row entirely rejected the only header there was, and every
-    read of that column silently fell back to counting cells along the row.
+    Detected boxes are taller than the gap between rows, so a header's box ends below the top
+    of the row beneath it — here by about a pixel. Requiring the header to clear the row
+    rejects the only header there is.
     """
     obs = Observation(
         screenshot_path="/nonexistent.png",

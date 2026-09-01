@@ -22,18 +22,17 @@ base_url_pattern: "^http://targetapp:8080(/.*)?$"
 # CUA_TARGET_BASE_URL. How a second tenant runs the same policy.
 entry_url: http://targetapp:8080
 
-# The fault-injection harness. Demo apps have one, a real core banking system does
-# not, and an app declaring none gets no fault panel in the console. Deliberately
-# *excluded* from the allowlist below: arming a fault is done to the automation from
-# outside it, by the driver, before a run starts — never as a recordable step.
+# The fault-injection harness. Demo apps have one, a real core banking system does not,
+# and an app declaring none gets no fault panel in the console. Deliberately *excluded*
+# from the allowlist below: arming a fault is done to the automation from outside it,
+# never as a recordable step.
 fault_url: http://targetapp:8080/api/faults
 
 # --- Allowlist -------------------------------------------------------------
-# The agent may not act outside these. Note what is absent: the control plane
-# (:8000), the console (:3000) and noVNC (:6080). The agent runs on the same machine
-# as its own operator surface, so "localhost" would be a hole, not a convenience.
-# `/dev` and `/api/faults` are excluded for the same reason — an agent that can
-# switch on its own "session expired" can switch it off.
+# The agent may not act outside these. Absent: the control plane (:8000), the console
+# (:3000) and noVNC (:6080) — the agent runs on the same machine as its own operator
+# surface, so "localhost" would be a hole. `/dev` and `/api/faults` are excluded for the
+# same reason: an agent that can arm its own faults can disarm them.
 allowed_url_patterns:
   - "^http://targetapp:8080(?!/dev|/api/faults)(/.*)?$"
 
@@ -53,14 +52,14 @@ risky_intent_patterns:
   - "(?i)\\b(submit|confirm|transfer|send|delete|remove|close|authorize|approve)\\b"
 
 # --- Recoverable conditions ------------------------------------------------
-# Detector + ordered actions + a cap. The cap is the important field: dismissing the
-# same modal eleven times means the dismissal is not working, which is a hard failure
-# rather than eleven successful recoveries.
+# Detector + ordered actions + a cap. The cap matters: dismissing the same modal eleven
+# times means the dismissal is not working, which is a hard failure rather than eleven
+# successful recoveries.
 #
-# Actions: `wait` (ms), `click` (by anchor text), `key`, `reload` (for a condition a
-# wait alone cannot clear), `sign_on`. `sign_on` is gated in the engine — available
-# only while no risky action has run, and it restarts the capability from step 1,
-# because signing back in returns the session and not your place in the flow.
+# Actions: `wait` (ms), `click` (by anchor text), `key`, `reload` (for a condition a wait
+# alone cannot clear), `sign_on`. `sign_on` is gated in the engine — available only while
+# no risky action has run, and it restarts the capability from step 1, because signing
+# back in returns the session and not your place in the flow.
 recoveries:
   - name: maintenance_notice
     detector: { kind: text_present, value: "scheduled maintenance" }
@@ -76,11 +75,9 @@ recoveries:
 
   # Session expiry, on a run that has done nothing irreversible.
   #
-  # Was an escalation, on the argument that re-authenticating means holding a
-  # credential — which does not survive contact with the code: it already holds one
-  # and types it at session start. What a mid-flow expiry changes is the state of the
-  # *work*, not the secret. So the handler is "sign in and start over", allowed only
-  # while no risky step has executed: a balance read at 3am re-runs itself, a
+  # A mid-flow expiry costs the run its place in the flow, not the credential — the
+  # session already types one at sign-on. So the handler is "sign in and start over",
+  # allowed only while no risky step has executed: a balance read re-runs itself, a
   # confirmed transfer parks for a person. `max_per_run: 1` — twice is not transient.
   - name: session_expired
     detector: { kind: text_present, value: "session has expired" }
@@ -99,10 +96,9 @@ app_errors:
 
 # A human can fix this: park the run and hand them the live session.
 escalations:
-  # Signed out with no explanation. Still an escalation while `session_expired` is
-  # not: the app saying so is a condition with a known cause and handler; arriving
-  # here without it is not. Recoveries match before escalations, so an expiry that
-  # says so is recovered.
+  # Signed out with no explanation, which is an escalation while `session_expired` is
+  # not: the app saying so is a condition with a known cause and handler. Recoveries
+  # match before escalations, so an expiry that says so is recovered.
   - name: sign_on_required
     detector: { kind: text_present, value: "Staff Sign-On" }
 
@@ -134,14 +130,13 @@ business_outcomes:
     result_fields: [member_id]
 
 # --- Text that changes on its own ------------------------------------------
-# Lines that tick while nothing is happening. Excluded when perception decides
-# whether the screen stopped moving, and nowhere else — a countdown is still read and
-# still available to a checkpoint, it is just no longer evidence of motion.
+# Lines that tick while nothing is happening. Excluded when perception decides whether
+# the screen stopped moving, and nowhere else — a countdown is still read and still
+# available to a checkpoint.
 #
-# Without this a countdown defeats both settle tests at once — the pixels differ
-# because a digit changed, and the text differs for the same reason — so every step
-# burns two timeouts on a screen that was ready throughout. Any app showing a clock
-# or a "last refreshed" stamp needs an entry, which is most of them.
+# Without this a countdown defeats both settle tests at once, so every step burns two
+# timeouts on a screen that was ready throughout. Any app showing a clock or a "last
+# refreshed" stamp needs an entry.
 volatile_text:
   - "\\b\\d{1,2}:\\d{2}(:\\d{2})?\\b"      # clocks and session countdowns
   - "(?i)last (refreshed|updated)"
@@ -177,8 +172,9 @@ surface: >-
   a bank back-office application, operated on behalf of a credit-union teller
 
 # --- Redaction -------------------------------------------------------------
-# Seam only in v1 — see cua.policy.redact. Patterns are declared now so the
-# implementation has something to consume.
+# Declared, and deliberately not applied — see `runtime.wiring.build_redactor` for why.
+# Masking sensitive *inputs* is separate, always on, and driven by `InputSpec.sensitive`
+# rather than by anything here.
 redact_patterns:
   - "\\b\\d{3}-\\d{2}-\\d{4}\\b"            # SSN
   - "\\b(?:\\d[ -]*?){13,16}\\b"            # PAN

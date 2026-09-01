@@ -3,17 +3,12 @@
 
     docker compose run --rm desktop python3 /app/scripts/fetch_models.py
 
-Weights are deliberately not baked into the image — they are ~300MB+ that would
-have to be re-pulled on every layer invalidation, and they do not belong in git.
-Instead they live in ./models, bind-mounted at /models, so they survive rebuilds
-and a developer downloads them once.
+Weights are deliberately not baked into the image — ~300MB+ re-pulled on every layer
+invalidation — so they live in ./models, bind-mounted at /models, and survive rebuilds.
 
-The failure this prevents: each library has its own idea of where a cache goes,
-and the defaults all point inside the container ( ~/.cache/huggingface,
-~/.paddlex, ~/.config/Ultralytics ). Left alone, every `docker compose up
---build` silently re-downloads them, and the first run of a demo stalls for
-minutes on what looks like a hang. Every one of those paths is redirected under
-/models by the Dockerfile; this script proves it by actually pulling them.
+Each library defaults its cache to a path inside the container (~/.cache/huggingface,
+~/.paddlex, ~/.config/Ultralytics), so left alone every rebuild silently re-downloads them.
+The Dockerfile redirects all of those under /models; this script proves it by pulling them.
 
 Idempotent. Safe to re-run; already-present files are left alone.
 """
@@ -100,17 +95,13 @@ try:
         from rapidocr import RapidOCR
         from rapidocr.utils.typings import EngineType
 
-        # The same PP-OCR models in torch format, which is the only route to this
-        # machine's GPU: onnxruntime-gpu ships CUDA 12 wheels and the torch here is
-        # CUDA 13, so its CUDA provider loads and then registers no device.
+        # The same PP-OCR models in torch format, the only route to this machine's GPU:
+        # onnxruntime-gpu ships CUDA 12 wheels against this image's CUDA 13 and registers no
+        # device. Measured on a dense 1440x900 screen: 2707ms on CPU against 807ms here, for
+        # identical output.
         #
-        # Measured on a dense back-office screen, 1440x900: 2707ms on the CPU
-        # against 807ms here, for identical output. Perception is ~95% of a
-        # replay's wall clock, so that is the largest single lever in the system.
-        #
-        # Fetched here rather than on first use so a run never pays for a download
-        # mid-step. ~31MB into RapidOCR's own cache, which the image makes
-        # writable for exactly this.
+        # Fetched here rather than on first use, so a run never pays for a download mid-step.
+        # ~31MB into RapidOCR's own cache, which the image makes writable for this.
         RapidOCR(
             params={
                 "Det.engine_type": EngineType.TORCH,

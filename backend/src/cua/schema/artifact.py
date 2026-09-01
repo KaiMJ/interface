@@ -1,10 +1,9 @@
-"""The capability artifact.
+"""The capability artifact: the contract between the discovery run that wrote it and the
+agents that invoke it.
 
-The contract between the discovery run that wrote it and the agents that invoke it.
-Three readers at once: a *calling agent*, needing typed inputs, typed outputs and a
-declared set of business outcomes to branch on; a *human reviewer*, who must approve it
-without watching a video; and the *replay engine*, which executes it with no model
-present.
+Three readers at once — a *calling agent* needing typed inputs, outputs and outcomes to branch
+on; a *human reviewer* who must approve it without watching a video; and the *replay engine*,
+which executes it with no model present.
 """
 
 from __future__ import annotations
@@ -38,13 +37,9 @@ SCHEMA_VERSION = 1
 class Relation(str, Enum):
     """Where the real target sits relative to the thing we can name.
 
-    The control a step acts on is very often not the thing with the words on it.
-    A form field is an empty box beside a label; a balance is a cell to the right
-    of "Available Balance"; a "View" button is at the end of a row identified by
-    its account number. Under vision there is no `for=` attribute to follow, so
-    the relationship has to be recorded — and once recorded it is more portable
-    than either a coordinate or a role, because rebranding an app rarely moves the
-    value out from beside its label.
+    The control a step acts on is usually not the thing with words on it: a form field is an
+    empty box beside a label, a balance is the cell right of "Available Balance". Vision has no
+    `for=` attribute to follow, so the relationship is recorded instead.
     """
 
     SELF = "self"
@@ -53,21 +48,18 @@ class Relation(str, Enum):
 
 
 class Target(Frozen):
-    """How a step identifies the control it acts on.
+    """How a step identifies the control it acts on, most portable first.
 
-    Ordered from most to least portable, and the resolver walks these in order. The tier that
-    succeeded is recorded on every step result, which gives a free drift signal: anchors
-    starting to fall through to `bbox` are an early warning long before a hard failure.
+    The resolver walks these in order and records which tier won, a free drift signal: anchors
+    decaying into `bbox` fallbacks are an early warning long before a hard failure.
 
-      1. anchor_text  visible text at/near the target. Survives rebranding and relayout, and
-                      may contain `{{param}}`, which is what makes data-dependent targeting
-                      possible ("the row for member {{member_id}}").
+      1. anchor_text  visible text at/near the target. Survives rebranding, and may contain
+                      `{{param}}` — "the row for member {{member_id}}".
       2. role + name  semantic match against detected elements.
-      3. bbox         the recorded position. Correct until something above it changes height;
-                      using it logs a drift event.
+      3. bbox         the recorded position. Using it logs a drift event.
 
-    `intent` and `target_desc` are not decoration: policy classifies `intent` for risk, and
-    the pre-click assertion checks the resolved region actually says `target_desc`.
+    `intent` and `target_desc` are not decoration: policy classifies `intent` for risk, and the
+    pre-click assertion checks the resolved region actually says `target_desc`.
     """
 
     intent: str                                   # "click the Transfer button"
@@ -79,22 +71,17 @@ class Target(Frozen):
     name: str | None = None
     bbox: Bbox | None = None
 
-    # Resolve the anchor, then step to its neighbour: how a step types into the box
-    # beside "User ID" or reads the value beside "Available Balance", neither of
-    # which has text of its own to match.
+    # Resolve the anchor, then step to its neighbour: how a step types into the box beside
+    # "User ID", which has no text of its own to match.
     relation: Relation = Relation.SELF
     relation_index: int = 0               # nth neighbour in that direction
-    # For a value in a table, the header above it. Preferred over `relation_index`
-    # when both are recorded, because an index is a count of the cells that happened
-    # to be filled in on the row it was recorded from: a blank status, an extra
-    # column, or an anchor that matches one element here and two elsewhere all shift
-    # it silently onto the wrong cell. A header is what a person reads, and it does
-    # not move when the row's contents do.
+    # For a table value, the header above it. Beats `relation_index` when both are recorded:
+    # an index counts the cells filled on one row, so a blank status or an extra column shifts
+    # it silently onto the wrong cell.
     column: Template | None = None
 
-    # Click point within the resolved box, 0..1, centre by default — how a step
-    # targets the "View" button at the right edge of a matched row. Bounded, because
-    # an offset outside the box is not a click on the box.
+    # Click point within the resolved box, centre by default — how a step targets the "View"
+    # button at the right edge of a matched row. Bounded: outside the box is not a click on it.
     offset: tuple[Unit, Unit] = (0.5, 0.5)
 
     normalize: tuple[Normalizer, ...] = (Normalizer.CASEFOLD, Normalizer.COLLAPSE_WS)
@@ -117,10 +104,9 @@ class CheckKind(str, Enum):
 class Checkpoint(Frozen):
     """An assertion that the expected state was actually reached.
 
-    Present per step, not only at the end. A wrong click at step 3 should fail at
-    step 3 with a legible diff, not produce a plausible-looking wrong output at
-    step 9. Also the reason there is no `sleep()` anywhere in this system: waiting
-    is `poll a checkpoint until timeout`.
+    Per step, not only at the end: a wrong click at step 3 should fail at step 3 with a legible
+    diff, not a plausible wrong output at step 9. Also how this system waits — polling a
+    checkpoint until timeout, rather than sleeping.
     """
 
     kind: CheckKind
@@ -137,12 +123,8 @@ class Checkpoint(Frozen):
 
 
 class Primitive(str, Enum):
-    """The action space.
-
-    Same list in discovery and in replay, on purpose. If the discovery agent can
-    only express things replay can execute, recordings are replayable by
-    construction instead of by post-hoc inference over a transcript.
-    """
+    """The action space. Identical in discovery and replay: the agent can only express what
+    replay can execute, so recordings are replayable by construction."""
 
     NAVIGATE = "navigate"
     CLICK = "click"
@@ -157,11 +139,9 @@ class Primitive(str, Enum):
 class OnError(str, Enum):
     """What replay does when this step's checkpoint does not hold.
 
-    `RETRY` is legal only on a step declared `safe`, and validation refuses the
-    combination — `risk` is the artifact's statement about reversibility, so a
-    risky step asking to be run twice is a contradiction rather than a preference.
-    The engine applies the same gate against policy's *effective* risk, which also
-    catches a step promoted to risky from its intent.
+    `RETRY` is legal only on a `safe` step and validation refuses the combination: a risky step
+    asking to run twice is a contradiction, not a preference. The engine re-checks against
+    policy's *effective* risk, catching a step promoted to risky from its intent.
     """
 
     HARD_FAIL = "hard_fail"
@@ -172,9 +152,8 @@ class OnError(str, Enum):
 class StepBase(Frozen):
     id: int
     risk: Risk = Risk.SAFE
-    # Which declared screen this step expects. Checked before it acts, so a flow
-    # that went elsewhere fails with "we are on the sign-on screen, not the member
-    # profile" rather than "the target was not found" — a different fix.
+    # Which declared screen this step expects, checked before it acts, so a flow that went
+    # elsewhere names where it is rather than reporting a missing target.
     screen: str | None = None
     # Verified after the action. This is the step's own success condition.
     checkpoint: Checkpoint | None = None
@@ -222,11 +201,9 @@ class Predicate(Frozen):
 class Scan(Frozen):
     """How to reach the next screenful, and how far to keep trying.
 
-    There is deliberately no `stop_when` field. Exhaustion has exactly two
-    signals and both follow from `advance`: a screenful identical to one already
-    seen (every mode), and a pagination anchor that is no longer on the page
-    (`click_anchor`). A field that selects between them could only ever disable
-    one of two correct checks.
+    No `stop_when` field, deliberately: exhaustion has two signals and both follow from
+    `advance` — a screenful identical to one already seen, and a pagination anchor no longer on
+    the page. A field selecting between them could only disable one of two correct checks.
     """
 
     advance: ScanAdvance = ScanAdvance.SCROLL
@@ -252,21 +229,17 @@ class ScopeExtent(str, Enum):
 class FindAndActStep(StepBase):
     """Find the thing matching a predicate, then act on it.
 
-    A first-class step type because a target's position in a list is a function of
-    the data, not of the layout. Recording `scroll, scroll, click(y)` is wrong four
-    separate ways: the position drifts, the page drifts, the record may be absent,
-    and the match may be ambiguous. Recording the predicate is right in all four.
-
-    Still fully deterministic — a fixed loop of (observe scope, evaluate predicate,
-    advance) with no model in it. Pagination is the same primitive with
-    `advance=click_anchor`. Bulk extraction is the same primitive with
-    `on_found.action=extract`.
+    A first-class step type because a target's position in a list is a function of the data,
+    not the layout: a recorded `scroll, scroll, click(y)` cannot express an absent record or an
+    ambiguous match. Evaluation stays deterministic — observe scope, evaluate, advance, no
+    model. Pagination and bulk extraction are the same primitive with a different
+    `scan.advance` / `on_found_action`.
     """
 
     kind: Literal["find_and_act"] = "find_and_act"
 
-    # Located by anchor text (a column-header row), not a fixed box, so a banner
-    # above the table does not invalidate the scope.
+    # Located by anchor text (a column-header row), not a fixed box, so a banner above the
+    # table does not invalidate the scope.
     scope: Target
     scope_extent: ScopeExtent = ScopeExtent.BELOW
 
@@ -276,18 +249,15 @@ class FindAndActStep(StepBase):
     on_found_action: Primitive = Primitive.CLICK
     on_found_offset: tuple[Unit, Unit] = (0.5, 0.5)
     on_found_extract_as: str | None = None
-    # Which cell of the matched row to read, named by its column header. A row is not
-    # a value: returning "08/10/2026 PACIFIC WIRELESS Telecom ($441.56)" makes the
-    # caller parse a screen we already parsed. Located by header text and horizontal
-    # overlap — the way a person reads a table.
+    # Which cell of the matched row to read, named by its column header: a row is not a value.
+    # Found by header text and horizontal overlap.
     on_found_extract_column: Template | None = None
     collect_all: bool = False             # "the last N transactions"
     limit: int | None = None
 
-    # Exhausting the list without a match is a legitimate answer, so it maps to a
-    # business outcome. Hitting max_advances while content was still moving is a hard
-    # failure: absence and quitting early are not the same, and conflating them is
-    # the mistake the brief names.
+    # Exhausting the list without a match is a legitimate answer, so it maps to a business
+    # outcome. Hitting max_advances with content still moving is a hard failure: absence and
+    # quitting early are not the same thing.
     on_not_found_outcome: str | None = None
     on_multiple: MultiplePolicy = MultiplePolicy.ESCALATE
 
@@ -315,8 +285,8 @@ class InputSpec(Frozen):
     description: str = ""
     example: str | None = None
     constraints: Constraints | None = None
-    # Never logged, never written unredacted to evidence, never in a prompt.
-    # Supplied at execution time, substituted below the serialization boundary.
+    # Never logged, never written unredacted to evidence, never in a prompt. Supplied at
+    # execution time and substituted below the serialization boundary.
     sensitive: bool = False
 
 
@@ -324,41 +294,48 @@ class OutputSpec(Frozen):
     name: str
     type: ValueType
     description: str = ""
-    # Which step produced it. Declared, not "whatever the model happened to read" —
-    # the caller's contract has to be stable across runs.
+    # Which step produced it. Declared, not "whatever the model happened to read": the
+    # caller's contract has to be stable across runs.
     from_step: int
     normalize: tuple[Normalizer, ...] = (Normalizer.COLLAPSE_WS,)
     required: bool = True
-    # The inputs' class, pointed the other way. A checkpoint proves we are on the
-    # right screen; it says nothing about whether what was read off it is a value
-    # this capability may return. `18204.55` misread as `1820455` is type-valid,
-    # passes every assertion, and is a balance an agent will quote to a member.
-    # Authored at review time — the recording saw one value, so a derived bound
-    # would be that value or a guess.
+    # `InputSpec.constraints` pointed the other way. A checkpoint proves we are on the right
+    # screen, not that what was read off it is a value this capability may return: `18204.55`
+    # misread as `1820455` is type-valid and passes every assertion. Authored at review time,
+    # since a bound derived from a recording that saw one value is that value or a guess.
     constraints: Constraints | None = None
 
 
 class BusinessOutcome(Frozen):
     """A legitimate alternative result, not a failure.
 
-    "No such member" is an answer the caller needs, and conflating it with a crash is the most
-    common design mistake in this problem. Declared per capability so the calling agent knows
-    the full set of shapes it may receive; detectors are evaluated before the success check at
-    each step, first match wins, and the run stops cleanly.
+    "No such member" is an answer the caller needs, so it is declared per capability and the
+    calling agent knows every shape it may receive. Detectors run before the success check at
+    each step; first match wins and the run stops cleanly.
 
-    **`detector` may be omitted, and is then inherited from app policy by name.** *What the
-    screen says* is a property of the application — every flow that searches for a member
-    meets the same "no member matches" wording — while *whether this flow can return that
-    answer* is a property of the capability. Inheriting rather than copying is what makes
-    teaching scale: `learn-outcome` and `diagnose` write the detector once into
-    `policies/<app>.yaml`. Opting in stays explicit, because a capability advertising an
-    outcome it cannot reach is lying to its caller about the shapes it may return.
+    `detector` may be omitted and is then inherited from app policy by name. *What the screen
+    says* belongs to the application; *whether this flow can return that answer* belongs to the
+    capability, so the policy holds the detector once and each capability opts in by name.
+
+    `cua learn-outcome` demonstrates an outcome by replaying with inputs that reach it;
+    `cua diagnose` reads a run that stopped on an undeclared screen and proposes the policy
+    stanza. Neither edits `policies/<app>.yaml` itself: a system that writes its own guardrails
+    is not one.
     """
 
     name: str
     description: str = ""
     detector: Checkpoint | None = None
     result_fields: dict[str, ValueType] = Field(default_factory=dict)
+    # Has this outcome actually been seen to fire?
+    #
+    # A recording cannot confirm one: the outcome describes a screen the successful run did not
+    # visit, so synthesis can only *refute* a proposed detector (see
+    # `discovery.synthesize._falsify`). An unverified outcome stays in the artifact, where a
+    # reviewer can see what the model guessed, and out of the agent-facing manifest, where it
+    # would be a promise. Inherited, taught or hand-authored outcomes are verified by
+    # construction, which is why this defaults to true.
+    verified: bool = True
 
 
 # ---------------------------------------------------------------------------
@@ -367,17 +344,13 @@ class BusinessOutcome(Frozen):
 
 
 class Screen(Frozen):
-    """A recognisable state of the application.
+    """A recognisable state of the application: the smallest useful piece of a UI model, and
+    the seam a fuller one would grow from.
 
-    The smallest useful piece of a UI model, and the seam a fuller one would grow from. Two
-    institutions running the same vendor product have the same screens with different
-    branding, so this is where per-tenant differences want to attach — overriding a screen's
-    signature is smaller and safer than re-recording every artifact that passes through it.
-
-    Declared and enforced: a step may name the screen it expects and replay asserts it before
-    acting (`FailureKind.WRONG_SCREEN`). Not yet *derived* — deriving one from a single run
-    named the member profile after the member's branch, which is data rather than a screen,
-    and separating the two needs two runs with different inputs.
+    Two institutions on the same vendor product have the same screens with different branding,
+    so this is where per-tenant overrides attach. Declared and enforced — a step names the
+    screen it expects and replay asserts it before acting — but not derived: telling a screen
+    from the record on it needs two runs with different inputs.
     """
 
     name: str
@@ -391,13 +364,9 @@ class Status(str, Enum):
 
 
 class AppRef(Frozen):
-    """Which application this capability drives.
-
-    `base_url_pattern` is a pattern rather than a literal so the same artifact can
-    point at a different institution's install of the same vendor product. That is
-    the cheapest possible down-payment on the multi-tenant story (§3.7) and costs
-    nothing now.
-    """
+    """Which application this capability drives. `base_url_pattern` is a pattern, not a
+    literal, so one artifact can point at another institution's install of the same vendor
+    product (REPORT §4)."""
 
     name: str
     vendor: str | None = None
@@ -421,7 +390,7 @@ class Capability(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schema_version: int = SCHEMA_VERSION
-    id: str                               # cap_get_savings_balance
+    id: str                               # cap_get_account_balance
     version: int = 1
     status: Status = Status.DRAFT
 
@@ -431,8 +400,7 @@ class Capability(BaseModel):
     app: AppRef
     inputs: list[InputSpec] = Field(default_factory=list)
     outputs: list[OutputSpec] = Field(default_factory=list)
-    # Empty is legitimate: a capability declaring no screens makes no claim about
-    # where it is.
+    # Empty is legitimate: declaring no screens makes no claim about where it is.
     screens: list[Screen] = Field(default_factory=list)
     steps: list[Step] = Field(default_factory=list)
 
@@ -451,16 +419,8 @@ class Capability(BaseModel):
     def _referentially_intact(self) -> Capability:
         """Reject an artifact whose internal references do not resolve.
 
-        Every one of these is otherwise a capability that loads fine, passes
-        review, and fails halfway through a run against a member's account —
-        which is the expensive place to find out. Synthesis on a familiar surface
-        happens to produce consistent artifacts; recordings from an unfamiliar one
-        will be rougher, and the cheapest place to catch that is construction.
-
-        Deliberately *not* checked here: whether an anchor exists on the screen,
-        or whether a checkpoint can pass. Those are claims about the application,
-        answerable only by running it. This validator only checks claims the
-        artifact makes about itself.
+        Only claims the artifact makes about itself. Whether an anchor exists or a checkpoint
+        can pass are claims about the application, answerable only by running it.
         """
         problems: list[str] = []
 
@@ -481,8 +441,8 @@ class Capability(BaseModel):
                     f"input {spec.name!r} is constrained against undeclared input {other!r}"
                 )
 
-        # `from_step` pointing at a click yields nothing, and the caller's contract
-        # silently loses a field.
+        # `from_step` pointing at a click yields nothing, and the caller's contract silently
+        # loses a field.
         for out in self.outputs:
             step = by_id.get(out.from_step)
             if step is None:
@@ -498,10 +458,8 @@ class Capability(BaseModel):
             if step.screen is not None and step.screen not in screens:
                 problems.append(f"step {step.id} expects undeclared screen {step.screen!r}")
 
-            # `risky` says the step is not reversible; `on_error: retry` asks to run
-            # it twice. A file saying both is asking for a duplicate transfer, and the
-            # cheapest place to refuse is before it loads — the engine refuses at run
-            # time too, but by then it has been reviewed and approved as it stands.
+            # `risky` says the step is not reversible; `on_error: retry` asks to run it
+            # twice. A file saying both is asking for a duplicate transfer.
             if step.on_error is OnError.RETRY and step.risk is not Risk.SAFE:
                 problems.append(
                     f"step {step.id} is risky and declares on_error: retry; "
@@ -513,8 +471,8 @@ class Capability(BaseModel):
                     "(set `retries`)"
                 )
 
-        # An unknown {{placeholder}} raises at render time, mid-run. Here it is a
-        # rejected file.
+        # An unknown {{placeholder}} raises at render time, mid-run. Here it is a rejected
+        # file.
         for where, text in _templates(self):
             for name in _PLACEHOLDER.findall(text):
                 if name not in declared:

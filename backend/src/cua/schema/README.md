@@ -14,7 +14,7 @@ Everything else in `cua` depends on these.
 
 ---
 
-## 1) Common (what everything else is built from)
+## 1) Common
 
 - Bbox / Point / Viewport (0..1 of the recorded screen)
 - ValueType / Normalizer / MatchMode (how values are typed and compared)
@@ -27,7 +27,7 @@ Everything else in `cua` depends on these.
 - ElementSource (OCR, icon detector, DOM/ax)
 - SettledBy (how we decided the screen had stopped moving)
 
-## 3) Targeting — how one step finds its control and knows it worked (in artifact.py)
+## 3) Targeting — how one step finds its control and knows it worked (artifact.py)
 
 - Target (anchor text → role + name → recorded box — most portable first)
     - Relation (the control is often not the thing with the words on it: a field is an
@@ -35,12 +35,11 @@ Everything else in `cua` depends on these.
 - Primitive (browser action primitives)
 - StepBase
     - ActStep (one target: navigate / click / type / extract / wait)
-    - FindAndActStep (when target's position is a function of the data, not the layout)
-- Checkpoint (asserts the expected state: text present, element visible, region stable,
-  etc.)
+    - FindAndActStep (when a target's position is a function of the data, not the layout)
+- Checkpoint (asserts the expected state: text present, element visible, region stable)
 - OnError (hard_fail / escalate / retry — and retry on a risky step is refused)
 
-## 4) Artifact — the whole capability, so we can replay it (in artfiact.py)
+## 4) Artifact — the whole capability (artifact.py)
 
 - Capability
     - goal / description / app (AppRef) / status (draft → approved → deprecated)
@@ -49,11 +48,13 @@ Everything else in `cua` depends on these.
     - recording (provenance — which run, which model, when)
 - InputSpec (`sensitive` values never reach an artifact)
 - OutputSpec (typed output — so a misread digit is rejected)
-- Constraints (shared by both: pattern / min / max / choices / not_equal_to)
+- Constraints (shared by both: pattern / min / max / choices / not_equal_to). On an
+  output this is the one field synthesis cannot fill in, and is authored at review time:
+  a bound derived from a recording that saw one value is that value, or a guess.
 - BusinessOutcome ("no such member")
 - Screen (a recognisable state of the app)
 
-`Capability` validates during initialization for things like
+`Capability` validates during initialization for
  - duplicate step ids
  - an output reading from a step that extracts nothing
  - an undeclared `{{placeholder}}`

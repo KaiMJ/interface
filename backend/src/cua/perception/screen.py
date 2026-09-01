@@ -1,9 +1,8 @@
 """X display capture.
 
-We photograph the whole virtual display, not the browser viewport. `page.screenshot()`
-would be easier and is browser-only, which means two capture paths and two coordinate
-spaces the moment a desktop surface appears — and the operator sees the X display over
-VNC, so the evidence should be the picture they are looking at.
+We photograph the whole virtual display, not the browser viewport. `page.screenshot()` is
+easier and browser-only, which would mean two coordinate spaces the moment a desktop surface
+appears — and the operator watches the X display over VNC, so the evidence is what they see.
 """
 
 from __future__ import annotations
@@ -23,9 +22,8 @@ class XDisplayScreen:
     def __init__(self, display: str, viewport: Viewport) -> None:
         self.display = display
         self.viewport = viewport
-        # One mss instance per screen, created on first use. Constructing one per
-        # capture reopens the X connection every frame, which at a 120ms settle
-        # poll is a measurable share of the loop.
+        # One mss instance per screen, created on first use: constructing one per capture
+        # reopens the X connection every frame, measurable at a 120ms settle poll.
         self._sct: Any | None = None
 
     def _session(self) -> Any:
@@ -40,13 +38,11 @@ class XDisplayScreen:
     def capture(self, out_path: Path) -> tuple[Viewport, str]:
         """Grab the full display, write a PNG, return geometry + content hash.
 
-        The hash is over the raw pixel buffer, not the encoded file: PNG encoders
-        are allowed to vary their output for identical input, which would make
-        settle-detection never converge.
+        The hash is over the raw pixel buffer, not the encoded file: PNG encoders may vary
+        their output for identical input, which would make settle-detection never converge.
         """
         sct = self._session()
-        # monitors[0] is the union of all screens; monitors[1] is the first real
-        # one. We run a single-screen Xvfb, so [1] is the display.
+        # monitors[0] is the union of all screens, [1] the first real one. Single-screen Xvfb.
         shot = sct.grab(sct.monitors[1])
         out_path.parent.mkdir(parents=True, exist_ok=True)
         Image.frombytes("RGB", shot.size, shot.rgb).save(out_path)
@@ -63,12 +59,8 @@ class XDisplayScreen:
 
 
 class ImageFileScreen:
-    """Replays a fixed sequence of pre-captured PNGs.
-
-    Exists so replay, resolver and checkpoint logic can be tested without an X
-    server, and so a reviewer with no API key can exercise the deterministic path
-    against recorded frames.
-    """
+    """Replays a fixed sequence of pre-captured PNGs, so replay, resolver and checkpoint logic
+    run without an X server — and the deterministic path can be exercised with no API key."""
 
     def __init__(self, frames: list[Path], viewport: Viewport) -> None:
         if not frames:
@@ -78,12 +70,11 @@ class ImageFileScreen:
         self._i = 0
 
     def capture(self, out_path: Path) -> tuple[Viewport, str]:
-        """Return the current frame. Only `advance()` moves the sequence on.
+        """Return the current frame; only `advance()` moves the sequence on.
 
-        Capture is not what changes a screen — an action is. Advancing here would
-        mean every settle poll consumed a frame, and `settle()` would never see
-        two equal ones in a row. The offline driver calls `advance()` when it
-        "acts", which is the same causality the live pair has.
+        Capture is not what changes a screen, an action is. Advancing here would let every
+        settle poll consume a frame and `settle()` would never see two equal ones in a row. The
+        offline driver calls `advance()` when it acts, the same causality the live pair has.
         """
         src = self.frames[self._i]
         img = Image.open(src).convert("RGB")
@@ -95,10 +86,7 @@ class ImageFileScreen:
         )
 
     def advance(self) -> None:
-        """Move to the next frame, holding on the last one once exhausted.
-
-        Holding rather than wrapping or raising is what makes a replay against a
-        recorded sequence terminate: the tail of the sequence is by definition the
-        state the run ended in.
-        """
+        """Move to the next frame, holding on the last once exhausted. Holding rather than
+        wrapping or raising is what lets a replay against a recorded sequence terminate: the
+        tail is by definition the state the run ended in."""
         self._i = min(self._i + 1, len(self.frames) - 1)

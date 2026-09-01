@@ -1,9 +1,8 @@
 /**
- * Member search: search -> results -> detail, the shape the brief asks for. Two
- * intentional details — a query that matches nothing renders "No member matches" and
- * an HTTP 200, because it is an answer rather than an error; and every result row's
- * action link is labelled "View", which is the normal case in these systems and why
- * a step has to target the row matching a predicate rather than the text.
+ * Member search: search -> results -> detail. Two intentional details — a query that
+ * matches nothing renders "No member matches" with an HTTP 200, because it is an answer
+ * rather than an error; and every result row's action link is labelled "View", so a step
+ * has to target the row matching a predicate rather than the text.
  */
 
 import Link from "next/link";

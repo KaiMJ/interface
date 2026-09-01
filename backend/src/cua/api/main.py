@@ -33,8 +33,8 @@ class RunInProgress(RuntimeError):
 class Runtime:
     """Everything the routes share. One instance, held on `app.state`.
 
-    A dataclass rather than module-level globals so a test can build one with
-    fakes, and so the lifetime of the browser session is visible in one place.
+    A dataclass rather than module-level globals, so a test can build one with fakes and the
+    browser session's lifetime is visible in one place.
     """
 
     settings: Settings
@@ -47,26 +47,18 @@ class Runtime:
     # Background runs the console started, so it can start one without holding an
     # HTTP request open for the length of a discovery run.
     tasks: dict[str, Any] = field(default_factory=dict)
-    # What each of those runs is, from the moment it is accepted. A run spends its
-    # first seconds starting a browser and signing in, and writes no evidence
-    # until then — without this the console answers 404 for a run the operator
-    # just started and watched appear in the header.
+    # What each of those runs is, from the moment it is accepted — a run writes no evidence
+    # while it is starting a browser and signing in.
     pending: dict[str, dict[str, Any]] = field(default_factory=dict)
-    # Which run currently holds the display, if any. One browser on one X display
-    # means two concurrent runs would fight over the same pixels — and an operator
-    # console makes starting a second one a single mis-click. Refusing is the only
-    # honest answer; queueing here would be scaling plumbing the brief explicitly
-    # does not reward.
+    # Which run currently holds the display, if any. One browser on one X display means two
+    # concurrent runs would fight over the same pixels, so a second is refused rather than
+    # queued.
     active_run: str | None = None
-    # Whether the thing holding the session is a *run*. Arming a fault claims the
-    # display the same way, and for the same reason, but it is not something the
-    # console can open and show steps for — reporting it as a run made the console
-    # chase a run id that will never exist.
+    # Whether the thing holding the session is a *run*. Arming a fault claims the display the
+    # same way but has no steps to show, so it must not be reported as a run.
     active_is_run: bool = True
-    # Which demo faults the console last armed. Their real state lives in a cookie
-    # inside the automation's browser and is not readable from here, so this is
-    # what we set rather than what is set — honest, and the only thing that can be
-    # said without driving the session to go and look.
+    # Which demo faults the console last armed. Their real state lives in a cookie inside the
+    # automation's browser, so this is what we set rather than what is set.
     armed_faults: list[str] = field(default_factory=list)
 
     def begin(self, run_id: str, is_run: bool = True) -> None:
@@ -83,13 +75,12 @@ class Runtime:
     async def session(self, app: str | None = None) -> Any:
         """The live session for one application, started and signed in on first use.
 
-        Lazily, because the control plane must come up and answer /health whether
-        or not a browser can start — a container whose health check fails because
-        Xvfb was slow is a container that gets restarted forever.
+        Lazily, so the control plane comes up and answers /health whether or not a browser can
+        start.
 
-        `app` selects the sign-on recipe and guardrails. The pool refuses to hand
-        back a session opened for a different application (`WrongApp`), because
-        one display is one coordinate space.
+        `app` selects the sign-on recipe and guardrails. The pool refuses to hand back a
+        session opened for a different application (`WrongApp`): one display is one coordinate
+        space.
         """
         session = await self.pool.acquire(self.settings.display, app or self.settings.default_app)
         await session.authenticate(
@@ -102,9 +93,7 @@ class Runtime:
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """The browser outlives every run but not the process.
 
-    Closing it here rather than per-run is the same ownership rule the session
-    itself encodes: a run borrows the session, and only the process that owns it
-    tears it down.
+    A run borrows the session; only the process that owns it tears it down.
     """
     yield
     pool = getattr(app.state.runtime, "pool", None)
@@ -137,9 +126,8 @@ def create_app() -> FastAPI:
         pool=build_session_pool(cfg),
     )
 
-    # The console is a separate origin (:3000 to :8000) and is the only browser
-    # client. Wide open is acceptable for a localhost demo and is exactly the kind
-    # of thing that must not survive into a deployment.
+    # The console is a separate origin (:3000 to :8000) and the only browser client. Wide open
+    # is acceptable for a localhost demo and must not survive into a deployment.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],

@@ -1,9 +1,8 @@
 """Text reading.
 
-PP-OCR detection and recognition: text lines with boxes and per-line confidence. Three
-uses — naming detected controls, evaluating checkpoints, and scanning lists in
-`find_and_act`, which is the weak one, because a predicate is only as good as the
-characters that came back.
+PP-OCR detection and recognition: text lines with boxes and per-line confidence. Three uses —
+naming detected controls, evaluating checkpoints, and scanning lists in `find_and_act`. The
+last is the weak one, because a predicate is only as good as the characters that came back.
 """
 
 from __future__ import annotations
@@ -18,46 +17,36 @@ from ..calibration import CALIBRATION
 from ..schema import Bbox, Element, ElementSource, Viewport
 
 
-class OnnxTextReader:
-    """PP-OCR via ONNX Runtime. Implements `perception.base.TextReader`.
+class RapidOcrTextReader:
+    """PP-OCR via RapidOCR. Implements `perception.base.TextReader`.
 
-    The engine choice is deliberate and was made against measurements, not taste;
-    the reasoning is recorded on the dependency in pyproject.toml. Behind the
-    `TextReader` protocol, so swapping engines again touches this file only.
+    `engine` selects the backend at construction: `onnxruntime` on the CPU, or `torch` on the
+    GPU the detector is already using. Behind the `TextReader` protocol, so swapping either
+    touches this file only.
     """
 
     def __init__(
         self,
-        models_dir: Path,
-        lang: str = "en",
         conf_threshold: float = 0.5,
         det_side_len: int = 1600,
         engine: str = "onnxruntime",
     ) -> None:
-        self.models_dir = models_dir
-        self.lang = lang
         self.det_side_len = det_side_len
         # "onnxruntime" (CPU) or "torch" (the GPU the detector already uses).
         self.engine = engine
-        # Below this a line is dropped rather than kept as text. Anchors and
-        # checkpoints both compare against this output, and a confidently wrong
-        # string is worse than a missing one: a missing anchor fails the step
-        # loudly, a wrong one resolves to the wrong control.
+        # Below this a line is dropped. A confidently wrong string is worse than a missing
+        # one: a missing anchor fails the step loudly, a wrong one resolves to the wrong
+        # control.
         self.conf_threshold = conf_threshold
         self._ocr: Any | None = None
 
     def _load(self) -> Any:
         """Construct the recogniser once, on the configured backend.
 
-        The torch backend is the GPU path. Its weights are not in the wheel — the
-        ONNX ones are — so the first construction downloads them into RapidOCR's
-        own cache. That is why the image makes that directory writable: a
-        container running as a non-root user cannot otherwise provision them, and
-        the failure surfaces halfway through the first run rather than at build.
-
-        A backend that cannot be constructed falls back to the CPU one rather
-        than taking the run down with it. Losing two seconds a step is a
-        performance problem; refusing to observe is an outage.
+        The torch backend is the GPU path and its weights are not in the wheel, so the first
+        construction downloads them into RapidOCR's own cache — which is why the image makes
+        that directory writable for a non-root user. A backend that cannot be constructed falls
+        back to CPU rather than taking the run down.
         """
         if self._ocr is not None:
             return self._ocr
@@ -98,15 +87,12 @@ class OnnxTextReader:
         viewport: Viewport,
         region: Bbox | None = None,
     ) -> list[Element]:
-        """Return one element per detected text line.
+        """Return one element per detected text line, carrying `source=OCR`, `role="text"` and
+        the raw string in both `text` and `name`.
 
-        When `region` is given, crop before reading rather than reading the frame
-        and filtering. Cropping is both faster and more accurate — PP-OCR's
-        detection stage behaves better on a tight region than on a full page — and
-        it is what makes a 10-screen scan affordable.
-
-        Emitted elements carry `source=OCR`, `role="text"`, and the raw string in
-        both `text` and `name`.
+        A `region` crops before reading rather than reading the frame and filtering: cropping
+        is faster and more accurate, since PP-OCR's detection stage behaves better on a tight
+        region than a full page.
         """
         w, h = float(viewport.width), float(viewport.height)
         img = Image.open(image_path).convert("RGB")
@@ -115,8 +101,8 @@ class OnnxTextReader:
         if region is not None:
             left, top = region.x * w, region.y * h
             right, bottom = left + region.w * w, top + region.h * h
-            # A degenerate crop makes PP-OCR's detector raise rather than return
-            # nothing, so treat "no region to read" as "no text".
+            # A degenerate crop makes PP-OCR's detector raise rather than return nothing, so
+            # treat "no region to read" as "no text".
             if right - left < 2 or bottom - top < 2:
                 return []
             img = img.crop((int(left), int(top), int(right), int(bottom)))
@@ -162,17 +148,13 @@ def group_rows(
 ) -> list[list[Element]]:
     """Cluster text elements into visual rows by vertical overlap.
 
-    Row grouping is what makes `row_contains_all` predicates possible without a
-    DOM. A table row is not a thing that exists in pixels; it is a set of text
-    boxes that share a horizontal band. Tolerance is in normalized units and
-    deliberately small — merging two adjacent table rows would let a predicate
-    match terms that a human would never read as one record.
+    What makes `row_contains_all` predicates possible without a DOM: a table row is a set of
+    text boxes sharing a horizontal band. The tolerance is deliberately small, since merging
+    two adjacent rows would let a predicate match terms no human would read as one record.
     """
     rows: list[list[Element]] = []
-    # Sorted by vertical centre, so a new element can only ever belong to the row
-    # being built. Comparing against every open row instead would let a tall
-    # element chain two table rows into one, which is exactly the failure this
-    # tolerance is small to avoid.
+    # Sorted by vertical centre, so a new element can only belong to the row being built; a
+    # tall element must not chain two rows into one.
     for el in sorted(elements, key=lambda e: (e.bbox.center.y, e.bbox.x)):
         centre = el.bbox.center.y
         if rows:

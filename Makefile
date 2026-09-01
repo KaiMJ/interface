@@ -38,12 +38,8 @@ api:           ## Run just the backend (no docker)
 test:          ## Backend tests (no browser, no display, no model, no target app)
 	cd backend && uv run pytest -q
 
-lint:          ## ruff + mypy strict, and diagram.html's citations
+lint:          ## ruff + mypy strict
 	cd backend && uv run ruff check . && uv run mypy src
-	python3 scripts/anchors.py --check
-
-diagram:       ## Regenerate diagram.html's file:line citations from the source
-	python3 scripts/anchors.py
 
 fmt:           ## ruff format
 	cd backend && uv run ruff format .

@@ -1,10 +1,8 @@
 """Which institution's install a recorded URL means.
 
-The hazard these pin is quiet rather than loud: an allowlist is a pattern that
-spans tenants *by design* (that is what makes one artifact reusable), so a
-recorded absolute URL from institution A passes institution B's allowlist and the
-run succeeds — against A. Nothing fails; the answer is simply about the wrong
-credit union's member.
+An allowlist is a pattern that spans tenants *by design*, so a recorded absolute URL from
+institution A passes institution B's allowlist and the run succeeds — against A. Nothing
+fails; the answer is about the wrong credit union's member.
 """
 
 from __future__ import annotations

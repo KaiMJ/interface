@@ -1,14 +1,9 @@
 """The replay engine and its error taxonomy.
 
-Every case here is one of the result classes the caller must be able to tell
-apart, driven through the real engine, the real resolver, the real checkpoint
-evaluation and the real app policy file. Only the surface is faked: perception
-returns scripted frames and the driver records what it was asked to do.
-
-Faking at that seam is the point of having it. If these tests needed a browser
-they would not run in CI, and the thing they are actually asserting — that a
-"no such member" screen produces a business outcome and an unreadable balance
-produces a failure — has nothing to do with pixels.
+Every case here is one of the result classes the caller must be able to tell apart, driven
+through the real engine, resolver, checkpoint evaluation and app policy file. Only the surface
+is faked: perception returns scripted frames and the driver records what it was asked to do,
+so none of it needs a browser.
 """
 
 from __future__ import annotations
@@ -193,9 +188,9 @@ def build(tmp_path: Path, frames: list[Observation]) -> tuple[ReplayEngine, Fake
 def savings_capability(**overrides: Any) -> Capability:
     """Read a member's savings balance. The read capability, hand-written.
 
-    Deliberately the same shape synthesis emits: a navigate with a templated URL,
-    an extraction targeted relative to a label, a declared output with a type, and
-    the two legitimate non-answers this screen can produce.
+    The same shape synthesis emits: a navigate with a templated URL, an extraction targeted
+    relative to a label, a typed output, and the two legitimate non-answers this screen can
+    produce.
     """
     cap = Capability(
         id="cap_get_savings_balance",
@@ -337,9 +332,8 @@ async def test_permission_denied_is_a_distinct_outcome_from_not_found(tmp_path: 
 
 
 async def test_an_application_error_is_named_as_one(tmp_path: Path) -> None:
-    # Declared in app policy, so it stops with APP_ERROR rather than as a
-    # checkpoint that did not hold — which would send an operator looking for a
-    # layout problem that is not there.
+    # Declared in app policy, so it stops with APP_ERROR rather than as a checkpoint that did
+    # not hold.
     engine, _, _ = build(
         tmp_path,
         [
@@ -359,14 +353,10 @@ async def test_a_repeatable_step_gets_its_declared_budget_against_an_app_error(
 ) -> None:
     """An application error is not automatically final.
 
-    The taxonomy keeps two statements apart and this is where they meet. A
-    *recovery* is the app's operator saying "this condition is transient on this
-    application"; `on_error: retry` is the recording saying "this step is
-    repeatable". Either can buy another attempt, neither implies the other, and
-    both are gated on the same `risk`.
-
-    What does not change: when the budget is spent the run stops with APP_ERROR,
-    the kind that names the cause. Retrying must not cost us the diagnosis.
+    A *recovery* is the app's operator declaring the condition transient; `on_error: retry` is
+    the recording declaring the step repeatable. Either buys another attempt, neither implies
+    the other, and both are gated on the same `risk`. When the budget is spent the run still
+    stops with APP_ERROR, the kind that names the cause.
     """
     errored = frame("Search", "An unexpected error occurred while processing")
     engine, _, _ = build(tmp_path, [frame("Search"), errored, errored, errored, errored])
@@ -426,10 +416,8 @@ async def test_a_target_that_is_not_there_stops_rather_than_guessing(tmp_path: P
 async def test_a_target_mismatch_reports_where_on_screen_it_looked(tmp_path: Path) -> None:
     """The failure says WHERE, not only what.
 
-    "the region does not read as the recorded target" sends an operator to the
-    screenshot to work out which region. Carrying the box means the console can
-    draw it — and means the same failure is machine-readable, which is what a
-    policy author needs to write a dismissal handler against.
+    Carrying the box means the console can draw it, and that the failure is machine-readable,
+    which is what a policy author writes a dismissal handler against.
     """
     cap = savings_capability()
     # An anchor that is not on the screen, plus a recorded box. The resolver
@@ -462,8 +450,8 @@ async def test_a_target_mismatch_reports_where_on_screen_it_looked(tmp_path: Pat
 
 
 async def test_an_unreadable_output_fails_rather_than_returning_nothing(tmp_path: Path) -> None:
-    # The label is there and the cell beside it is not a number. A partial
-    # success here is how a downstream agent ends up acting on a null balance.
+    # The label is there and the cell beside it is not a number; a partial success here would
+    # hand a downstream agent a null balance.
     unreadable = ACCOUNTS_ROW.model_copy(
         update={
             "elements": tuple(
@@ -496,9 +484,8 @@ async def test_navigating_outside_the_allowlist_is_denied(tmp_path: Path) -> Non
 
 
 async def test_a_url_containing_a_risky_verb_is_not_a_risky_action(tmp_path: Path) -> None:
-    # Promotion reads the *declared intent*. Matching the step's value instead would
-    # stop before every page whose path contains a verb — measured on
-    # /transfer/review, a page you look at rather than a transfer you make.
+    # Promotion reads the *declared intent*: matching the step's value would stop before every
+    # page whose path contains a verb, such as /transfer/review.
     cap = savings_capability()
     cap.steps[0] = cap.steps[0].model_copy(
         update={"value": "http://targetapp:8080/transfer/review?member={{member_id}}"}
@@ -522,10 +509,8 @@ async def test_a_bad_input_is_rejected_before_anything_is_touched(tmp_path: Path
 async def test_a_violated_constraint_is_a_structured_rejection(tmp_path: Path) -> None:
     """Not an exception out of `replay()`.
 
-    A declared constraint is the caller's contract, so breaking it has to come
-    back as a result they can read — naming the input and the rule — the same way
-    a missing input or a bad type does. Every other class of bad call already did;
-    constraints escaped as a bare ValueError past both handlers.
+    A declared constraint is the caller's contract, so breaking it comes back as a result they
+    can read — naming the input and the rule — the same way a missing input or a bad type does.
     """
     cap = savings_capability()
     cap = cap.model_copy(
@@ -556,9 +541,9 @@ async def test_a_violated_constraint_is_a_structured_rejection(tmp_path: Path) -
 async def test_a_sensitive_input_is_never_written_anywhere(tmp_path: Path) -> None:
     """The one redaction guarantee that is implemented, asserted end to end.
 
-    `InputSpec.sensitive` is a declaration rather than a pattern guess, so it
-    cannot miss — but only if the redaction actually runs before the first write.
-    It writes on every step, so "before the last write" would already be too late.
+    `InputSpec.sensitive` is a declaration rather than a pattern guess, so it cannot miss — but
+    only if the redaction runs before the *first* write, since the result is written on every
+    step.
     """
     cap = savings_capability()
     cap = cap.model_copy(
@@ -620,11 +605,10 @@ async def test_a_declared_interstitial_is_dismissed_and_the_run_continues(
 
 # --- an interstitial that eats the click ------------------------------------
 #
-# The case dismiss-and-re-poll cannot handle alone, and the one the demo app was
-# built to produce: the dialog does not move the page, so a recorded coordinate
-# still resolves to the right control and the click lands on the dialog. Dismissing
-# it afterwards does not make the eaten click happen — either it is cleared before
-# the step acts, or the step runs again.
+# The case dismiss-and-re-poll cannot handle alone: the dialog does not move the page, so a
+# recorded coordinate still resolves and the click lands on the dialog. Dismissing it
+# afterwards does not make the eaten click happen — either it is cleared before the step acts,
+# or the step runs again.
 
 SEARCH = frame("Member Search", "Search", url="http://targetapp:8080/members")
 MODAL = Observation(
@@ -648,11 +632,9 @@ PROFILE = frame("Member Profile", "Primary Savings", url="http://targetapp:8080/
 class ModalApp:
     """A perceiver and driver in one, modelling the demo app's dialog.
 
-    Two states. While the modal is up every click is absorbed except the one on
-    its dismiss control; once it is down, clicking Search opens the profile. The
-    fixture exists because the interesting property cannot be scripted as a frame
-    list: whether a click has any effect depends on what is on screen when it is
-    issued, which is the whole of this failure mode.
+    Two states: while the modal is up every click is absorbed except the one on its dismiss
+    control; once it is down, clicking Search opens the profile. Not scriptable as a frame
+    list, because whether a click has any effect depends on what is on screen when it is issued.
     """
 
     def __init__(self, modal_at: str = "start") -> None:
@@ -765,12 +747,10 @@ async def test_an_interstitial_already_on_screen_is_cleared_before_the_step_acts
 async def test_a_swallowed_click_is_re_executed_after_the_interstitial_clears(
     tmp_path: Path,
 ) -> None:
-    """The expensive case, and the one that used to hard-fail.
+    """The dialog appears between observing and clicking, so the click is eaten.
 
-    The dialog appears between observing and clicking, so the click is eaten. The
-    old engine dismissed it and then polled a checkpoint for an action that never
-    happened, reporting `checkpoint_failed` at the end of the step's timeout —
-    with the evidence showing a recovery that had "worked".
+    Dismissing it afterwards leaves a checkpoint being polled for an action that never
+    happened, so the step has to run again.
     """
     app = ModalApp(modal_at="on_click")
     result = await build_modal(tmp_path, app).replay(open_profile(), INPUTS)
@@ -830,11 +810,9 @@ def _policy_kwargs(policy: Any) -> dict[str, Any]:
 class SlowApp(ModalApp):
     """The previous page is still on screen for the first N observations.
 
-    What a server-side delay actually looks like to a coordinate-based system:
-    not a spinner, not an empty page — the *old* page, fully rendered and
-    perfectly stable, for as long as the request takes. Nothing about settling
-    can tell that apart from having arrived, which is why the answer has to be to
-    keep looking for the thing the step needs.
+    What a server-side delay looks like to a coordinate-based system: the *old* page, fully
+    rendered and stable. Settling cannot tell that apart from having arrived, so the step has
+    to keep looking for what it needs.
     """
 
     def __init__(self, stale_for: int) -> None:
@@ -853,13 +831,9 @@ class SlowApp(ModalApp):
 async def test_a_target_that_has_not_rendered_yet_is_waited_for_not_failed(
     tmp_path: Path,
 ) -> None:
-    """The gap the `slow` fault found on the live app.
-
-    A step recorded without a checkpoint imposes no wait, so the previous step's
-    latency lands on this one as `target_mismatch` — which reads as UI drift and
-    is not. Resolution is a read, so polling it needs no risk gate; this is the
-    safe direction to retry in.
-    """
+    """A step recorded without a checkpoint imposes no wait, so the previous step's latency
+    lands on this one as `target_mismatch` — which reads as UI drift and is not. Resolution is
+    a read, so polling it needs no risk gate."""
     app = SlowApp(stale_for=3)
     cap = open_profile()
     # The step's target is on the profile, not on the page we are still looking at.
@@ -975,10 +949,9 @@ async def test_a_recorded_url_is_rebased_onto_this_deployments_install(
 ) -> None:
     """The artifact contributes the path; the deployment contributes the origin.
 
-    Without this the allowlist is no defence at all, because it is a *pattern*
-    spanning tenants by design — so a capability recorded at one institution would
-    replay happily against that institution from another institution's deployment,
-    and report success.
+    The allowlist is a *pattern* spanning tenants by design, so without rebasing a capability
+    recorded at one institution replays against that institution from another's deployment and
+    reports success.
     """
     engine, driver, _ = build(tmp_path, [frame("start"), ACCOUNTS_ROW])
     engine.entry_url = "http://targetapp:8080"
@@ -1112,11 +1085,9 @@ async def test_an_aborted_intervention_ends_the_run_as_escalated(tmp_path: Path)
 async def test_a_step_does_not_photograph_the_same_screen_twice(tmp_path: Path) -> None:
     """The frame a step ends on is the frame the next step starts from.
 
-    Nothing acts between one step's effect verification and the next step's first
-    look, so taking a second picture there costs a full perception — ~2.4s of text
-    recognition on a dense page, measured — to establish that the screen nobody
-    touched has not changed. Every step after the first should therefore pay for
-    one observation, not two.
+    Nothing acts between one step's effect verification and the next step's first look, so a
+    second picture there costs a full perception (~2.4s on a dense page) to establish that an
+    untouched screen has not changed.
     """
     engine, _, _ = build(tmp_path, [frame("Sign-On placeholder"), ACCOUNTS_ROW])
     result = await engine.replay(savings_capability(), INPUTS)
@@ -1133,15 +1104,11 @@ async def test_a_step_records_the_screen_it_acted_on_and_the_one_it_produced(
 ) -> None:
     """Two frames per step, because they mean different things.
 
-    The target was resolved against the screen the step acted on; the checkpoint
-    was judged on what the action produced. Storing only the second — which is
-    what happened when the post-action observation overwrote the pre-action one —
-    draws the step's resolved region onto a screen that never contained it, and
-    makes consecutive steps byte-identical, since one step's after-state is the
-    next step's acted-on state.
+    The target was resolved against the screen the step acted on; the checkpoint was judged on
+    what the action produced. Storing only the second draws a step's resolved region onto a
+    screen that never contained it.
 
-    (These fakes carry no real image, so the pair is asserted on the observation
-    records, which are written either way.)
+    (These fakes carry no real image, so the pair is asserted on the observation records.)
     """
     engine, _, _ = build(tmp_path, [frame("Sign-On placeholder"), ACCOUNTS_ROW])
     result = await engine.replay(savings_capability(), INPUTS)
@@ -1181,9 +1148,8 @@ async def test_an_unchanged_screen_is_not_re_interpreted_while_polling(
     result = await engine.replay(open_profile(), INPUTS)
 
     assert result.status is RunStatus.FAILURE
-    # Without the gate this polls for 300ms at one full perception per turn. The
-    # exact count depends on timing; the property is that it is small and bounded
-    # rather than proportional to the timeout.
+    # Without the gate this polls at one full perception per turn. The exact count depends on
+    # timing; the property is that it is bounded rather than proportional to the timeout.
     assert result.steps[0].phases.observations <= 3, result.steps[0].phases
 
 
@@ -1195,15 +1161,13 @@ async def test_an_unchanged_screen_is_not_re_interpreted_while_polling(
 class ExpiringApp:
     """A perceiver and driver in one, whose session dies at a chosen moment.
 
-    Same shape as `ModalApp` and for the same reason: whether the run can get
-    itself out of this depends on *when* the session dies relative to what the run
-    has already done, which is not a property a frame list can express.
+    Same shape as `ModalApp`: whether the run can recover depends on *when* the session dies
+    relative to what it has already done, which a frame list cannot express.
     """
 
     def __init__(self, expire_at: int | None = None, screen: Observation = ACCOUNTS_ROW) -> None:
-        # None means "not on a timer" — the test trips it by hand. A large number
-        # would not do: a step polls its screen every millisecond, so any count
-        # meant as "never" is reachable inside one timeout.
+        # None means "not on a timer" — the test trips it by hand. A large number would not
+        # do: a step polls often enough that any count meant as "never" is reachable.
         self.expire_at = expire_at
         self.screen = screen
         self.observations = 0
@@ -1265,13 +1229,10 @@ def build_expiring(tmp_path: Path, app: ExpiringApp, sign_on: Any = None) -> Rep
 async def test_a_session_that_dies_on_a_read_signs_back_in_and_starts_over(
     tmp_path: Path,
 ) -> None:
-    """The condition this used to escalate for, on a flow where nobody needs to be
-    woken up.
+    """A session expiry on a flow where nobody needs to be woken up.
 
-    Re-authenticating does not put the run back where it was — it lands on the
-    application's landing page — so the only honest recovery is to run the
-    capability again. That is available precisely because nothing this flow does
-    is irreversible, which is what `risk: safe` on every step *means*.
+    Re-authenticating lands on the application's landing page, so the only honest recovery is
+    to run the capability again — available because nothing this flow does is irreversible.
     """
     app = ExpiringApp(expire_at=3)
     engine = build_expiring(tmp_path, app, sign_on=None)
@@ -1282,20 +1243,17 @@ async def test_a_session_that_dies_on_a_read_signs_back_in_and_starts_over(
     assert result.status is RunStatus.SUCCESS
     assert result.outputs == {"balance": 18204.55}
     assert app.sign_ons == 1
-    # The steps taken before the expiry stay in the log. A run that executed step
-    # 2 twice should say so rather than present a tidy five-step history.
+    # The steps taken before the expiry stay in the log: a run that executed step 2 twice
+    # says so.
     assert len(result.steps) > len(savings_capability().steps)
 
 
 async def test_a_session_that_dies_after_a_risky_step_waits_for_a_person(
     tmp_path: Path,
 ) -> None:
-    """The gate, and the reason it is not simply "log in again".
-
-    Once a run has executed something irreversible, whether its first half
-    committed is not a question this engine may answer by doing the whole thing
-    over. It parks instead, and the operator gets the live session.
-    """
+    """The gate: once a run has executed something irreversible, whether its first half
+    committed is not a question the engine may answer by doing the whole thing over. It parks
+    instead, and the operator gets the live session."""
     app = ExpiringApp(screen=SEARCH)         # not on a timer; tripped by hand below
     engine = build_expiring(tmp_path, app)
     engine.sign_on = app.sign_on
@@ -1394,11 +1352,9 @@ async def test_a_condition_a_human_does_not_clear_stops_rather_than_parking_fore
 ) -> None:
     """An operator can resume without having fixed anything.
 
-    The declared condition is still on screen, so the run classifies it again and
-    would park again — and again. Parking is not free: it holds the only session,
-    and a queue that keeps re-issuing the same intervention teaches operators to
-    ignore it. After two the run stops and names the condition it could not get
-    past, which is a thing someone can act on.
+    The declared condition is still on screen, so the run would classify it and park again,
+    holding the only session. After two the run stops and names the condition it could not get
+    past.
     """
     # A bare sign-on screen with no "session has expired" on it. An expiry that says
     # so is a declared recovery; arriving here with no explanation is not.
@@ -1440,21 +1396,16 @@ async def test_the_automation_cannot_act_while_a_human_holds_control(tmp_path: P
 
 
 def _allowing(policy: Policy) -> Policy:
-    """The same policy with risky actions allowed rather than confirmed.
-
-    A test about ambiguity should not be answered by the risky-disposition
-    escalation that would fire first — otherwise it passes for the wrong reason.
-    """
+    """The same policy with risky actions allowed rather than confirmed, so a test about
+    ambiguity is not answered by the risky-disposition escalation that would fire first."""
     return policy.__class__(**{**_policy_kwargs(policy), "risky_disposition": "allow"})
 
 
 async def test_an_anchor_that_matches_two_rows_stops_a_risky_step(tmp_path: Path) -> None:
     """Three rows whose button reads exactly "View" are three different members.
 
-    The recorded position picks one, and on a write that is a guess with a
-    member's money behind it. `find_and_act` has defaulted to escalating on
-    ambiguity from the start because it is the obviously data-dependent case;
-    this is the same rule on an ordinary click, which is where it was missing.
+    The recorded position picks one, and on a write that is a guess with a member's money
+    behind it. The same rule `find_and_act` applies, on an ordinary click.
     """
     two_rows = Observation(
         screenshot_path="/nonexistent/frame.png",
@@ -1488,11 +1439,9 @@ async def test_an_anchor_that_matches_two_rows_stops_a_risky_step(tmp_path: Path
 async def test_a_substring_match_is_not_ambiguity(tmp_path: Path) -> None:
     """The heading "Member Search" is not a rival for the "Search" button.
 
-    `contains` is the right default — a balance lives inside "Available Balance:
-    $18,204.55" — but it means the raw match count is inflated on nearly every
-    screen. A rule that read it directly would park a risky step on a screen where
-    a human sees no ambiguity at all, which is the failure mode that teaches
-    operators to ignore the queue.
+    `contains` is the right default — a balance lives inside "Available Balance: $18,204.55" —
+    but it inflates the raw match count on nearly every screen, and a rule reading it directly
+    would park a risky step where a human sees no ambiguity.
     """
     screen = Observation(
         screenshot_path="/nonexistent/frame.png",
@@ -1659,13 +1608,11 @@ async def test_an_outcome_the_app_does_not_declare_stops_before_anything_is_touc
 async def test_a_blank_required_input_is_refused_before_the_browser_opens(
     tmp_path: Path,
 ) -> None:
-    """The incident, at its narrowest point.
+    """An empty string is not a supplied input.
 
-    Measured, on a live run: `account_nickname=""` reached the contract, which
-    tested `is None` and let it by. `{{account_nickname}}` then rendered to
-    nothing, the anchor tier skipped itself for want of a needle, the ladder fell
-    to "any text element", and the run returned the first row's balance as a
-    SUCCESS. A caller asking for nothing was told a number about somebody's money.
+    A contract testing only `is None` lets it by, `{{account_nickname}}` renders to nothing,
+    the anchor tier has no needle, and the ladder falls to "any text element" — returning the
+    first row's balance as a SUCCESS.
     """
     engine, driver, _ = build(tmp_path, [ACCOUNTS_ROW])
     result = await engine.replay(
@@ -1686,3 +1633,38 @@ async def test_a_whitespace_input_is_blank_too(tmp_path: Path) -> None:
         savings_capability(), {"member_id": "12345", "account_nickname": "   "}
     )
     assert result.status is not RunStatus.SUCCESS
+
+
+async def test_a_resolution_failure_reports_the_value_not_the_placeholder(
+    tmp_path: Path,
+) -> None:
+    """`expected` is read by a person, so it carries the input, not the template: a failure
+    reports the account it looked for rather than "{{account_nickname}}"."""
+    cap = savings_capability()
+    extract = cap.steps[1]
+    cap = cap.model_copy(
+        update={
+            "steps": [
+                cap.steps[0],
+                extract.model_copy(
+                    update={
+                        "target": extract.target.model_copy(
+                            update={
+                                "target_desc": "the value to the right of '{{account_nickname}}'"
+                            }
+                        )
+                    }
+                ),
+            ]
+        }
+    )
+    engine, _, _ = build(
+        tmp_path, [frame("start"), frame("Member Profile", "Everyday Checking", "$4,820.19")]
+    )
+    result = await engine.replay(cap, INPUTS)
+
+    assert result.status is RunStatus.FAILURE
+    assert result.failure is not None
+    assert result.failure.kind is FailureKind.RESOLUTION_EXHAUSTED
+    assert result.failure.expected == "the value to the right of 'Primary Savings'"
+    assert "{{" not in (result.failure.expected or "")

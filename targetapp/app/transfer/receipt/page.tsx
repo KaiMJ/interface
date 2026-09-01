@@ -1,8 +1,7 @@
 /**
- * Transfer funds — step 3 of 3, the checkpoint screen. Everything a capability wants
- * to extract is here and distinguishable by anchor text rather than position, and
- * the success checkpoint asserts "Transfer Complete" — the artifact does not
- * conclude success from having pressed a button.
+ * Transfer funds — step 3 of 3, the checkpoint screen. Everything a capability extracts
+ * is distinguishable by anchor text rather than position, and the success checkpoint
+ * asserts "Transfer Complete" rather than concluding success from a button press.
  */
 
 import Link from "next/link";

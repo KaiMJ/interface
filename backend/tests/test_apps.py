@@ -1,8 +1,6 @@
 """One app per policy file, selected per run.
 
-The check these tests exist for: adding a second application must be adding a
-YAML file, not editing `backend/src`. Anything here that needed a Python change
-would be a bug in the architecture rather than a configuration step, so the
+Adding a second application must be adding a YAML file, not editing `backend/src`, so the
 second app below is written from scratch in a temp directory and never imported.
 """
 

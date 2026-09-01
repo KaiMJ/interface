@@ -1,19 +1,16 @@
 # The automation container: a real (virtual) desktop that both the agent and a
 # human operator can drive.
 #
-# Lineage: a trimmed fork of Anthropic's computer-use-demo image. We keep the
-# desktop plumbing (Xvfb + window manager + x11vnc + noVNC) because that is what
-# makes the §3.6 handoff real rather than mocked — the human takes over the same
-# X display the agent is driving. We drop the demo's agent loop and Streamlit UI
-# and substitute our own backend.
+# A trimmed fork of Anthropic's computer-use-demo image. The desktop plumbing (Xvfb +
+# window manager + x11vnc + noVNC) is what makes the handoff real rather than mocked: the
+# human takes over the same X display the agent is driving. The demo's agent loop and
+# Streamlit UI are dropped.
 #
-# Two stages. The builder resolves and installs Python dependencies into a venv;
-# the runtime copies that venv and adds only what has to exist at run time. That
-# leaves uv, the resolver's caches, and the build toolchain behind.
+# Two stages: the builder resolves and installs Python dependencies into a venv, and the
+# runtime copies that venv and adds only what has to exist at run time.
 #
-# It also drops Playwright's official image, which ships Chromium, Firefox AND
-# WebKit plus their combined dependency closure. We drive one browser. Installing
-# `chromium` alone from a plain slim base costs about a gigabyte less.
+# Not Playwright's official image, which ships Chromium, Firefox and WebKit plus their
+# combined dependency closure; `chromium` alone from a slim base costs ~1GB less.
 
 ARG PYTHON_VERSION=3.12-slim-bookworm
 
@@ -30,11 +27,10 @@ ENV UV_LINK_MODE=copy \
 
 WORKDIR /app
 
-# Dependency layer, resolved from the lockfile and nothing else. `--frozen` means
-# the build fails if uv.lock is stale rather than silently resolving something
-# different from what was tested — which is the entire point of committing a lock.
-# `--no-install-project` keeps this layer independent of application code, so an
-# edit to src/ does not trigger a multi-gigabyte reinstall.
+# Dependency layer, resolved from the lockfile and nothing else. `--frozen` fails the
+# build on a stale uv.lock rather than resolving something other than what was tested.
+# `--no-install-project` keeps this layer independent of application code, so an edit to
+# src/ does not trigger a multi-gigabyte reinstall.
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project --extra perception
@@ -73,10 +69,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
         ca-certificates \
         procps \
-        # OpenMP runtime, needed by opencv and onnxruntime. The slim base omits
-        # it, and torch bundles a private copy — so anything importing torch first
-        # appears to work while a standalone import fails. An accidental
-        # dependency on import order is worse than a missing package.
+        # OpenMP runtime, needed by opencv and onnxruntime. The slim base omits it and
+        # torch bundles a private copy, so without this the imports work or fail
+        # depending on order.
         libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -102,13 +97,26 @@ COPY --from=builder /app/.venv /app/.venv
 RUN playwright install --with-deps chromium \
  && rm -rf /var/lib/apt/lists/*
 
-# RapidOCR caches model weights inside its own package directory, and the
-# container runs as the invoking user. The ONNX weights ship in the wheel, but the
+# RapidOCR caches model weights inside its own package directory and offers no way
+# to move it — the path is `Path(__file__).parent.parent / "models"`, with no
+# setting and no environment variable. The ONNX weights ship in the wheel; the
 # torch ones — the only route to this machine's GPU, and OCR is ~95% of a replay's
-# wall clock — are fetched on first use, which a read-only directory turns into a
-# failure halfway through the first run. Writable here so that `CUA_OCR_ENGINE=torch`
-# can provision itself; see `cua.perception.ocr`.
-RUN chmod -R a+w /app/.venv/lib/python3.12/site-packages/rapidocr/models
+# wall clock — are fetched on first use.
+#
+# Left in the image, that directory is *inside a layer*, so every rebuild discards
+# the torch weights and the next run pays a download it may not be able to make.
+# Measured: with the upstream host unreachable, each process start stalled ~60s per
+# missing file before falling back to the CPU. That contradicts the promise two
+# stanzas down — weights live in the bind-mounted volume, not the image.
+#
+# So the package directory becomes a symlink into that volume, and the wheel's own
+# ONNX files are kept aside as a seed the entrypoint restores. The seed is what
+# keeps the symlink honest on a first run against an empty ./models.
+RUN set -eux; \
+    d=/app/.venv/lib/python3.12/site-packages/rapidocr/models; \
+    mv "$d" /opt/rapidocr-seed; \
+    chmod -R a+r /opt/rapidocr-seed; \
+    ln -s /models/rapidocr "$d"
 
 COPY src ./src
 COPY image ./image

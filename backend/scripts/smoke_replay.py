@@ -3,10 +3,8 @@
 
     docker compose exec desktop python3 scripts/smoke_replay.py
 
-The capability here is hand-written rather than recorded, on purpose: this script
-answers "does the deterministic path work against the real app", and a recorded
-artifact would answer that question and the discovery question at once, so a
-failure would not say which half broke.
+The capability here is hand-written rather than recorded: a recorded artifact would test the
+deterministic path and discovery at once, so a failure would not say which half broke.
 
 Three invocations, one per result class the caller has to tell apart:
 

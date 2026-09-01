@@ -1,10 +1,8 @@
 """What a run leaves behind for a human.
 
-The system already made every decision these tests assert on — which tier found
-the target, what policy said, what the model was shown. It just used to throw
-them away once they had been acted on, which meant the console could show that a
-step happened and never why. These are the records that close that gap, so they
-are tested like a contract rather than like logging: something reads them.
+Which tier found the target, what policy said, what the model was shown — decisions the system
+makes anyway, kept so the console can show not just that a step happened but why. Tested like
+a contract rather than like logging, because something reads them.
 """
 
 from __future__ import annotations
@@ -63,8 +61,7 @@ def frame(*elements: Element) -> Observation:
 
 
 def test_an_allowed_action_is_recorded_not_only_a_denied_one() -> None:
-    # The failure this prevents: evidence in which "this transfer was permitted"
-    # is represented by the absence of an entry.
+    # Otherwise "this transfer was permitted" is represented by the absence of an entry.
     decision = POLICY.decide(Primitive.CLICK, Risk.SAFE, "click the View button")
 
     assert decision.disposition == "allow"
@@ -74,8 +71,7 @@ def test_an_allowed_action_is_recorded_not_only_a_denied_one() -> None:
 
 
 def test_a_promotion_names_the_pattern_that_caused_it() -> None:
-    # Policy may raise a step the recording declared safe. Reporting the promotion
-    # without its cause reads as the system being arbitrary.
+    # Policy may raise a step the recording declared safe, and the promotion carries its cause.
     decision = POLICY.decide(Primitive.CLICK, Risk.SAFE, "click Confirm Transfer")
 
     assert decision.disposition == "confirm"
@@ -162,9 +158,8 @@ def test_ambiguity_is_reported_as_a_count_not_hidden() -> None:
 
 
 def test_a_relation_that_lands_nowhere_says_so() -> None:
-    # Typing into a label because the field beside it could not be found is the
-    # class of silent wrong action this system exists to prevent, so the miss has
-    # to be legible rather than merely correct.
+    # Typing into a label because the field beside it could not be found is a silent wrong
+    # action, so the miss has to be legible rather than merely correct.
     obs = frame(el("e0", 0.8, 0.1, "User ID"))
     target = Target(
         intent="i",
@@ -209,11 +204,8 @@ async def test_a_replayed_step_carries_its_policy_and_its_ladder(tmp_path: Path)
 
 @pytest.mark.asyncio
 async def test_a_rejected_tool_call_is_still_a_step_in_the_log(tmp_path: Path) -> None:
-    """A model that tried something impossible left no trace at all.
-
-    The step log a human reads was a filtered view of what happened, filtered by
-    exactly the thing being debugged.
-    """
+    """A turn that produced no artifact step is still recorded, or the step log is filtered by
+    exactly the thing being debugged."""
     from fakes import FakeDriver, FakePerceiver
     from fakes import frame as fake_frame
 
@@ -250,9 +242,8 @@ async def test_a_rejected_tool_call_is_still_a_step_in_the_log(tmp_path: Path) -
     assert rejected.model_turn is not None
     assert rejected.model_turn.mark == 999
     assert "not on this screen" in (rejected.model_turn.detail or "")
-    # The entry navigation is step 1 of the artifact, so it is step 1 of the log —
-    # and it carries the frame the run started on, not an empty record that
-    # renders as a black panel.
+    # The entry navigation is step 1 of the artifact, so it is step 1 of the log, carrying the
+    # frame the run started on.
     assert result.steps[0].step_id == 1
     assert result.steps[0].policy is not None
     assert result.steps[0].evidence.screenshot

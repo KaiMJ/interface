@@ -1,11 +1,8 @@
 "use client";
 
 /**
- * The console's vocabulary: panels, labelled fields, status marks, raw JSON.
- *
- * Extracted because the same four shapes carry every panel, and because a debug
- * surface earns trust by being consistent — a status that is a dot in one place
- * and a word in another makes a reader check twice.
+ * The console's vocabulary: panels, labelled fields, status marks, raw JSON. The same
+ * four shapes carry every panel, so a status reads the same way everywhere.
  */
 
 import { useState } from "react";
@@ -91,11 +88,9 @@ export function statusColor(status: string): string {
 /**
  * A run in flight reads as `running`, not as its eventual failure.
  *
- * The engine writes its result to evidence before every step so a run can be
- * watched while it happens; the initial status has to be one that means "not
- * finished" rather than a terminal class, or every live run looks broken until
- * it ends. The hollow mark distinguishes it at a glance from the solid terminal
- * states, which is the point of showing it at all.
+ * The engine writes its result to evidence before every step, so the initial status has
+ * to mean "not finished" rather than a terminal class. The hollow mark distinguishes it
+ * from the solid terminal states.
  */
 export function StatusDot({ status, label = true }: { status: string; label?: boolean }) {
   const live = status === "running";
@@ -135,11 +130,9 @@ export function Chip({
 }
 
 /**
- * The escape hatch.
- *
- * Every panel in this console is an opinionated reading of a record on disk, and
- * an opinionated reading is exactly what you stop trusting when you are debugging
- * the thing that produced it. Collapsed by default, one click from the bytes.
+ * The escape hatch: every panel here is an opinionated reading of a record on disk, and
+ * a reading is what you stop trusting when debugging what produced it. Collapsed by
+ * default, one click from the bytes.
  */
 export function Json({ value, label = "raw" }: { value: unknown; label?: string }) {
   const [open, setOpen] = useState(false);

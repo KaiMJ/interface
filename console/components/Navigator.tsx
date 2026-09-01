@@ -1,9 +1,8 @@
 "use client";
 
 /**
- * One rail, three lists, one at a time — what is this run doing, what has this
- * system done, what can it do. You are never asking two at once, so they are tabs
- * rather than three columns competing for the same space.
+ * One rail, three lists, one at a time — what is this run doing, what has this system
+ * done, what can it do. Tabs rather than three columns, since you never ask two at once.
  *
  * The horizontal rail above the frame is a scrubber: shape and timing at a glance,
  * deliberately saying nothing about what each step *is*.
@@ -155,9 +154,8 @@ export function Navigator({
                 onClick={() => onSelectRun(r.run_id)}
                 title={r.run_id}
                 status={r.status}
-                // The one line that distinguishes this run from the next: what it
-                // ran, or — for a discovery run, which has no capability yet —
-                // what it was asked to do.
+                // What distinguishes this run from the next: what it ran, or — for a
+                // discovery run, which has no capability yet — what it was asked to do.
                 detail={`${r.capability ?? r.goal ?? r.kind}`}
                 meta={r.duration_ms ? ms(r.duration_ms) : ""}
               />
@@ -247,12 +245,11 @@ function Row({
 
 /**
  * The live edge of a running discovery: the step being decided, before there is any
- * outcome to record. Discovery spends roughly half its wall clock waiting on the
- * model — one turn of the recording run took 70 seconds — and without this the
- * console is indistinguishable from a hung run for that whole time.
+ * outcome to record. Discovery spends roughly half its wall clock waiting on the model,
+ * and without this a live run is indistinguishable from a hung one.
  *
- * The elapsed seconds are counted here rather than sent. The server has nothing new
- * to say each second, and a heartbeat per second is a heartbeat too many.
+ * The elapsed seconds are counted here rather than sent — the server has nothing new to
+ * say each second.
  */
 function Pending({ pending }: { pending: Thinking }) {
   const [now, setNow] = useState(() => Date.now());

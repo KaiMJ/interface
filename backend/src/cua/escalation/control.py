@@ -9,9 +9,7 @@ calling `click()`:
          ▲                                              │
          └──────────── resume ◄──── NOBODY ◄────release ┘
 
-`NOBODY` is the interval between the automation stopping and the operator connecting,
-and it is what makes "the agent clicked while I was typing" impossible rather than
-unlikely.
+`NOBODY` is the interval between the automation stopping and the operator connecting.
 """
 
 from __future__ import annotations
@@ -57,9 +55,8 @@ class RunControl:
     def park(self, req: InterventionRequest) -> None:
         """Surrender control and publish the request. Does not wait.
 
-        The whole state transition: everything an operator can observe has happened
-        when this returns. Split from `escalate` so the queue can be exercised
-        without a background task pretending to be a run.
+        Everything an operator can observe has happened when this returns. Split from
+        `escalate` so the queue can be exercised without a run behind it.
         """
         # Surrendered *before* publishing, so there is no window in which an
         # operator sees the intervention while the automation may still act.
@@ -116,8 +113,8 @@ class RunControl:
 
 
 class ControlRegistry:
-    """All live runs, by id. In-memory deliberately: what it coordinates is a
-    browser on this machine's display, so a token outliving that process lies."""
+    """All live runs, by id. In-memory deliberately: what it coordinates is a browser on this
+    machine's display, so a token outliving that process would lie."""
 
     def __init__(self) -> None:
         self._runs: dict[str, RunControl] = {}
@@ -150,9 +147,8 @@ class ControlRegistry:
         ]
 
     def all(self) -> list[InterventionRequest]:
-        """Every intervention seen, open or closed. `pending()` is the queue; this
-        is the record beside it, so checking what you did five minutes ago does not
-        mean opening an evidence directory."""
+        """Every intervention seen, open or closed. `pending()` is the queue; this is the
+        record beside it."""
         return [c.intervention for c in self._runs.values() if c.intervention is not None]
 
     def forget(self, run_id: str) -> None:

@@ -1,5 +1,4 @@
-"""What is this frame? One function, so the ordering cannot be re-litigated per
-call site — the usual way a clean error model rots.
+"""What is this frame? One function, so the ordering cannot be re-litigated per call site.
 
     BUSINESS_OUTCOME  per capability; detector may be inherited from app policy
     RECOVERABLE       per app policy; handle, re-observe, re-execute if safe
@@ -45,8 +44,8 @@ def classify(
 ) -> Classified:
     """Order is load-bearing; see module docstring."""
 
-    # 1. First, always. Evaluated after the checkpoint, "no such member" would be
-    #    reported as a failed assertion rather than as the answer that was asked for.
+    # 1. First, always: evaluated after the checkpoint, "no such member" arrives as a failed
+    #    assertion rather than as the answer that was asked for.
     for outcome in effective_outcomes(cap, policy):
         # Inherited detectors are filled in above, or it raised.
         detector = outcome.detector
@@ -82,19 +81,18 @@ def classify(
 class UndeclaredOutcome(Exception):
     """A capability inherits an outcome the app does not declare.
 
-    Raised at run start, not when the screen appears: an unresolved detector does
-    not error, it never matches — so the outcome comes back as a checkpoint failure
-    while the contract goes on advertising it.
+    Raised at run start rather than when the screen appears: an unresolved detector never
+    matches, so the outcome would come back as a checkpoint failure while the contract went on
+    advertising it.
     """
 
 
 def effective_outcomes(cap: Capability, policy: Any) -> list[BusinessOutcome]:
     """Outcomes with inherited detectors filled in.
 
-    An entry carrying its own detector is flow-specific ("insufficient funds") and
-    used as recorded. One without names an app-level detector, resolved here rather
-    than at load time so a policy edit takes effect on the next run — one YAML diff
-    covering every capability on the app.
+    An entry carrying its own detector is flow-specific ("insufficient funds") and used as
+    recorded; one without names an app-level detector, resolved here rather than at load time
+    so a policy edit takes effect on the next run of every capability.
     """
     resolved: list[BusinessOutcome] = []
     for outcome in cap.business_outcomes:
@@ -132,15 +130,12 @@ def effective_outcomes(cap: Capability, policy: Any) -> list[BusinessOutcome]:
 def conditions(
     obs: Observation, policy: Any, recovery_counts: dict[str, int]
 ) -> Classified | None:
-    """Declared app conditions on this frame, or None if it is ordinary.
-
-    Evaluable without a step, which is why it is its own function — the engine
-    calls it before a step acts as well as after.
-    """
+    """Declared app conditions on this frame, or None if it is ordinary. Evaluable without a
+    step, which is why it is its own function: the engine calls it before a step acts as well
+    as after."""
     text = _text(obs)
 
-    # Bounded: dismissing the same modal eleven times means the dismissal is not
-    # working, and "eleven successful recoveries" is the wrong description of that.
+    # Bounded: dismissing the same modal eleven times means the dismissal is not working.
     recovery = policy.match_recovery(text)
     if recovery is not None:
         if recovery_counts.get(recovery.name, 0) >= recovery.max_per_run:
@@ -152,8 +147,8 @@ def conditions(
             )
         return Classified(kind=Classification.RECOVERABLE, name=recovery.name)
 
-    # No handler, split by who can clear it. Both would otherwise arrive as "the
-    # checkpoint did not hold" — the symptom, not the cause.
+    # No handler, split by who can clear it. Both would otherwise arrive as "the checkpoint
+    # did not hold" — the symptom, not the cause.
     app_error = policy.match_app_error(text)
     if app_error is not None:
         return Classified(
@@ -176,9 +171,6 @@ def _text(obs: Observation) -> str:
 
 
 def _outcome_fields(outcome: Any, params: dict[str, Any]) -> dict[str, Any]:
-    """Fill a business outcome's declared fields, from the run's inputs.
-
-    Not from the screen: reading the member id back off an error page is scraping a
-    message to recover a value we were handed.
-    """
+    """Fill a business outcome's declared fields from the run's inputs, rather than scraping an
+    error page to recover a value the caller handed us."""
     return {name: params.get(name) for name in outcome.result_fields}

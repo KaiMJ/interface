@@ -22,9 +22,8 @@ from ..schema import CheckKind, Checkpoint, Observation, Primitive
 class AuthenticationFailed(RuntimeError):
     """The session could not reach an authenticated state.
 
-    Terminal for the session, not for a run: every capability assumes it starts
-    signed in, so continuing would produce a series of steps that each fail for a
-    reason that has nothing to do with the capability.
+    Terminal for the session, not for a run: every capability assumes it starts signed in, so
+    continuing would fail every step for a reason unrelated to the capability.
     """
 
 
@@ -51,16 +50,12 @@ class Session:
     async def authenticate(self, username: str, password: str) -> None:
         """Log in once, before any capability runs.
 
-        Deliberately not a recorded capability: it is the one flow where a secret
-        is typed, and keeping it out of the artifact system means no artifact ever
-        needs to reference one. The *recipe* — which fields, which button, what
-        the signed-out screen says — is per-app configuration in the policy file,
-        so pointing this at a second application is an edit to YAML rather than to
-        Python.
+        Deliberately not a recorded capability: it is the one flow where a secret is typed, so
+        no artifact ever needs to reference one. The *recipe* — which fields, which button,
+        what the signed-out screen says — is per-app configuration in the policy file.
 
-        Idempotent. A session that is already signed in returns immediately, which
-        is what makes it safe to call before every run rather than tracking
-        whether the cookie is still good.
+        Idempotent: a session already signed in returns immediately, so this is safe to call
+        before every run rather than tracking whether the cookie is still good.
         """
         if not username or self.sign_on is None:
             return
@@ -72,9 +67,8 @@ class Session:
         if not evaluate(detector, obs):
             return
 
-        # The credential is substituted here, at the moment of typing, from values
-        # this object was handed. The recipe holds `{{password}}` and nothing else
-        # ever holds the value.
+        # The credential is substituted at the moment of typing. The recipe holds
+        # `{{password}}` and nothing else ever holds the value.
         secrets = {"username": username, "password": password}
         for step in self.sign_on.steps:
             obs = await self.observe()
@@ -82,9 +76,8 @@ class Session:
 
         obs = await self.observe()
         if evaluate(detector, obs):
-            # Deliberately vague. The screen may say "Sign-on failed"; repeating
-            # it into an exception message that ends up in a log is how a bad
-            # credential becomes a logged credential.
+            # Deliberately vague: the screen may say "Sign-on failed", and repeating it into
+            # an exception that reaches a log is how a bad credential becomes a logged one.
             raise AuthenticationFailed(
                 f"still on the sign-on screen after submitting as {username!r}"
             )
@@ -128,25 +121,21 @@ class WrongApp(RuntimeError):
 class SessionPool:
     """One session per display. Single-display in v1, so: one session.
 
-    Present as a named concept rather than a bare global because concurrency is
-    the first thing that breaks this design, and the constraint should be visible
-    in the type rather than discovered at runtime.
+    A named concept rather than a bare global, so the concurrency constraint is visible in the
+    type rather than discovered at runtime.
 
-    A session is also bound to one *application*, because the sign-on recipe and
-    the guardrails come from that app's policy. Two applications cannot share a
-    display: the X display is the coordinate space, so a second browser on it
-    would put two apps in one picture and every resolved coordinate would be
-    ambiguous. Asking for the wrong one raises rather than silently driving app A
-    under app B's allowlist.
+    A session is also bound to one *application*, because the sign-on recipe and the guardrails
+    come from that app's policy. Two applications cannot share a display: the X display is the
+    coordinate space, so a second browser on it would make every resolved coordinate ambiguous.
+    Asking for the wrong one raises rather than driving app A under app B's allowlist.
     """
 
     def __init__(self, factory: Callable[[str, str | None], Session] | None = None) -> None:
         self._sessions: dict[str, Session] = {}
         self._apps: dict[str, str | None] = {}
         self._factory = factory
-        # Serialized because a session is one browser on one display: two runs
-        # sharing it would interleave clicks, and the failure would look like a
-        # flaky application rather than like a concurrency bug.
+        # Serialized because a session is one browser on one display: two runs sharing it
+        # would interleave clicks and look like a flaky application.
         self._lock = asyncio.Lock()
 
     async def acquire(self, display: str, app: str | None = None) -> Session:

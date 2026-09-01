@@ -1,6 +1,5 @@
 /**
- * App chrome, deliberately hostile-ish in ways that are true of real back-office
- * systems and that a modern component library would accidentally fix: no
+ * App chrome, deliberately hostile in ways real back-office systems are: no
  * data-testid anywhere, plain anchors with generic labels, and two injectable
  * interruptions.
  *
@@ -64,11 +63,9 @@ export function Shell({
 }
 
 /**
- * The unexpected dialog.
- *
- * Rendered last and positioned over everything. It does not move the page — that
- * is the whole point. A recorded coordinate still resolves to the "right" place
- * and the click lands here instead.
+ * The unexpected dialog: rendered last and positioned over everything. It does not move
+ * the page, so a recorded coordinate still resolves to the "right" place and the click
+ * lands here instead.
  */
 function MaintenanceModal() {
   return (

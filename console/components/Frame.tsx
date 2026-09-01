@@ -3,14 +3,14 @@
 /**
  * What the agent was looking at, and what it made of it. Three layers over one
  * image: the capture an operator would have seen over VNC; the numbered marks the
- * model was actually shown, against which any argument about a decision is
- * litigated; and every box perception found, with role, source and confidence.
+ * model was actually shown; and every box perception found, with role, source and
+ * confidence.
  *
  * Coordinates are normalised 0..1 of the recording viewport, so they overlay any
- * rendered size — which is the point of normalising them.
+ * rendered size.
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Chip, ms } from "./ui";
 import { StepLine } from "./RunView";
 import {
@@ -48,8 +48,11 @@ export function Frame({
   const [observation, setObservation] = useState<Observation | null>(null);
   const [hover, setHover] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [paint, setPaint] = useState<React.CSSProperties | null>(null);
 
-  // The observation is a per-step file, fetched on demand. Loading every step's
+  // The observation is a per-step file, fetched on demand: loading every step's
   // elements up front would pull a megabyte of boxes to render one frame.
   useEffect(() => {
     setObservation(null);
@@ -64,11 +67,36 @@ export function Frame({
     };
   }, [runId, frame?.observation]);
 
+  // Where the image actually lands inside its box. The overlays are percentages of
+  // the *displayed* frame, so they need the displayed frame's rectangle rather than
+  // the element containing it — a wrapper clamped to the scroll area while the image
+  // keeps its own height scales every overlay against a shorter frame. Measured, so a
+  // layout change cannot quietly reintroduce it.
+  const measure = useCallback(() => {
+    const wrap = wrapRef.current;
+    const img = imgRef.current;
+    if (!wrap || !img) return;
+    const { naturalWidth: nw, naturalHeight: nh } = img;
+    const box = img.getBoundingClientRect();
+    const origin = wrap.getBoundingClientRect();
+    if (!nw || !nh || !box.width || !box.height) return setPaint(null);
+    // Sub-pixel on purpose: offsetWidth and friends round, and half a pixel of rounding
+    // misplaces where the agent clicked.
+    const scale = Math.min(box.width / nw, box.height / nh); // what object-contain did
+    const w = nw * scale;
+    const h = nh * scale;
+    setPaint({
+      left: box.left - origin.left + (box.width - w) / 2,
+      top: box.top - origin.top + (box.height - h) / 2,
+      width: w,
+      height: h,
+    });
+  }, []);
+
   // A step that failed *after* acting has its reason on the after-frame — the
-  // permission denial, the application error, the screen the checkpoint did not
-  // find. Defaulting to the pre-action capture there shows the screen from before
-  // the thing went wrong, which reads as the console having missed the failure
-  // entirely. Keyed on the step so it re-decides on selection and still leaves the
+  // permission denial, the application error, the screen the checkpoint did not find.
+  // Defaulting to the pre-action capture there shows the screen from before the thing
+  // went wrong. Keyed on the step, so it re-decides on selection and still leaves the
   // tabs under the operator's hand.
   useEffect(() => {
     setLayer(step && isFailed(step.status) && frame?.after ? "after" : "marks");
@@ -90,6 +118,17 @@ export function Frame({
             ? frame.after
             : frame.frame,
       );
+
+  useEffect(() => {
+    const wrap = wrapRef.current;
+    const img = imgRef.current;
+    if (!wrap || !img) return;
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(wrap);
+    ro.observe(img);
+    return () => ro.disconnect();
+  }, [measure, src]);
 
   const failureBox =
     failure?.region && frame && failure.step_id === frame.step_id ? failure.region : null;
@@ -142,53 +181,60 @@ export function Frame({
           ))}
         </span>
       </div>
-      <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-black">
+      <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black">
         {src && frame ? (
-          <div className="relative inline-block max-h-full max-w-full">
+          <div ref={wrapRef} className="relative flex h-full w-full items-center justify-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
+              ref={imgRef}
               src={src}
               alt={`step ${frame.step_id}`}
+              onLoad={measure}
               className="max-h-full max-w-full object-contain"
             />
 
-            {showing === "elements"
-              ? elements.map((el) => (
-                  <span
-                    key={el.id}
-                    onMouseEnter={() => setHover(el.id)}
-                    onMouseLeave={() => setHover((h) => (h === el.id ? null : h))}
-                    className="absolute cursor-crosshair"
-                    style={{
-                      ...place(el.bbox),
-                      border: `1px solid ${SOURCE_COLOR[el.source] ?? "#8593a2"}`,
-                      background: hover === el.id ? "rgba(90,169,230,0.25)" : "transparent",
-                    }}
-                    title={`${el.id} ${el.role ?? "?"} · ${el.source} ${el.conf.toFixed(2)}\n${
-                      el.text ?? el.name ?? ""
-                    }`}
-                  />
-                ))
-              : null}
+            {/* One layer, laid over exactly the pixels of the frame. Everything
+                inside it is a percentage of the recording viewport, which is only
+                true of this rectangle. */}
+            <div className="pointer-events-none absolute" style={paint ?? { display: "none" }}>
+              {showing === "elements"
+                ? elements.map((el) => (
+                    <span
+                      key={el.id}
+                      onMouseEnter={() => setHover(el.id)}
+                      onMouseLeave={() => setHover((h) => (h === el.id ? null : h))}
+                      className="pointer-events-auto absolute cursor-crosshair"
+                      style={{
+                        ...place(el.bbox),
+                        border: `1px solid ${SOURCE_COLOR[el.source] ?? "#8593a2"}`,
+                        background: hover === el.id ? "rgba(90,169,230,0.25)" : "transparent",
+                      }}
+                      title={`${el.id} ${el.role ?? "?"} · ${el.source} ${el.conf.toFixed(2)}\n${
+                        el.text ?? el.name ?? ""
+                      }`}
+                    />
+                  ))
+                : null}
 
-            {/* Where the resolver landed. Drawn on every layer: "the anchor
-                matched" and "the click went here" are only the same claim if you
-                can see them in the same place. */}
-            {targetBox && showing !== "after" ? (
-              <span
-                className="pointer-events-none absolute border-2 border-[var(--accent)]"
-                style={place(targetBox)}
-                title={`resolved via ${step?.resolution}`}
-              />
-            ) : null}
+              {/* Where the resolver landed. Drawn on every layer: "the anchor
+                  matched" and "the click went here" are only the same claim if you
+                  can see them in the same place. */}
+              {targetBox && showing !== "after" ? (
+                <span
+                  className="absolute border-2 border-[var(--accent)]"
+                  style={place(targetBox)}
+                  title={`resolved via ${step?.resolution}`}
+                />
+              ) : null}
 
-            {failureBox ? (
-              <span
-                className="pointer-events-none absolute border-2 border-[var(--err)]"
-                style={{ ...place(failureBox), boxShadow: "0 0 0 9999px rgba(0,0,0,0.45)" }}
-                title={`${failure?.kind}: ${failure?.observed ?? ""}`}
-              />
-            ) : null}
+              {failureBox ? (
+                <span
+                  className="absolute border-2 border-[var(--err)]"
+                  style={{ ...place(failureBox), boxShadow: "0 0 0 9999px rgba(0,0,0,0.45)" }}
+                  title={`${failure?.kind}: ${failure?.observed ?? ""}`}
+                />
+              ) : null}
+            </div>
           </div>
         ) : (
           <p className="p-6 text-[12px] text-[var(--muted)]">

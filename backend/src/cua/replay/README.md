@@ -18,50 +18,45 @@ production path — what an AI agent invokes.
 
 ## 1) The contract — answerable without touching the app (contract.py)
 
-- validate_inputs (coerce and check against the declared InputSpecs, before a
-  browser opens — a type error should be a rejected call, not a run that gets four
-  steps in and types "None" into an amount field)
+- validate_inputs (coerce and check against the declared InputSpecs, before a browser
+  opens — a type error is a rejected call, not a run that gets four steps in)
 - extract_outputs (read the declared outputs back out: coerce → normalize → bounds)
 - ContractError (a structured rejection the engine turns into a terminal result)
-
-A blank string is treated as missing, not as a value. `""` passes a plain `in` check,
-renders `{{account_nickname}}` to nothing, and the ladder then returns the first row's
-balance as a success.
 
 ## 2) The engine — one step at a time (engine.py)
 
 - ReplayEngine (the lifecycle below)
 - RunContext (what one run accumulates, including what the *current* step decided —
-  held here rather than returned, because a step that ends the run unwinds through
-  an exception and that is the step whose evidence matters most)
+  held here rather than returned, because a step that ends the run unwinds through an
+  exception)
 - the four ways a run ends early
     - _Business (a legitimate answer — the caller branches on it)
     - _Escalated (parked, handed to a human on the same live session)
     - _Failed (something we do not understand)
-    - _Restart (session expired, nothing irreversible had happened yet, so the
-      capability starts over rather than resuming somewhere it cannot verify)
+    - _Restart (session expired with nothing irreversible done, so the capability
+      starts over rather than resuming somewhere it cannot verify)
 
 ## 3) Classification — what is this frame? (outcomes.py)
 
 - classify (one function, so the order below cannot be re-litigated per call site)
-- effective_outcomes (fill in the detectors a capability inherits from app policy,
-  at run start — an unresolved detector does not error, it simply never matches)
-- conditions (declared app states; evaluable without a step, so the engine can also
-  ask before one acts)
+- effective_outcomes (fill in the detectors a capability inherits from app policy, at
+  run start — an unresolved detector does not error, it never matches)
+- conditions (declared app states, evaluable without a step, so the engine can also ask
+  before one acts)
 
 ## 4) Scanning — when position is a function of the data (scan.py)
 
 - Scanner (observe scope → group rows → test predicate → advance, bounded)
-- ScanResult (the matches, and whether the list was *exhausted* or we merely ran out
-  of budget — see below)
-- Untestable (the predicate cannot be answered, which is not the same as "no match":
-  equality against a cell the app truncated is unanswerable)
+- ScanResult (the matches, and whether the list was *exhausted* or merely ran out of
+  budget — see below)
+- Untestable (the predicate cannot be answered, which is not "no match": equality
+  against a cell the app truncated is unanswerable)
 
 ## 5) Tenancy (tenant.py)
 
-- rebase (a recorded URL, pointed at this deployment's install — without it a
-  capability recorded at one credit union and replayed from another navigates to the
-  first, passes the allowlist, and reports success about the wrong member)
+- rebase (a recorded URL, pointed at this deployment's install — without it a capability
+  recorded at one credit union and replayed from another navigates to the first, passes
+  the allowlist, and reports success about the wrong member)
 
 ---
 
@@ -80,8 +75,8 @@ balance as a success.
    resolve            Target → coordinate, via the ladder in resolve/
         │
         ▼
-   verify target      does the region say what the recording said it said?
-        │             is something stacked on top of it?
+   verify target      does the region say what the recording said, and is something
+        │             stacked on top of it?
         ▼
    execute            one primitive
         │
@@ -89,9 +84,9 @@ balance as a success.
    verify effect      poll the checkpoint to its own deadline, then classify
 ```
 
-Waiting happens at both ends of a step, and there is no unconditional `sleep()` on
-this path — waiting is polling to a declared deadline. The only two `sleep` calls are
-the poll interval itself and a `wait` action a policy declared with a number.
+There is no unconditional `sleep()` on this path — waiting is polling to a declared
+deadline. The only two `sleep` calls are the poll interval itself and a `wait` action a
+policy declared with a number.
 
 ## What is this frame — the order is the point
 
@@ -104,8 +99,8 @@ the poll interval itself and a `wait` action a policy declared with a number.
 ```
 
 Business outcomes are asked first. Evaluated after the checkpoint, "no member matches"
-arrives as a failed assertion — a layout problem an operator goes looking for and
-never finds — instead of the answer the caller asked for.
+arrives as a failed assertion — a layout problem an operator goes looking for and never
+finds — instead of the answer the caller asked for.
 
 ## When a step runs twice
 
@@ -118,14 +113,8 @@ never finds — instead of the answer the caller asked for.
    on_error: retry, within its budget      ┘
 ```
 
-The gate reads policy's verdict rather than the artifact's own `risk` field, so a step
-recorded `safe` and promoted by an intent pattern is excluded too. And the checkpoint
-is polled to its full deadline before any re-execution, so a step whose action landed
-and was merely obscured is never run a second time.
-
 ## Exhausted is not out-of-budget
 
-A scan that saw the whole list and found nothing is a business outcome. A scan that
-hit `max_advances` while the region was still changing is a hard failure — "not found"
-there would be a confidently wrong answer, which is the distinction the whole error
-taxonomy exists to keep.
+A scan that saw the whole list and found nothing is a business outcome. A scan that hit
+`max_advances` while the region was still changing is a hard failure — "not found" there
+would be a confidently wrong answer.

@@ -1,9 +1,6 @@
 """Fakes for the two surfaces the system touches: the screen and the model.
 
-Both are faked at the seam the design already has, which is the point of having
-one. A test that needed a browser and an API key would not run in CI, and none of
-what these tests assert — that a "no such member" screen is an outcome, that a
-discarded step is not recorded — has anything to do with pixels or with tokens.
+Both are faked at seams the design already has, so the tests need no browser and no API key.
 """
 
 from __future__ import annotations
@@ -132,9 +129,8 @@ class FakeDriver:
 class ScriptedLLM:
     """Plays back a fixed list of tool calls.
 
-    Faked at `LLMClient`'s two-method surface rather than at the HTTP layer,
-    because what these tests are about is what the loop does with an answer — not
-    how the answer was transported.
+    Faked at `LLMClient`'s two-method surface rather than at the HTTP layer: what is under
+    test is what the loop does with an answer.
     """
 
     model = "scripted/test"

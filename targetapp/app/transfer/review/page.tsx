@@ -1,12 +1,10 @@
 /**
- * Transfer funds — step 2 of 3. "Confirm Transfer" is the one control in this app
- * that moves money and cannot be taken back, so under `risky_disposition: confirm`
- * the automation must escalate before pressing it — which makes the escalation demo
- * a real guardrail firing rather than a contrived failure.
+ * Transfer funds — step 2 of 3. "Confirm Transfer" is the one control in this app that
+ * moves money and cannot be taken back, so under `risky_disposition: confirm` the
+ * automation escalates before pressing it.
  *
- * Both business outcomes are decided here and render with a 200: insufficient funds,
- * and over the daily limit. Neither is a failure, and a caller needs to distinguish
- * "the member is short" from "we lost the thread".
+ * Both business outcomes are decided here and render with a 200: insufficient funds, and
+ * over the daily limit. Neither is a failure.
  */
 
 import Link from "next/link";
@@ -43,9 +41,8 @@ export default async function Review({
   const overLimit = amt > DAILY_TRANSFER_LIMIT;
   const insufficient = amt > available;
 
-  // The extra interstitial. Injected, undeclared, and sitting between the review
-  // page and the confirmation — a step recorded without it will land on the wrong
-  // screen and the checkpoint has to catch that.
+  // The extra interstitial: injected, undeclared, and between the review page and the
+  // confirmation, so a step recorded without it lands on the wrong screen.
   if (faults.has("confirm") && !ack) {
     return (
       <Shell teller={teller} banner={faults.has("banner")} modal={faults.has("modal")}>
@@ -71,12 +68,9 @@ export default async function Review({
     );
   }
 
-  // The transfer's parameters travel in the form rather than in this action's
-  // closure. Closing over the page's variables is the shorter spelling and it
-  // fails at run time under Next 16 with `ReferenceError: memberId is not
-  // defined` — the closure is not carried across the server-action boundary. It
-  // surfaces only when the button is actually pressed, which is exactly the kind
-  // of runtime error a replay has to survive rather than assume away.
+  // The transfer's parameters travel in the form rather than in this action's closure:
+  // under Next 16 the closure is not carried across the server-action boundary, and the
+  // resulting `ReferenceError` surfaces only when the button is pressed.
   async function confirm(formData: FormData) {
     "use server";
     const m = String(formData.get("member") ?? "");

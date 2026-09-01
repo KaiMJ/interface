@@ -1,7 +1,6 @@
 /**
- * noVNC ships no type declarations. Rather than `any`, declare the slice of RFB
- * this console actually uses — which doubles as documentation of the handoff
- * contract: connect to a display, toggle who may send input, disconnect.
+ * noVNC ships no type declarations, so this declares the slice of RFB the console uses:
+ * connect to a display, toggle who may send input, disconnect.
  */
 declare module "@novnc/novnc" {
   export interface RFBOptions {

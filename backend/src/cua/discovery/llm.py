@@ -1,8 +1,6 @@
 """LLM client, via LiteLLM.
 
-Thin on purpose: two methods, so the model stays swappable rather than an architectural
-commitment, and "which model drives a UI best" stays an empirical question answered by
-changing `CUA_MODEL`.
+Thin on purpose: two methods, so the model stays swappable by changing `CUA_MODEL`.
 """
 
 from __future__ import annotations
@@ -19,10 +17,9 @@ class ToolCall:
     name: str
     input: dict[str, Any]
     text: str = ""          # the model's stated reasoning; recorded as step intent
-    # The chain of thought, when the model emits one. Distinct from `text`: with
-    # `tool_choice="required"` a reasoning model puts nothing in `content` and
-    # everything here, so reading only `text` records an empty string and the
-    # console shows a run that appears to have decided nothing.
+    # The chain of thought, when the model emits one. Distinct from `text`: under
+    # `tool_choice="required"` a reasoning model leaves `content` empty and puts everything
+    # here.
     reasoning: str = ""
     raw_id: str | None = None
 
@@ -54,10 +51,8 @@ class LLMClient:
     def preflight(self) -> None:
         """Fail fast if the configured model cannot do what the loop needs.
 
-        Checks vision and function-calling support via LiteLLM's capability
-        metadata, and that the provider's credential is present. A discovery run
-        that dies twenty seconds in because the model cannot see images is a
-        confusing failure; this one is not.
+        Checks vision and function-calling support via LiteLLM's capability metadata, and that
+        the provider's credential is present.
         """
         import litellm
 
@@ -65,10 +60,8 @@ class LLMClient:
         if missing:
             raise ModelUnusable(f"{self.model} needs {', '.join(missing)} in the environment")
 
-        # Capability metadata is best-effort: LiteLLM does not know every model,
-        # and a model it has not heard of is not necessarily unusable. An unknown
-        # model is allowed through and fails on the first turn with the provider's
-        # own error, which is more informative than ours would be.
+        # Best-effort: LiteLLM does not know every model. An unknown one is let through and
+        # fails on the first turn with the provider's own error.
         for name, supported in (
             ("vision", litellm.supports_vision),
             ("tool calling", litellm.supports_function_calling),
@@ -93,9 +86,8 @@ class LLMClient:
     ) -> ToolCall:
         """One turn. Returns exactly one tool call.
 
-        `tool_choice="required"` — a turn that returns prose is a wasted turn and
-        the loop has nothing to do with it. Providers that do not honour it get a
-        retry with an explicit instruction rather than a crash.
+        `tool_choice="required"`, since the loop has nothing to do with prose. Providers that
+        do not honour it get a retry with an explicit instruction rather than a crash.
         """
         turn = list(messages)
         if image_path is not None:
@@ -118,8 +110,8 @@ class LLMClient:
                     reasoning=_reasoning(choice),
                     raw_id=getattr(call, "id", None),
                 )
-            # Prose instead of a tool call. Say so and try once more rather than
-            # crashing a run that has already done nine steps of real work.
+            # Prose instead of a tool call. Say so and try once more rather than crashing a
+            # run that has already done real work.
             turn = [
                 *turn,
                 {"role": "assistant", "content": choice.content or ""},
@@ -138,10 +130,8 @@ class LLMClient:
     async def structured(self, system: str, prompt: str, schema: dict[str, Any]) -> dict[str, Any]:
         """One structured completion. Used only by artifact synthesis.
 
-        Expressed as a single forced tool call rather than as a JSON response
-        format, because tool calling is already a hard requirement of this design
-        while structured-output support varies by provider. One capability
-        requirement, not two.
+        A single forced tool call rather than a JSON response format: tool calling is already a
+        hard requirement, while structured-output support varies by provider.
         """
         tool = {
             "type": "function",
@@ -194,12 +184,9 @@ class ModelUnusable(RuntimeError):
 def _reasoning(choice: Any) -> str:
     """The model's chain of thought, from wherever the provider put it.
 
-    Two shapes in the wild and no way to know which a given model uses: a flat
-    `reasoning_content` string, or `thinking_blocks` carrying the same thing in
-    parts. Both are read and the first that yields text wins, because the
-    alternative is a per-model branch in the one file that exists to keep models
-    interchangeable. Redacted blocks carry no readable text and are skipped: the
-    turn is still recorded, it just has nothing to show for its thinking.
+    Two shapes in the wild: a flat `reasoning_content` string, or `thinking_blocks` carrying
+    the same thing in parts. Both are read and the first that yields text wins, rather than
+    branching per model. Redacted blocks carry no readable text and are skipped.
     """
     flat = str(getattr(choice, "reasoning_content", "") or "").strip()
     if flat:
@@ -216,9 +203,8 @@ def _reasoning(choice: Any) -> str:
 def _json(arguments: Any) -> dict[str, Any]:
     """Tool arguments, however the provider chose to send them.
 
-    Some return a JSON string, some a dict, and a model under load occasionally
-    returns a string that is nearly JSON. A malformed argument set is a bad turn,
-    not a crashed run, so it comes back empty and the loop reports it.
+    Some return a JSON string, some a dict, and a model under load occasionally returns a
+    string that is nearly JSON. A malformed argument set is a bad turn, not a crashed run.
     """
     if isinstance(arguments, dict):
         return arguments
@@ -232,10 +218,8 @@ def _json(arguments: Any) -> dict[str, Any]:
 def _with_image(messages: list[dict[str, Any]], image_path: Path) -> list[dict[str, Any]]:
     """Attach the frame to the last user message.
 
-    Only the current frame is ever sent. Earlier screenshots are represented by
-    the text history instead: a ten-step run would otherwise carry ten megabytes
-    of base64 into every subsequent turn, and models attend worse, not better,
-    with a pile of near-identical images to compare.
+    Only the current frame is ever sent; earlier screenshots are represented by the text
+    history, so a ten-step run does not carry ten megabytes of base64 into every later turn.
     """
     head, last = messages[:-1], dict(messages[-1])
     content = last.get("content")
@@ -247,9 +231,8 @@ def _with_image(messages: list[dict[str, Any]], image_path: Path) -> list[dict[s
 def image_part(path: Path) -> dict[str, Any]:
     """Encode a screenshot as an OpenAI-style image content part.
 
-    LiteLLM translates this to whatever the target provider wants, which is most
-    of the reason it is here — the alternative is a per-provider branch in the one
-    part of the loop that runs on every single turn.
+    LiteLLM translates this to whatever the target provider wants, so the per-turn path has no
+    per-provider branch.
     """
     data = base64.b64encode(path.read_bytes()).decode()
     return {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{data}"}}
@@ -258,8 +241,8 @@ def image_part(path: Path) -> dict[str, Any]:
 class NoLLM:
     """Raises on any call.
 
-    Injected into the replay engine so a model call on the replay path is a loud
-    crash rather than a slow, expensive, silently non-deterministic success.
+    Injected into the replay engine, so a model call on the replay path is a loud crash rather
+    than a silently non-deterministic success.
     """
 
     calls = 0

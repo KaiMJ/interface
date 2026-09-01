@@ -3,13 +3,10 @@
 
     docker compose exec desktop python3 scripts/smoke_scan.py
 
-The step type the design leans on hardest, and the one that is easiest to believe
-without checking. A member's transaction history is 22 rows today and may be 3
-tomorrow, so the row a caller wants has no stable position — recording
-`scroll, scroll, click(y)` is wrong four separate ways and recording the predicate
-is right in all four.
+A member's transaction history is 22 rows today and may be 3 tomorrow, so the row a caller
+wants has no stable position and a recorded `scroll, scroll, click(y)` cannot express it.
 
-What this exercises, in the order the failures matter:
+What this exercises:
 
   1. the scope is located by anchor text (a column header), not a recorded box
   2. rows are reconstructed from text boxes — a table row does not exist in pixels
@@ -80,9 +77,8 @@ async def main() -> int:
     try:
         # -------------------------------------------------------------------
         step("a row that appears exactly once")
-        # PACIFIC WIRELESS is one row of 22, below the fold on a 900px display.
-        # Its amount is a parenthesised debit, which is also the string OCR is
-        # most likely to mangle.
+        # PACIFIC WIRELESS is one row of 22, below the fold on a 900px display. Its amount is
+        # a parenthesised debit, the string OCR is most likely to mangle.
         result = await run("unique", "PACIFIC WIRELESS")
         if result.status is RunStatus.SUCCESS:
             ok(f"{result.outputs} in {result.duration_ms}ms")

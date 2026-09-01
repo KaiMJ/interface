@@ -1,11 +1,4 @@
-"""Run -> capability. The synthesis pass.
-
-Three stages, deterministic first and model-assisted only where determinism cannot
-answer: prune steps that did not advance the state, parameterize recorded literals by
-exact match against declared inputs, then ask the model only for naming and outcome
-candidates — discarding any proposed outcome detector that was visible on the successful
-run's own frames, since a detector that matches every success is worse than none.
-"""
+"""Synthesize a recorded discovery run into a capability."""
 
 from __future__ import annotations
 
@@ -40,36 +33,20 @@ MONEY = (Normalizer.COLLAPSE_WS, Normalizer.STRIP_CURRENCY)
 _COMPARE = (Normalizer.CASEFOLD, Normalizer.COLLAPSE_WS)
 _NORMALIZE_SEP = "\n"
 
-# A success condition is a *proof*, not a transcript. Measured: a model asked for one
-# returned the whole final screen — which validates, then fails next run because a
-# balance in the middle of it moved by twenty-five dollars.
+# Prevent a changing record value from becoming a success condition.
 MAX_SUCCESS_TEXT = 120
 
 
-# Screens are deliberately *not* derived here, and the reason is a measurement.
-# A first version took the longest line unique to each acted-on frame — the rule
-# that works for outcome detectors — and named the member profile `riverside_004`,
-# after the member's *branch*. That identifies the record, not the screen, so the
-# capability would have refused to run for anybody else.
-#
-# One run cannot tell chrome from data: it only sees one record. Two runs with
-# different inputs can, which is where screen derivation belongs (PLAN item 1).
-# Until then a capability declares screens because a human wrote them, or declares
-# none and makes no claim about where it is.
+def prune(steps: list[Any]) -> list[Any]:
+    """Drop a re-read under a name already taken, and a navigate the next one supersedes.
 
-
-def prune(steps: list[Any], observations: list[Any]) -> list[Any]:
-    """Drop steps that did not advance the state.
-
-    Conservative on purpose. Anything more aggressive would be deciding, after the
-    fact, that a step the run verified at the time was unnecessary — and the cost
-    of being wrong is an artifact that skips a step the application needed.
+    Only what is decidable from the steps themselves. Judging redundancy from the frames
+    would mean overruling, after the fact, a step the run verified at the time.
     """
     kept: list[Any] = []
     read: set[str] = set()
     for step in steps:
-        # A second read under the same name adds nothing to the contract and one
-        # more thing to go wrong on replay.
+        # Keep one extraction per output name.
         name = getattr(step, "extract_as", None) or getattr(step, "on_found_extract_as", None)
         if name:
             if name in read:
@@ -87,8 +64,7 @@ def prune(steps: list[Any], observations: list[Any]) -> list[Any]:
             kept[-1] = step
             continue
         kept.append(step)
-    # Ids tie an extraction to the output it populates, and renumbering mid-pipeline
-    # cuts that link. `_renumber` does it at the end and remaps the outputs with it.
+    # Preserve ids until outputs are remapped.
     return kept
 
 
@@ -125,10 +101,7 @@ def parameterize(steps: list[Any], inputs: dict[str, Any]) -> tuple[list[Any], l
                             terms=tuple(sub(t) or "" for t in step.predicate.terms),
                             normalize=step.predicate.normalize,
                         ),
-                        # Declared a `Template` in the schema, so it is substituted like
-                        # one. A column header is chrome and normally has nothing to
-                        # replace — but a header carrying an input value would otherwise
-                        # be the one recorded literal parameterization missed.
+                        # A dynamic column header is also a template.
                         "on_found_extract_column": sub(step.on_found_extract_column),
                     }
                 )
@@ -153,9 +126,7 @@ def parameterize(steps: list[Any], inputs: dict[str, Any]) -> tuple[list[Any], l
             example=str(inputs[name]),
         )
         for name in inputs
-        # An input appearing nowhere in the recording is not a parameter of this
-        # flow, and declaring it tells a calling agent it can steer something it
-        # cannot.
+        # Do not expose inputs that do not affect the flow.
         if name in used
     ]
     return rewritten, specs
@@ -192,10 +163,7 @@ async def declare(state: Any, llm: Any, inputs: dict[str, Any]) -> dict[str, Any
         and not evaluate(Checkpoint(kind=CheckKind.TEXT_PRESENT, value=success_text), final)
     )
     if absent or len(success_text) > MAX_SUCCESS_TEXT:
-        # Rejected, not trusted, for one of two reasons: the phrase is not on the
-        # screen the model just looked at, or it is a transcript of the screen
-        # rather than a proof that the goal was reached. The run's own verified
-        # success text — the one `finish` was checked against — replaces it.
+        # Use the run's verified condition instead.
         proposal["success_text"] = state.success_text
         proposal["success_text_rejected"] = success_text
     if not proposal.get("success_text"):
@@ -217,18 +185,7 @@ async def declare(state: Any, llm: Any, inputs: dict[str, Any]) -> dict[str, Any
 
 
 def _falsify(proposed: Any, state: Any) -> tuple[list[Any], list[Any]]:
-    """Drop outcome detectors that fire on the successful run.
-
-    An outcome describes a screen this run did not visit, so its detector cannot
-    be confirmed. It can be refuted: a phrase visible while the flow *succeeded*
-    cannot be what distinguishes it having gone another way. Measured on a real
-    recording, the model proposed "Accounts" — a column header on every screen —
-    which would have classified every success as a business outcome.
-
-    Rejections are returned rather than discarded. The synthesis note is what a
-    reviewer reads before approving, and "what was proposed and thrown away" is
-    part of judging whether the rest is trustworthy.
-    """
+    """Reject outcome detectors visible on a successful recording."""
     seen = _NORMALIZE_SEP.join(
         apply(" ".join((e.text or "").strip() for e in obs.elements), _COMPARE)
         for obs in state.observations
@@ -261,17 +218,15 @@ async def synthesize(
     capability_id: str = "",
     app: AppRef | None = None,
     viewport: Viewport | None = None,
+    policy: Any = None,
 ) -> Capability:
-    """Full pipeline. Validates the result parses as a `Capability` before returning
-    — a synthesis that produces an unloadable artifact is a failed run, not a
-    successful one with a bad file."""
-    steps = prune(state.steps, state.observations)
+    """Full pipeline. Validates the result parses as a `Capability` before returning."""
+    steps = prune(state.steps)
     steps, specs = parameterize(steps, inputs)
     proposal = await declare(state, llm, inputs)
 
-    # Outputs are read off the recording's own step ids, then both are renumbered
-    # together. The artifact a reviewer reads is numbered 1..n; the association
-    # between an extraction and the value it produces survives it.
+    # Outputs are read off the recording's own step ids, then both are renumbered together,
+    # so the artifact reads 1..n without breaking the extraction-to-output link.
     outputs = _outputs(steps, state)
     steps, renumbered = _renumber(steps)
     outputs = [o.model_copy(update={"from_step": renumbered[o.from_step]}) for o in outputs]
@@ -280,9 +235,38 @@ async def synthesize(
         value=str(proposal.get("success_text") or state.success_text or ""),
     )
 
+    # What the application already knows, inherited by name. A recording cannot discover these
+    # detectors — the successful run never reaches those screens — so without inheritance a
+    # fresh capability hard-fails on legitimate answers.
+    #
+    # Name-only, so `effective_outcomes` resolves the detector at run time and one policy edit
+    # reaches every capability on that app. An outcome this flow cannot reach is inert and a
+    # reviewer prunes it.
+    inherited_outcomes = [
+        BusinessOutcome(name=o.name, description=o.description)
+        for o in getattr(policy, "business_outcomes", ())
+    ]
+    known = {o.name for o in inherited_outcomes}
+
+    # What the model guessed, minus anything the application already declares: the policy's
+    # wording is demonstrated and the model's is not.
+    proposed_outcomes = [
+        BusinessOutcome(
+            name=_slug(str(o.get("name", ""))),
+            description=str(o.get("description", "")),
+            detector=Checkpoint(kind=CheckKind.TEXT_PRESENT, value=str(o.get("detector_text", ""))),
+            result_fields={spec.name: spec.type for spec in specs},
+            # Survived refutation, which is not confirmation: `_falsify` can only rule a
+            # detector out. Recorded for a reviewer and withheld from the tool manifest until
+            # `cua learn-outcome` or `cua diagnose` demonstrates it.
+            verified=False,
+        )
+        for o in proposal.get("business_outcomes", ())
+        if o.get("name") and o.get("detector_text") and _slug(str(o.get("name", ""))) not in known
+    ]
+
     cap = Capability(
-        # The caller's choice wins outright — `--capability-id` is someone naming
-        # their own artifact. Otherwise the model's proposal, having survived
+        # `--capability-id` wins outright; otherwise the model's proposal, having survived
         # `_name`; otherwise a slug of the goal.
         id=capability_id or str(proposal.get("capability_id")) or _slug(state.goal),
         status=Status.DRAFT,
@@ -293,18 +277,7 @@ async def synthesize(
         outputs=outputs,
         steps=[_typed(s) for s in steps],
         success=success,
-        business_outcomes=[
-            BusinessOutcome(
-                name=_slug(str(o.get("name", ""))),
-                description=str(o.get("description", "")),
-                detector=Checkpoint(
-                    kind=CheckKind.TEXT_PRESENT, value=str(o.get("detector_text", ""))
-                ),
-                result_fields={spec.name: spec.type for spec in specs},
-            )
-            for o in proposal.get("business_outcomes", ())
-            if o.get("name") and o.get("detector_text")
-        ],
+        business_outcomes=[*inherited_outcomes, *proposed_outcomes],
         recording=Recording(
             run_id=state.run_id,
             model=getattr(llm, "model", ""),
@@ -334,9 +307,7 @@ def _sub_target(target: Target | None, sub: Any) -> Target | None:
     return target.model_copy(
         update={
             "anchor_text": sub(target.anchor_text),
-            # Declared a `Template`, so it is substituted like one. A header is chrome
-            # and usually has nothing to replace; one carrying an input value would
-            # otherwise be a recorded literal parameterization missed.
+            # A dynamic column header is also a template.
             "column": sub(target.column),
             "name": sub(target.name),
             "intent": sub(target.intent),
@@ -348,9 +319,8 @@ def _sub_target(target: Target | None, sub: Any) -> Target | None:
 def _outputs(steps: list[Any], state: Any) -> list[OutputSpec]:
     """The output contract, read off the recording.
 
-    Every extraction already carries the name the model chose and the step it came
-    from. Asking a second model call to re-derive the outputs would introduce the
-    one thing a contract cannot have: two sources of truth about its own shape.
+    Every extraction already carries the name the model chose and the step it came from, so a
+    contract has one source of truth about its own shape.
     """
     outputs: list[OutputSpec] = []
     for step in steps:
@@ -386,9 +356,8 @@ def _value_type(value: Any) -> ValueType:
         return ValueType.INTEGER
     if isinstance(value, float):
         return ValueType.NUMBER
-    # A string stays a string even when it looks like a number: member ids and
-    # account numbers have leading zeros, and turning "007" into 7 is how a
-    # capability starts looking up the wrong member.
+    # A string stays a string even when it looks like a number: member and account numbers
+    # have leading zeros, and "007" is not 7.
     return ValueType.STRING
 
 
@@ -413,16 +382,13 @@ _ID = re.compile(r"^[a-z][a-z0-9_]{2,47}$")
 def _name(proposed: str, inputs: dict[str, Any], goal: str) -> tuple[str, str]:
     """The capability's id: proposed by the model, then refuted by code.
 
-    The fallback is a slug of the goal, which is correct and unreadable — and contains a
-    member id, which is the one rejection worth making mechanically: the id of a thing
-    parameterised by member id should not contain one. Two checks: snake_case, 3-48
-    characters, and none of the caller's declared values, since those are the arguments rather
-    than the flow. Returns the id and, when the proposal was refused, why — kept in
-    `synthesis.json`, because what was proposed and thrown away is part of judging the rest.
+    Two checks: snake_case at 3-48 characters, and none of the caller's declared values, since
+    the id of a flow parameterised by member id should not contain a member id. Falls back to a
+    slug of the goal. Returns the id and, when the proposal was refused, why — kept in
+    `synthesis.json`.
     """
-    # Normalised directly rather than through `_slug`, whose empty-string
-    # fallback is the literal name "capability" — which would then pass the shape
-    # check below and ship a capability called `capability`.
+    # Normalised directly rather than through `_slug`, whose empty-string fallback is the
+    # literal name "capability" and would pass the shape check below.
     candidate = re.sub(r"[^a-z0-9]+", "_", proposed.lower()).strip("_")
     if not candidate:
         return _slug(goal), "the model proposed no usable id"

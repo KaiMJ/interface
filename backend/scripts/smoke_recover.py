@@ -3,11 +3,9 @@
 
     docker compose exec desktop python3 scripts/smoke_recover.py
 
-The other smoke scripts ask whether the happy path works. This one asks the
-question §3.3 is actually about: what happens when the application does something
-legitimate and inconvenient in the middle of a replay. One capability —
-`cap_get_savings_balance`, the recorded one — run three times with a different
-fault armed, and the three tiers of the taxonomy are the three answers:
+What happens when the application does something legitimate and inconvenient in the middle of
+a replay. One capability — `cap_get_account_balance`, the recorded one — run three times with
+a different fault armed, for the three tiers of the taxonomy:
 
   modal    an interstitial is already on screen. Cleared before the step acts,
            because the demo app's dialog deliberately does not move the page: a
@@ -20,18 +18,14 @@ fault armed, and the three tiers of the taxonomy are the three answers:
            server-side delay looks like to a system that reads pixels. Result:
            SUCCESS, with the wait on the step record.
 
-  expired  the session died mid-flow. The recipe for signing in is already in
-           policy and the automation already types it at session start, so the
-           thing genuinely lost is not the credential — it is the run's *place* in
-           the flow, because signing back in lands on the landing page. So the
-           handler is "sign in and start the capability over", and the engine
-           allows it only while nothing irreversible has happened. This capability
-           reads a balance: every step is safe, so it re-runs itself and nobody is
-           woken. Result: SUCCESS, with the restart on the record.
+  expired  the session died mid-flow. Signing back in lands on the landing page, so what is
+           lost is the run's *place* in the flow and the handler is "sign in and start the
+           capability over" — allowed only while nothing irreversible has happened. Every
+           step here is safe, so it re-runs itself. Result: SUCCESS, with the restart on the
+           record.
 
-           The other half of that gate — an expiry *after* a risky step, which
-           parks for a person rather than redoing the work — is
-           `smoke_escalate.py`, which drives the write capability.
+           The other half of that gate — an expiry *after* a risky step, which parks for a
+           person — is `smoke_escalate.py`.
 
 Faults are armed by driving the automation's own browser through
 `/api/faults?set=…` — they live in a cookie, deliberately, so that a reviewer's
@@ -156,8 +150,8 @@ async def case_expired(session: Any, cap: Any) -> None:
         bad("nothing on the record says the session expired — did the fault arm?")
 
     if len(result.steps) > len(cap.steps):
-        # The steps taken before the expiry stay in the log. A run that executed
-        # step 2 twice should say so rather than present a tidy history.
+        # The steps taken before the expiry stay in the log: a run that executed step 2
+        # twice says so.
         ok(f"{len(result.steps)} step records for a {len(cap.steps)}-step capability")
     else:
         bad("the capability did not start over")
@@ -171,7 +165,7 @@ async def case_expired(session: Any, cap: Any) -> None:
 
 
 async def main() -> int:
-    cap = Catalog(CFG.artifacts_dir).load("cap_get_savings_balance")
+    cap = Catalog(CFG.artifacts_dir).load("cap_get_account_balance")
     session = build_session(CFG)
 
     step("session")

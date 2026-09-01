@@ -1,8 +1,4 @@
-"""Schema tests.
-
-The schemas are the deliverable most likely to be read closely, so they get the
-tests. Everything else is stubbed and will get tests as it lands.
-"""
+"""Schema tests."""
 
 from __future__ import annotations
 
@@ -112,9 +108,8 @@ def test_business_outcome_is_not_a_failure_shape() -> None:
 # ---------------------------------------------------------------------------
 # referential integrity
 #
-# Each of these is otherwise an artifact that loads fine, passes review, and
-# fails halfway through a run against a member's account. Construction is the
-# cheap place to find out; mid-run is the expensive one.
+# Each of these is otherwise an artifact that loads fine, passes review, and fails halfway
+# through a run. Construction is the cheap place to find out.
 # ---------------------------------------------------------------------------
 
 
@@ -215,10 +210,8 @@ def test_a_constraint_naming_an_undeclared_input_is_rejected() -> None:
 
 
 def test_a_risky_step_may_not_declare_a_retry() -> None:
-    """`risk: risky` says the action is irreversible and `on_error: retry` asks
-    for it to be run twice. A file that says both is a duplicate transfer waiting
-    for a slow checkpoint, and refusing it at load time is cheaper than refusing
-    it mid-run — by then the artifact has been reviewed and approved."""
+    """`risk: risky` says the action is irreversible and `on_error: retry` asks for it to be
+    run twice. A file that says both is a duplicate transfer waiting for a slow checkpoint."""
     from cua.schema import OnError, Risk
 
     with pytest.raises(ValidationError, match="cannot be retried"):
@@ -238,9 +231,8 @@ def test_a_risky_step_may_not_declare_a_retry() -> None:
 
 
 def test_a_retry_with_no_budget_is_rejected() -> None:
-    """Otherwise `on_error: retry, retries: 0` reads as a retry policy and behaves
-    as `hard_fail` — the worst kind of field, one that describes a behaviour the
-    system does not have."""
+    """Otherwise `on_error: retry, retries: 0` reads as a retry policy and behaves as
+    `hard_fail`."""
     from cua.schema import OnError
 
     with pytest.raises(ValidationError, match="no retry budget"):

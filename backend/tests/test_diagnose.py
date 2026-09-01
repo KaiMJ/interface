@@ -1,14 +1,11 @@
 """`cua diagnose`: turning one unforeseen screen into a declaration.
 
-The safety of pointing a model at this rests on three things, and all three are
-asserted here: it chooses a line rather than writing one, a line that also appears
-on a successful run is refused, and a condition met on a step that mutates is
-never proposed as something the automation may clear by itself.
+Three things make pointing a model at this safe, and all three are asserted here: it chooses a
+line rather than writing one, a line that also appears on a successful run is refused, and a
+condition met on a step that mutates is never proposed as auto-recoverable.
 
-No browser, no display, no application. `diagnose` reads a finished run's
-evidence and calls one model, so a scripted model and a directory of JSON is the
-whole fixture — which is also the argument for it being a separate pass rather
-than something bolted into the replay loop.
+No browser, no display, no application: `diagnose` reads a finished run's evidence and calls
+one model, so a scripted model and a directory of JSON is the whole fixture.
 """
 
 from __future__ import annotations
@@ -80,12 +77,10 @@ async def test_a_screen_nobody_declared_becomes_a_proposal() -> None:
 
 
 async def test_a_detector_that_is_also_on_a_successful_run_is_refused() -> None:
-    """The falsification rule. A line both runs read identifies nothing.
+    """The falsification rule: a line both runs read identifies nothing.
 
-    This is the failure that would be worst in production and least visible in
-    review: a detector on "Member Profile" makes every successful replay report
-    itself as a dormant account, and the patch looks perfectly reasonable in a
-    diff.
+    A detector on "Member Profile" makes every successful replay report itself as a dormant
+    account, and the patch looks reasonable in a diff.
     """
     run = failed_run(["Member Profile", "29455", DORMANT])
     model = ScriptedModel(
@@ -128,13 +123,11 @@ async def test_a_line_that_was_not_offered_is_refused() -> None:
 
 
 async def test_a_condition_on_a_step_that_mutates_is_never_auto_recoverable() -> None:
-    """The model does not get a vote on this.
+    """Not the model's call.
 
-    `recoverable` means the automation clears it and carries on unattended. Past a
-    step that may already have moved money, that is the one thing this system
-    exists not to do — so the classification is downgraded to a human's problem
-    whatever the model concluded, and the downgrade is recorded in the rationale
-    rather than applied silently.
+    `recoverable` means carrying on unattended past a step that may already have moved money,
+    so the classification is downgraded whatever the model concluded, and the downgrade is
+    recorded in the rationale rather than applied silently.
     """
     run = failed_run(["Confirm Transfer", "Please re-enter your authorization code"], risk="risky")
     model = ScriptedModel(
@@ -156,9 +149,8 @@ async def test_a_condition_on_a_step_that_mutates_is_never_auto_recoverable() ->
 
 
 async def test_drift_proposes_nothing_at_all() -> None:
-    """Some failures are not conditions to declare. Emitting a patch for one would
-    be inventing work for a reviewer, so the taxonomy has two members that
-    deliberately produce nothing."""
+    """Some failures are not conditions to declare, so the taxonomy has two members that
+    deliberately produce no patch."""
     run = failed_run(["Member Profile", "29455"])
     model = ScriptedModel(
         {
@@ -178,8 +170,7 @@ async def test_drift_proposes_nothing_at_all() -> None:
 
 
 async def test_the_model_is_shown_what_the_application_already_handles() -> None:
-    """A duplicate detector is not harmless — it is a second thing to keep in sync
-    with the first, and the app already declares several."""
+    """A duplicate detector is a second thing to keep in sync with the first."""
     run = failed_run(["Member Profile", DORMANT])
     model = ScriptedModel(
         {"classification": "drift", "line": -1, "name": "", "description": "", "rationale": ""}

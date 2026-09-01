@@ -6,9 +6,9 @@
  *
  * The card carries the context an operator needs before acting: which capability and
  * goal, which step, why it stopped, expected against observed. Below it, once the
- * transfer has happened, is what the human did — handoff and handback frames and
- * every input captured at the X layer. Keystrokes are counted and named, never
- * recorded: the operator may be typing a credential.
+ * transfer has happened, is what the human did — handoff and handback frames and every
+ * input captured at the X layer. Keystrokes are counted, never recorded: the operator
+ * may be typing a credential.
  */
 
 import { useState } from "react";
@@ -59,9 +59,8 @@ export function InterventionPanel({
   const past = queue.filter((i) => i.state === "resolved" || i.state === "aborted");
   const record = handoff && (handoff.handoff || handoff.resolution || actions.length > 0);
 
-  // Nothing waiting and nothing to review: one muted line, not a panel. The
-  // queue is empty almost all the time, and a card explaining that it is empty
-  // is a card in the way of the thing you are actually looking at.
+  // Nothing waiting and nothing to review: one muted line, not a panel. The queue is
+  // empty almost all the time.
   if (!open && !record && past.length === 0) {
     return (
       <p className="border-t border-[var(--rule)] px-3 py-2 text-[11px] text-[var(--muted)]">

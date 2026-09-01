@@ -1,9 +1,7 @@
 /**
- * Teller session: a cookie and a redirect. Authentication is not the interesting
- * part of this project; it is here because a back-office app that opened straight
- * onto member data would be an unrealistic surface, and because login is where the
- * automation's one credential is used — which is what puts something behind
- * "secrets never reach an artifact".
+ * Teller session: a cookie and a redirect. Here because a back-office app that opened
+ * straight onto member data would be an unrealistic surface, and because login is where
+ * the automation's one credential is used.
  */
 
 import { cookies } from "next/headers";
@@ -29,13 +27,9 @@ export async function currentTeller(): Promise<string | null> {
 /**
  * Guard for every authenticated page.
  *
- * The injected `expired` fault is handled a layer up, in `proxy.ts` —
- * expiring a session means clearing a cookie, and Next forbids cookie writes
- * during a Server Component render. This is the plain auth check.
- *
- * Session expiry is the case the replay engine must not paper over: silently
- * re-authenticating would let an automation resume a run whose context may no
- * longer be valid, so policy escalates instead.
+ * The injected `expired` fault is handled a layer up, in `proxy.ts`: expiring a session
+ * means clearing a cookie, and Next forbids cookie writes during a Server Component
+ * render. This is the plain auth check.
  */
 export async function requireTeller(): Promise<string> {
   const teller = await currentTeller();

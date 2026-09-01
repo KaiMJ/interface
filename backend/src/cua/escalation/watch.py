@@ -15,8 +15,8 @@ from typing import Any
 from ..clock import now_iso
 from ..schema import HumanAction
 
-# Sampled, not recorded wholesale: a mouse crossing the screen emits hundreds of
-# motion events and none of them are the audit trail. This is in display pixels.
+# Sampled, not recorded wholesale: a mouse crossing the screen emits hundreds of motion
+# events. In display pixels.
 _MOVE_THRESHOLD = 60
 
 _BUTTONS = {1: "click", 2: "click", 3: "click", 4: "scroll", 5: "scroll"}
@@ -121,9 +121,7 @@ class HumanActionWatcher:
             event, data = field.parse_binary_value(data, display.display, None, None)
             if event.type in (X.KeyPress, X.KeyRelease):
                 if event.type == X.KeyPress:
-                    # Count, never content. The operator may be typing a
-                    # credential, and an audit log of what someone typed into a
-                    # password field is a worse liability than one without it.
+                    # Count, never content: the operator may be typing a credential.
                     self._keystrokes += 1
                 continue
 
@@ -155,9 +153,8 @@ class HumanActionWatcher:
     def snapshot(self, out_path: Path, label: str) -> Path:
         """Evidence frame at handoff / handback.
 
-        Captured here rather than through the perceiver: this must work while the
-        automation is stopped and holds no control, and it must not depend on a
-        model-sized pipeline to take a picture.
+        Captured here rather than through the perceiver: it must work while the automation is
+        stopped and holds no control.
         """
         from ..perception.screen import XDisplayScreen
         from ..schema import Viewport

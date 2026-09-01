@@ -1,13 +1,9 @@
 """Learning a business outcome by demonstrating one.
 
-The mechanism this file covers is the answer to a measured failure: asked to name
-the alternative results a caller must branch on, the model proposed "Accounts" —
-a column header on every screen of the flow — as the detector for
-`account_not_found`. Every successful run would have been reported as a business
-outcome.
-
-So: proposals are refuted against the frames the successful run actually saw, and
-real wording is taken from a run that reaches the other screen.
+Asked to name the alternative results a caller must branch on, a model can propose a column
+header present on every screen of the flow, which would report every success as an outcome.
+So proposals are refuted against the frames the successful run actually saw, and real wording
+is taken from a run that reaches the other screen.
 """
 
 from __future__ import annotations
@@ -36,6 +32,7 @@ from cua.resolve import Resolver
 from cua.schema import (
     ActStep,
     AppRef,
+    BusinessOutcome,
     Capability,
     CheckKind,
     Checkpoint,
@@ -84,15 +81,13 @@ def test_the_detector_is_the_longest_line_only_the_other_run_shows() -> None:
         "No member record found for ID 99999.",
         "Return to search",
     ]
-    # Not "Member Inquiry", which is also new but shorter: a screen announcing a
-    # different result says so in a sentence, and the chrome it shares with every
-    # other screen is short.
+    # Not "Member Inquiry", which is also new but shorter: a screen announcing a different
+    # result says so in a sentence.
     assert distinguishing_text(reference, outcome) == "No member record found for ID 99999."
 
 
 def test_shared_chrome_never_becomes_a_detector() -> None:
-    # The failure this whole mechanism exists to prevent: a phrase that is on the
-    # happy path cannot distinguish anything.
+    # A phrase that is on the happy path cannot distinguish anything.
     reference = ["Accounts", "Current Balance", "Member Profile"]
     outcome = ["Accounts", "Current Balance", "You do not have permission to view this record."]
     assert distinguishing_text(reference, outcome).startswith("You do not have permission")
@@ -112,8 +107,8 @@ def test_final_lines_reads_the_last_observation_of_a_run(tmp_path: Path) -> None
         )
     # step-10, not step-02: sorted numerically, not lexically.
     assert final_lines(tmp_path) == ["last screen"]
-    # And the reference side of a comparison is everywhere the run went, because
-    # a phrase both runs passed through says nothing about how either ended.
+    # The reference side is everywhere the run went: a phrase both runs passed through says
+    # nothing about how either ended.
     assert all_lines(tmp_path) == ["first screen", "second screen", "last screen"]
 
 
@@ -132,8 +127,8 @@ def test_the_learned_detector_describes_the_capability_not_the_run() -> None:
     )
     outcome = learned.business_outcomes[-1]
 
-    # The run's own value is substituted back out. Recording 99999 would give a
-    # capability that only detects one member's absence.
+    # The run's own value is substituted back out, or the detector only recognises one
+    # member's absence.
     assert outcome.detector.value == "No member record found for ID {{member_id}}."
     # And the caller is told which parameter the answer is about.
     assert outcome.result_fields == {"member_id": ValueType.STRING}
@@ -238,6 +233,103 @@ async def test_a_detector_visible_on_the_successful_run_is_rejected() -> None:
     assert [o["name"] for o in declared["business_outcomes"]] == ["member_not_found"]
     rejected = declared["business_outcomes_rejected"]
     assert [o["name"] for o in rejected] == ["account_not_found"]
-    # The reason travels with it: the synthesis note is what a reviewer reads
-    # before approving, and a silent drop teaches them nothing.
+    # The reason travels with it: the synthesis note is what a reviewer reads before approving.
     assert "successful run" in rejected[0]["rejected_because"]
+
+
+# ---------------------------------------------------------------------------
+# surviving refutation is not the same as being confirmed
+
+
+def test_a_proposed_outcome_is_recorded_unverified_and_withheld_from_the_manifest(
+    tmp_path: Path,
+) -> None:
+    """The gap `_falsify` cannot close, carried into the contract instead of hidden.
+
+    A detector for a screen the run never reached can only be refuted, so invented wording
+    survives as an outcome that reads as declared and can never fire. A calling agent must not
+    be told about it; a reviewer must.
+    """
+    cap = capability().model_copy(
+        update={
+            "business_outcomes": [
+                BusinessOutcome(
+                    name="no_such_member",
+                    description="the model's guess at the wording",
+                    detector=Checkpoint(kind=CheckKind.TEXT_PRESENT, value="No members found"),
+                    verified=False,
+                ),
+                BusinessOutcome(
+                    name="member_not_found",
+                    description="demonstrated by learn-outcome",
+                    detector=Checkpoint(
+                        kind=CheckKind.TEXT_PRESENT,
+                        value="No member matches the search criteria entered.",
+                    ),
+                ),
+            ]
+        }
+    )
+    store = Catalog(tmp_path)
+    store.save(cap)
+
+    offered = store.tool_manifest()[0]["outcomes"]
+    assert [o["name"] for o in offered] == ["member_not_found"]  # type: ignore[index,union-attr]
+
+    # …and the guess is still in the artifact, because that is what a reviewer approves on.
+    assert {o.name for o in store.load(cap.id).business_outcomes} == {
+        "no_such_member",
+        "member_not_found",
+    }
+
+
+def test_an_outcome_taught_by_demonstration_is_verified() -> None:
+    """`learn-outcome` read the wording off the screen that produces it, so it is not a
+    guess and belongs in the manifest."""
+    learned = with_outcome(
+        capability(),
+        name="member_not_found",
+        description="no member exists with that id",
+        detector_text="No member matches the search criteria entered.",
+        inputs={"member_id": "99999"},
+        policy=POLICY,
+    )
+    assert learned.business_outcomes[-1].verified is True
+
+
+def test_a_learned_outcome_the_app_already_declares_opts_in_by_name(tmp_path: Path) -> None:
+    """The screen's wording contains the policy's detector, so the policy owns it.
+
+    A copy would opt out of the policy's `result_fields` and could not follow a later fix to
+    the wording.
+    """
+    learned = with_outcome(
+        capability(),
+        name="permission_denied",
+        description="",
+        # The whole line, as OCR reads it off the screen.
+        detector_text=(
+            "You do not have permission to view this member record. "
+            "Entitlement MBR_VIEW_RESTRICTED is required."
+        ),
+        inputs={"member_id": "44100"},
+        policy=POLICY,
+    )
+    outcome = learned.business_outcomes[-1]
+    assert outcome.name == "permission_denied"
+    assert outcome.detector is None, "should inherit the app's detector, not freeze a copy"
+    assert outcome.verified is True
+
+
+def test_a_recording_inherits_the_outcomes_its_application_declares() -> None:
+    """A recording cannot discover the app's own outcome detectors, since the successful run
+    never reaches those screens — so a fresh capability inherits them rather than hard-failing
+    on "no such member"."""
+    inherited = [
+        BusinessOutcome(name=o.name, description=o.description)
+        for o in POLICY.business_outcomes
+    ]
+    assert {o.name for o in inherited} == {"member_not_found", "permission_denied"}
+    # Name-only: the detector resolves from policy at run time, so one YAML edit reaches
+    # every capability on the app rather than N frozen copies.
+    assert all(o.detector is None and o.verified for o in inherited)

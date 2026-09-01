@@ -1,13 +1,14 @@
 """Composition root.
 
-The only module that knows how the pieces fit. Everything else takes its collaborators
-as constructor arguments, which is what makes the seams testable rather than described.
+The only module that knows how the pieces fit. Everything else takes its collaborators as
+constructor arguments.
 
-    build_discovery()   real LLM client, resolver with allow_vlm=True
-    build_replay()      NoLLM,           resolver with allow_vlm=False
+    build_discovery()   a real LLM client; the model picks from enumerated marks
+    build_replay()      no LLM client at all, and a resolver built with allow_vlm=False
 
-Replay is not *asked* to avoid the model; it is handed collaborators that raise if it
-tries. A test asserts `llm.calls == 0`.
+Replay is not *asked* to avoid the model; there is nothing on it to call, which is a property a
+test can assert — see `test_replay_resolver_cannot_reach_a_model_by_construction`. The VLM tier
+is the same idea one level down, off on both paths (`resolve.resolver.Resolver._by_vlm`).
 """
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ from ..escalation import ControlRegistry
 from ..evidence import EvidenceWriter
 from ..perception import Perceiver
 from ..perception.detect import build_detector
-from ..perception.ocr import OnnxTextReader
+from ..perception.ocr import RapidOcrTextReader
 from ..perception.screen import ImageFileScreen, XDisplayScreen
 from ..policy import Policy, Redactor
 from ..replay.engine import ReplayEngine
@@ -41,25 +42,21 @@ def build_perceiver(
 ) -> Perceiver:
     """The one perceiver, shared by discovery and replay.
 
-    Same perception on both paths on purpose. If replay saw the screen through a
-    different pipeline than the recording did, an artifact would be a description
-    of what *some other system* saw, and every checkpoint written at discovery
-    time would be a guess about replay.
+    If replay saw the screen through a different pipeline than the recording did, every
+    checkpoint written at discovery time would be a guess about replay.
 
-    `settings.detector` selects the backend: `omniparser` for the real thing,
-    `ocr_only` for the no-torch path.
+    `settings.detector` selects the backend: `omniparser` for the real thing, `ocr_only` for
+    the no-torch path.
     """
     return Perceiver(
         screen=XDisplayScreen(settings.display, settings.viewport),
         detector=build_detector(
             settings.detector,
-            settings.models_dir,
             settings.omniparser_repo,
             settings.omniparser_repo_file,
             settings.detect_conf_threshold,
         ),
-        reader=OnnxTextReader(
-            settings.models_dir,
+        reader=RapidOcrTextReader(
             conf_threshold=settings.ocr_conf_threshold,
             det_side_len=settings.ocr_det_side_len,
             engine=settings.ocr_engine,
@@ -70,10 +67,9 @@ def build_perceiver(
     )
 
 
-# One registry per process, because the thing it coordinates is a browser on this
-# machine's X display. A durable store would be the right answer for a real
-# deployment and the wrong one here: a control token that outlives the process
-# holding the session is a token that lies.
+# One registry per process, because what it coordinates is a browser on this machine's X
+# display: a control token that outlives the process holding the session is a token that lies.
+# A durable store is the right answer for a real deployment.
 REGISTRY = ControlRegistry()
 
 
@@ -85,9 +81,8 @@ def _load_policy(path: Path) -> Policy:
 def build_policy(settings: Settings, app: str | None = None) -> Policy:
     """The guardrails for one application, selected by name.
 
-    Cached by path: every builder below wants the same policy object for the same
-    run, and re-parsing the file per collaborator would let a mid-run edit give
-    the discovery loop and the driver different allowlists.
+    Cached by path, so a mid-run edit cannot give the discovery loop and the driver different
+    allowlists.
     """
     return _load_policy(settings.policy_path(app))
 
@@ -95,10 +90,9 @@ def build_policy(settings: Settings, app: str | None = None) -> Policy:
 def entry_url(settings: Settings, policy: Policy) -> str:
     """Where a run against this app starts.
 
-    Resolution order, most specific first: this deployment's override, then what
-    the app's policy declares. The override is how one policy file serves two
-    institutions running the same vendor product at different addresses — which is
-    the whole of the multi-tenant story that is actually built (REPORT §4).
+    Most specific first: this deployment's override, then what the app's policy declares. The
+    override is how one policy file serves two institutions running the same vendor product at
+    different addresses (REPORT §4).
     """
     url = settings.target_base_url or policy.entry_url
     if not url:
@@ -114,15 +108,22 @@ def build_catalog(settings: Settings) -> Catalog:
 
 
 def build_redactor(settings: Settings, app: str | None = None) -> Redactor:
+    """Declared-sensitive redaction, always on. Pattern masking off — a decision, not a gap.
+
+    `redact_mapping` keeps a credential out of a serialized result and runs unconditionally.
+    `enabled` governs only the pattern tier, off because the declared patterns are tuned for a
+    real deployment: the PAN pattern admits spaces and hyphens between digits, so against a
+    joined OCR string of a transaction table it masks runs of unrelated numbers and takes the
+    evidence with them. Turning it on needs a policy author who has measured their patterns.
+    """
     return Redactor(patterns=build_policy(settings, app).redact_patterns, enabled=False)
 
 
 def build_session(settings: Settings, app: str | None = None) -> Session:
     """The long-lived browser + display + perceiver triple.
 
-    A run borrows this; it does not own it. That split is what lets an escalation
-    hand a live session to a human without either tearing the browser down or
-    keeping a finished run alive just to hold a process open.
+    A run borrows this; it does not own it. That split is what lets an escalation hand a live
+    session to a human without tearing down the browser they are taking over.
     """
     policy = build_policy(settings, app)
     driver = BrowserDriver(settings.display, settings.viewport)
@@ -134,9 +135,8 @@ def build_session(settings: Settings, app: str | None = None) -> Session:
         perceiver=build_perceiver(
             settings,
             url_provider=driver.current_url,
-            # Which lines on this application tick on their own. Read from policy
-            # here rather than inside the perceiver, so perception stays a thing
-            # that knows about pixels and the application stays a YAML file.
+            # Which lines on this application tick on their own. Read from policy here, so
+            # perception stays a thing that knows only about pixels.
             volatile=policy.volatile_text,
         ),
         control=None,
@@ -161,11 +161,9 @@ def build_replay(
     """Replay, built so it *cannot* consult a model.
 
     The resolver is constructed without the VLM tier and no LLM client is passed in at all, so
-    a test can assert determinism by construction rather than by reading the code for the
-    absence of a call. `require_approved` is a constructor argument for the same reason
-    `allow_vlm` is: which engine you were handed decides what you may run. An operator at the
-    console or CLI is a reviewer at work and may replay a draft; the agent-facing invoke route
-    may not, because the caller on that path is a machine.
+    a test can assert determinism by construction. `require_approved` is a constructor argument
+    for the same reason `allow_vlm` is: which engine you were handed decides what you may run.
+    An operator at the console or CLI may replay a draft; the agent-facing invoke route may not.
     """
     control = REGISTRY.create(run_id)
     session.control = control
@@ -183,13 +181,11 @@ def build_replay(
         settle_poll_ms=settings.settle_poll_ms,
         step_timeout_ms=settings.step_timeout_ms,
         vnc_url=session.vnc_url,
-        # Which institution's install this run acts on. The recorded URLs name the
-        # one the capability was recorded at, which is a fact about the past.
+        # Which institution's install this run acts on; the recorded URLs name the one the
+        # capability was recorded at.
         entry_url=entry_url(settings, policy),
-        # A closure over the session's own sign-on, not the credentials. The
-        # engine can put the session back into an authenticated state without
-        # holding a secret it could serialize — and a run that dies mid-flow on a
-        # read-only capability re-runs itself instead of waking someone.
+        # A closure over the session's own sign-on, not the credentials, so the engine can
+        # re-authenticate without holding a secret it could serialize.
         sign_on=lambda: session.authenticate(
             settings.target_username, settings.target_password
         ),
@@ -205,10 +201,8 @@ def build_offline_replay(
 ) -> ReplayEngine:
     """Replay against recorded frames, with no browser and no display.
 
-    Same engine, same resolver, same policy, same evidence — two collaborators
-    swapped. That the substitution is this small is the argument that the
-    perception and action seams are real rather than described: nothing above them
-    knows the difference.
+    Same engine, resolver, policy and evidence writer, with two collaborators swapped; nothing
+    above the perception and action seams knows the difference.
     """
     screen = ImageFileScreen(frames, settings.viewport)
     driver = OfflineDriver(screen, url=url)
@@ -216,13 +210,11 @@ def build_offline_replay(
         screen=screen,
         detector=build_detector(
             settings.detector,
-            settings.models_dir,
             settings.omniparser_repo,
             settings.omniparser_repo_file,
             settings.detect_conf_threshold,
         ),
-        reader=OnnxTextReader(
-            settings.models_dir,
+        reader=RapidOcrTextReader(
             conf_threshold=settings.ocr_conf_threshold,
             det_side_len=settings.ocr_det_side_len,
             engine=settings.ocr_engine,
@@ -249,10 +241,9 @@ def build_discovery(
 ) -> DiscoveryLoop:
     """Discovery, built with a real model client.
 
-    The mirror image of `build_replay`: same perceiver, same driver, same policy
-    object, same evidence writer — and an LLM. The two paths differ in exactly one
-    collaborator, which is the point. A guardrail that only guards one of them is
-    not a guardrail.
+    The mirror image of `build_replay`: same perceiver, driver, policy object and evidence
+    writer, plus an LLM. The two paths differ in exactly one collaborator, so a guardrail
+    cannot bind only one of them.
     """
     control = REGISTRY.create(run_id)
     session.control = control

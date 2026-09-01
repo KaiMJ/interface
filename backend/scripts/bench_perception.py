@@ -5,26 +5,19 @@
     docker compose exec desktop python3 scripts/bench_perception.py \
         --frames /data/evidence/<run_id>/frames
 
-Perception is where a run's time goes — on a dense back-office screen an
-observation is ~2.4s, of which text recognition is ~98% and the GPU detector is
-~1%. Every step pays for at least one, so this number *is* the system's latency,
-and changing it is the only optimisation that matters at the current design.
+Perception is where a run's time goes — on a dense back-office screen an observation is
+~2.4s, of which text recognition is ~98%. Every step pays for at least one.
 
 Three questions, one command:
 
-  where     the split across detect / recognise / merge, so the 95% is visible
-            rather than inferred
-  engine    onnxruntime (CPU) against torch (the GPU the detector already uses),
-            which is the switch `CUA_OCR_ENGINE` selects
-  side_len  the detector's input scale, against *anchor correctness* rather than
-            line count — the trade this parameter actually makes
+  where     the split across detect / recognise / merge
+  engine    onnxruntime (CPU) against torch (the GPU the detector already uses), which is
+            the switch `CUA_OCR_ENGINE` selects
+  side_len  the detector's input scale, measured against *anchor correctness* rather than
+            line count
 
-That last one is why this script exists as a harness rather than a one-off. The
-shipped `1600` was chosen to read one specific screen, and a plausible-looking
-measurement said 960 was 34% faster and just as good. It is not reliably: on one
-sample it read the "View" link — the anchor the shipped capability resolves
-against — as "Yew", and on the next it read it correctly. A parameter whose
-regression is intermittent needs repeated trials to change, which is what
+A smaller `side_len` reads faster and misreads intermittently — one sample reads the "View"
+link correctly and the next reads "Yew" — so changing it needs repeated trials, which is what
 `--trials` is for.
 """
 
@@ -44,14 +37,13 @@ for _name in list(logging.root.manager.loggerDict) + ["RapidOCR"]:
 from cua.config import settings  # noqa: E402
 from cua.perception.detect import build_detector  # noqa: E402
 from cua.perception.merge import merge  # noqa: E402
-from cua.perception.ocr import OnnxTextReader  # noqa: E402
+from cua.perception.ocr import RapidOcrTextReader  # noqa: E402
 from cua.schema import Viewport  # noqa: E402
 
 CFG = settings()
 
-# Text the shipped capability resolves against. A side length that is fast and
-# cannot read these is not faster, it is broken — and the difference does not show
-# up in a line count.
+# Text the shipped capability resolves against. A side length that cannot read these is
+# broken however fast it is, and a line count does not show it.
 ANCHORS = ("View", "Primary Savings", "Member Profile")
 
 
@@ -92,7 +84,7 @@ def main() -> int:
 
     vp = Viewport(width=CFG.display_width, height=CFG.display_height)
     detector = build_detector(
-        CFG.detector, CFG.models_dir, CFG.omniparser_repo,
+        CFG.detector, CFG.omniparser_repo,
         CFG.omniparser_repo_file, CFG.detect_conf_threshold,
     )
 
@@ -105,8 +97,7 @@ def main() -> int:
 
         for engine in args.engines.split(","):
             for side in (int(s) for s in args.sides.split(",")):
-                reader = OnnxTextReader(
-                    CFG.models_dir,
+                reader = RapidOcrTextReader(
                     conf_threshold=CFG.ocr_conf_threshold,
                     det_side_len=side,
                     engine=engine.strip(),
@@ -126,8 +117,8 @@ def main() -> int:
                 ) else ""
                 show(f"ocr {engine.strip()} side={side}{marker}", times, verdict)
 
-        reader = OnnxTextReader(
-            CFG.models_dir, conf_threshold=CFG.ocr_conf_threshold,
+        reader = RapidOcrTextReader(
+            conf_threshold=CFG.ocr_conf_threshold,
             det_side_len=CFG.ocr_det_side_len, engine=CFG.ocr_engine,
         )
         lines = reader.read(frame, vp)

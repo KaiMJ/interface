@@ -1,14 +1,13 @@
 /**
- * Injectable fault states — the reason this app exists rather than a public sandbox,
- * since you cannot make a demo site return "session expired" on command.
+ * Injectable fault states — why this app exists rather than a public sandbox, which
+ * cannot be made to return "session expired" on command.
  *
- * Toggled at /dev or by POST /api/faults. State lives in a cookie, so the
- * automation's session and a reviewer's own tab do not fight over it.
+ * Toggled at /dev or by POST /api/faults. State lives in a cookie, so the automation's
+ * session and a reviewer's own tab do not fight over it.
  *
- * Note the deliberate split: these are FAULTS. The business outcomes — member not
- * found, insufficient funds, over the daily limit, restricted member — are ordinary
- * behaviour reachable with ordinary inputs, because conflating "a legitimate answer"
- * with "an injected failure" is exactly the mistake the system exists to avoid.
+ * These are FAULTS. The business outcomes — member not found, insufficient funds, over
+ * the daily limit, restricted member — are ordinary behaviour reachable with ordinary
+ * inputs, and are deliberately not in here.
  */
 
 import { cookies } from "next/headers";

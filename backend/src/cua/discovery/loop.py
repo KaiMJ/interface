@@ -1,10 +1,8 @@
 """The discovery loop: observe -> decide -> act -> record.
 
 Runs until the goal's success condition holds or a stopping condition fires — max steps,
-timeout, policy denial, dead end, or the model asking to escalate. The recording is a
-side effect of acting rather than a separate pass: every accepted tool call is appended
-as a typed step as it executes, with the observation it resolved against, so the
-transcript and the artifact cannot disagree.
+timeout, policy denial, dead end, or the model escalating. Recording is a side effect of
+acting rather than a separate pass, so the transcript and the artifact cannot disagree.
 """
 
 from __future__ import annotations
@@ -17,8 +15,8 @@ from typing import Any
 from uuid import uuid4
 
 from ..clock import monotonic_ms, now_iso
-from ..perception import Unsettled
-from ..perception.som import annotate, candidate_digest, truncated
+from ..perception import Unsettled, cell_in_column, column_span
+from ..perception.som import annotate, candidate_digest, unlisted
 from ..policy import PolicyDenied, RiskDisposition
 from ..replay.scan import Scanner, Untestable
 from ..resolve import Resolver, Unresolvable, evaluate, region_text
@@ -56,8 +54,8 @@ STUCK_REPEATS = 3
 
 @dataclass
 class DiscoveryState:
-    """Everything the loop accumulates. Serialized to evidence on every step, so a
-    crashed run is still inspectable."""
+    """Everything the loop accumulates. Written to evidence every step, so a crashed run is
+    still inspectable."""
 
     run_id: str
     goal: str
@@ -67,8 +65,8 @@ class DiscoveryState:
     observations: list[Observation] = field(default_factory=list)
     llm_calls: int = 0
     seen_frames: set[str] = field(default_factory=set)      # loop detection
-    # Steps the loop recorded on the model's behalf — the entry navigation. The
-    # model must do more than nothing before it may finish.
+    # Steps recorded on the model's behalf (the entry navigation). It must do more than
+    # nothing before it may finish.
     seeded: int = 0
 
     # Handed back each turn, and the audit trail of what it tried that did not work.
@@ -79,8 +77,7 @@ class DiscoveryState:
     extracted: dict[int, str] = field(default_factory=dict)
     # The frame each recorded step acted on; what screen derivation would work from.
     step_frames: dict[int, Observation] = field(default_factory=dict)
-    # Discovery splits roughly half perceiving, half waiting on the model, and only
-    # one half is ours to optimise — so the split has to be visible.
+    # Perception time, kept separate from time spent waiting on the model.
     observe_ms: float = 0.0
     observation_count: int = 0
     observe_ms_at_last_step: float = 0.0
@@ -89,8 +86,7 @@ class DiscoveryState:
     summary: str = ""
     escalation_reason: str = ""
     stop_reason: str = ""
-    # What synthesis proposed, verbatim — the one part of an artifact a model wrote
-    # freehand, so a reviewer can see what was proposed and what was rejected.
+    # What synthesis proposed, verbatim, so a reviewer sees what was rejected.
     declaration: dict[str, Any] = field(default_factory=dict)
     status: RunStatus = RunStatus.FAILURE
     failure: FailureDetail | None = None
@@ -117,9 +113,7 @@ class DiscoveryLoop:
         self.policy = policy
         self.evidence = evidence
         self.llm = llm
-        # The same token replay uses. Discovery is supervised, but "supervised" is
-        # not "may do anything", and a guardrail binding only the unattended path has
-        # a hole shaped exactly like a recording session.
+        # The same control token replay uses; guardrails bind both paths.
         self.control = control
         self.max_steps = max_steps
         self.max_llm_calls = max_llm_calls
@@ -128,11 +122,13 @@ class DiscoveryLoop:
         self.settle_poll_ms = settle_poll_ms
         # Where an operator connects to take over this exact session.
         self.vnc_url = vnc_url
-        # Discovery resolves too: the find tools locate their own scope with the same
-        # ladder replay uses. A recording built against a different resolver works
-        # only on the run that made it.
+        # The find tools locate their scope with the same ladder replay uses.
         self.resolver = Resolver(allow_vlm=False)
         self.scanner = Scanner(perceiver, driver, self.resolver)
+        # Set by `run`, one run's worth each. `state` is the second return channel: synthesis
+        # needs the steps and frames behind the DiscoveryResult.
+        self.goal_inputs: dict[str, Any] = {}
+        self.state: DiscoveryState | None = None
         self._deadline = 0.0
         self._scratch = Path(tempfile.mkdtemp(prefix="cua-discovery-"))
 
@@ -141,10 +137,9 @@ class DiscoveryLoop:
     async def run(self, goal: str, start_url: str, inputs: dict[str, Any]) -> DiscoveryResult:
         """Drive the surface until the goal is met.
 
-        `inputs` are the concrete values used for this run (member id, amount).
-        They matter beyond just being typed into fields: they are what the
-        synthesis pass looks for when deciding which literals in the recording are
-        parameters. See `synthesize.py`.
+        `inputs` are this run's concrete values (member id, amount). Beyond being typed into
+        fields, they are what synthesis looks for when deciding which literals in the recording
+        are parameters.
         """
         started = now_iso()
         state = DiscoveryState(run_id=self.evidence.run_id, goal=goal, started_at=started)
@@ -169,10 +164,9 @@ class DiscoveryLoop:
         try:
             self.policy.check_url(start_url)
             await self.driver.navigate(start_url)
-            # Recorded, not just performed. Otherwise the artifact begins wherever
-            # the browser happened to be — measured: a second invocation in the same
-            # session started on the previous run's member profile and failed at step
-            # 1. A capability establishes its own entry point.
+            # Recorded, not just performed, or the artifact begins wherever the browser
+            # happened to be — which for a second run in one session is the previous run's
+            # screen.
             state.steps.append(
                 ActStep(
                     id=1,
@@ -205,9 +199,8 @@ class DiscoveryLoop:
 
                 obs = await self._observe(state)
 
-                # Step 1 of the artifact is step 1 of the log, recorded here so it
-                # carries the frame the run actually started on. With an empty one it
-                # rendered as a black panel — the first thing anyone watching looks at.
+                # Step 1 of the artifact is step 1 of the log, recorded here so it carries the
+                # frame the run started on.
                 if not state.results:
                     self._record(
                         state,
@@ -272,12 +265,9 @@ class DiscoveryLoop:
     ) -> Any:
         """Park the recording session and hand it to a human.
 
-        The same mechanism replay uses, on the same control token and the same
-        live browser — the operator takes over mid-recording, does whatever is
-        needed, and gives it back. Returns the resolution, or None when this loop
-        was built without a control token (the offline tests), in which case the
-        caller treats it as a refusal: the safe reading of "nobody can be asked"
-        is not "proceed anyway".
+        The mechanism replay uses, on the same control token and the same live browser. Returns
+        None when built without a control token, which the caller reads as a refusal rather
+        than permission to proceed.
         """
         if self.control is None:
             return None
@@ -303,12 +293,11 @@ class DiscoveryLoop:
     async def _step(self, state: DiscoveryState, obs: Observation) -> bool:
         """One observe-decide-act cycle. Returns False when the run should stop."""
         step_id = len(state.steps) + 1
-        # Into scratch, not evidence: the writer copies it in under the name the
-        # manifest expects, and two names leave a reviewer wondering which was shown.
-        overlay = annotate(obs, self._scratch / f"step-{step_id:02d}.som.png")
+        # Into scratch: the writer copies it into evidence under the manifest's name.
+        overlay = annotate(obs, self._scratch / f"step-{step_id:02d}.som.png", MAX_CANDIDATES)
         evidence = self.evidence.frame(obs, step_id, annotated=overlay)
 
-        dropped = truncated(obs.elements, MAX_CANDIDATES)
+        undescribed = unlisted(obs.elements, MAX_CANDIDATES)
         system = prompts.system_prompt(
             frozenset(a.value for a in self.policy.allowed_actions),
             getattr(self.policy, "surface", ""),
@@ -318,21 +307,18 @@ class DiscoveryLoop:
             inputs=self.goal_inputs,
             candidates=candidate_digest(obs.elements, MAX_CANDIDATES),
             history=state.history,
-            truncated=dropped,
+            unlisted=undescribed,
         )
-        # Once per run, not once per step: it does not change, and a copy on every
-        # step would be most of the evidence directory.
+        # Once per run: it does not change between steps.
         if step_id == 1:
             self.evidence.note(
                 "prompt_system",
                 {"model": getattr(self.llm, "model", ""), "system": self._for_evidence(system)},
             )
         asked = monotonic_ms()
-        # A model call is the longest thing in a step — measured at 70s on one turn
-        # of the recording run — and until it returns there is nothing on disk for
-        # the console to tail, so a live run looks like a stalled one. This is the
-        # only record written *before* an outcome exists; it is a heartbeat, not
-        # evidence, and it is superseded by the step whose id it carries.
+        # A heartbeat, so a live run tailing evidence is not silent for the length of a model
+        # call. The only record written before an outcome exists; superseded by the step whose
+        # id it carries.
         self.evidence.note(
             "thinking",
             {
@@ -348,8 +334,7 @@ class DiscoveryLoop:
             image_path=overlay,
         )
         state.llm_calls = self.llm.calls
-        # What it was shown and what it answered. `intent` is the model's gloss on
-        # itself; this is the turn.
+        # What it was shown and what it answered.
         turn = ModelTurn(
             call=call.name,
             text=str(getattr(call, "text", "") or ""),
@@ -360,8 +345,10 @@ class DiscoveryLoop:
             expect=str(call.input.get("expect", "")) or None,
             mark=_as_int(call.input.get("mark")),
             anchor_proposed=str(call.input.get("anchor", "")) or None,
-            candidates_shown=min(len(obs.elements), MAX_CANDIDATES),
-            candidates_truncated=dropped,
+            # Every element is marked and selectable; only the digest's worth were listed as
+            # text. Two different denominators.
+            candidates_marked=len(obs.elements),
+            candidates_listed=len(obs.elements) - undescribed,
             latency_ms=int(monotonic_ms() - asked),
         )
         signature = (call.name, repr(sorted(call.input.items())))
@@ -372,8 +359,7 @@ class DiscoveryLoop:
             return self._finish(state, obs, call, evidence, turn)
         if call.name == "escalate":
             why = str(call.input.get("reason", "the model asked for help"))
-            # The model asking for help is a step of the run. It used to leave
-            # nothing behind but a line of history the model itself was shown.
+            # The model asking for help is a step of the run, not just a line of history.
             self._record(
                 state,
                 step_id=step_id,
@@ -397,9 +383,7 @@ class DiscoveryLoop:
                 state.stop_reason = f"the model escalated: {why}"
                 state.history.append(f"- escalated: {why}")
                 return False
-            # Tell the model what the human did: it is looking at a screen it did not
-            # produce, and without that line its next action is reasoned from a state
-            # it never saw.
+            # Tell the model what the human did; it is looking at a screen it did not produce.
             state.history.append(
                 f"- you asked for help ({why}). A human took the session and "
                 f"resolved it{': ' + resolution.note if resolution.note else ''}. "
@@ -425,21 +409,15 @@ class DiscoveryLoop:
     ) -> StepResult:
         """Append one step result and stream it to evidence.
 
-        Every turn goes through here, including the ones that produced no artifact
-        step — a rejected mark, a policy refusal, a discarded action. Those used to
-        exist only as a line of narration handed back to the model, which meant the
-        step log a human reads was a filtered version of what actually happened,
-        filtered by the thing being debugged.
+        Every turn, including those that produced no artifact step — a rejected mark, a policy
+        refusal, a discarded action.
         """
-        # Perceiving done since the previous step, attributed here because that is
-        # when it was paid for.
+        # Perceiving done since the previous step, attributed here.
         spent = state.observe_ms - state.observe_ms_at_last_step
         frames = state.observation_count - state.observations_at_last_step
         state.observe_ms_at_last_step = state.observe_ms
         state.observations_at_last_step = state.observation_count
-        # Rewritten after every step. Discovery wrote it once at the start and once
-        # at the end, which is why a run in progress showed no steps until it
-        # finished — the console tails this file, and there was nothing to tail.
+        # Rewritten after every step, so the file a console tails is current.
         result = StepResult(
             step_id=step_id,
             intent=intent,
@@ -477,11 +455,8 @@ class DiscoveryLoop:
     def _for_evidence(self, text: str) -> str:
         """Prompt text on its way to disk, through the same filter as everything else.
 
-        `EvidenceWriter.step` writes a `StepResult` verbatim, so a prompt field is
-        written exactly as handed over. Credentials never reach here — they are
-        resolved in the action layer, below the serialization boundary — but a run's
-        own inputs are all over a turn prompt, and the redactor is what the frames
-        and the logs are already filtered through.
+        Credentials never reach here — they are resolved in the action layer, below the
+        serialization boundary — but a run's own inputs are all over a turn prompt.
         """
         redactor = getattr(self.evidence, "redactor", None)
         if redactor is None:
@@ -524,9 +499,8 @@ class DiscoveryLoop:
         ):
             return reject(f"mark {call.input.get('mark')!r} is not on this screen")
 
-        # What the mark actually was, measured off the observation rather than taken
-        # from the model's description of it. The join the recording is built from,
-        # and how a reviewer judges a step they did not watch.
+        # What the mark actually was, measured off the observation rather than taken from the
+        # model's description of it.
         if element is not None:
             turn = turn.model_copy(
                 update={"element_id": element.id, "element_label": element.label}
@@ -551,9 +525,7 @@ class DiscoveryLoop:
         turn = turn.model_copy(
             update={"anchor_recorded": recorded_anchor, "expect_recorded": recorded_expect}
         )
-        # Told, not silently dropped. The model chooses an expectation for the next step
-        # too, and a run that refutes the same mistake five times without ever saying so
-        # is a prompt that never gets the chance to work.
+        # Told, not silently dropped: the model chooses an expectation next step too.
         if turn.expect and not recorded_expect:
             state.history.append(
                 f"- NOTE — {turn.expect!r} was not recorded as a checkpoint: it is this "
@@ -561,9 +533,7 @@ class DiscoveryLoop:
                 f"for every other input. Expect a heading, a panel title, or a label."
             )
 
-        # The same policy object replay uses, on the same primitive, before the
-        # action rather than after it. A guardrail that only guards the LLM is not
-        # a guardrail, and one that only guards replay is not either.
+        # The same policy object replay uses, on the same primitive, before the action.
         decision = self.policy.decide(primitive, step.risk, intent)
         try:
             if decision.disposition == "denied":
@@ -586,10 +556,7 @@ class DiscoveryLoop:
             return True
         disposition = decision.disposition
 
-        # A risky action is risky whoever is driving. Replay parks here; so does
-        # discovery. The alternative — letting a recording session submit a
-        # transfer because a human is notionally watching a VNC window — is a
-        # guardrail that binds only the path that needs it least.
+        # A risky action is risky whoever is driving, so a recording session confirms too.
         if disposition == RiskDisposition.CONFIRM:
             resolution = await self._intervene(
                 state,
@@ -617,11 +584,8 @@ class DiscoveryLoop:
 
         after = await self._observe(state)
         if primitive is not Primitive.EXTRACT:
-            # Reads do not move the screen, and counting them as actions that had
-            # no effect is how a run that is reading a value gets reported as
-            # stuck. Measured: a model that extracted a balance twice was
-            # escalated for making no progress while doing exactly what it was
-            # asked to do.
+            # Reads do not move the screen; counting them here would call a run that is
+            # reading stuck.
             state.frame_sequence.append(after.frame_hash or "")
         expect = str(call.input.get("expect", "")).strip()
         unmet = bool(expect) and not evaluate(
@@ -630,10 +594,8 @@ class DiscoveryLoop:
         changed = after.frame_hash != obs.frame_hash
 
         if unmet and not changed:
-            # Nothing happened. The action had no effect and the model's
-            # expectation was wrong about that, so there is no step here worth
-            # replaying — it is discarded, and the model is told what is actually
-            # on screen so its next attempt is different.
+            # Nothing happened and the expectation was wrong about that, so there is no step
+            # worth replaying. The model is told what is on screen instead.
             state.history.append(
                 f"- attempted: {intent}\n"
                 f"  DISCARDED — nothing changed, and the screen does not show {expect!r}. "
@@ -659,13 +621,9 @@ class DiscoveryLoop:
             return True
 
         if unmet:
-            # The screen *did* change: the action had an effect, and only the
-            # prediction about it was wrong. Dropping the step would leave the
-            # recording missing a state transition the flow actually made, and
-            # replay would then start from a screen it never reaches — which is
-            # exactly what a discarded "click View" produced before this branch
-            # existed. So the step is kept and its checkpoint is not: an assertion
-            # the run could not verify has no business in an artifact.
+            # The screen *did* change; only the prediction was wrong. Dropping the step would
+            # leave the recording missing a transition the flow made, so the step is kept and
+            # its checkpoint is not.
             step = step.model_copy(
                 update={
                     "checkpoint": None,
@@ -681,9 +639,8 @@ class DiscoveryLoop:
                 f"{_summary(after)}"
             )
 
-        # kept-with-checkpoint, or kept-with-the-checkpoint-dropped. Until now this
-        # verdict survived only as prose in the artifact's `note`, so a reviewer
-        # asking "which steps could the run not verify?" had to read every step.
+        # kept-with-checkpoint, or kept-with-the-checkpoint-dropped, as a queryable verdict
+        # rather than only as prose in the artifact's `note`.
         turn = turn.model_copy(
             update={
                 "verdict": "kept_without_checkpoint" if unmet else "kept",
@@ -693,9 +650,7 @@ class DiscoveryLoop:
 
         state.steps.append(step)
         state.step_frames[step.id] = obs
-        # What the step achieved, in the model's own terms. An extraction that
-        # does not report the value it read leaves the model unable to tell a
-        # successful read from a silent one — and it extracts again.
+        # What the step achieved, in the model's own terms, so a read reports its value.
         read = state.extracted.get(step.id)
         outcome = f" -> read {read!r}" if read else (f" (saw {expect!r})" if expect else "")
         state.history.append(f"{len(state.steps)}. {intent}{outcome}")
@@ -726,9 +681,9 @@ class DiscoveryLoop:
     ) -> None:
         """Carry out the action the model chose.
 
-        Clicks go to the chosen element's centre directly: the model picked from an
-        enumerated list, so there is nothing to resolve. The artifact still records
-        the anchor text and the box, which is what replay resolves against later.
+        Clicks go straight to the chosen element's centre — it picked from an enumerated list,
+        so there is nothing to resolve. The artifact still records the anchor text and the box,
+        which is what replay resolves against later.
         """
         if isinstance(step, FindAndActStep):
             found = await self.scanner.scan(step, self.goal_inputs, lambda: self._observe(state))
@@ -740,9 +695,11 @@ class DiscoveryLoop:
                 )
             row = found.matches[0]
             if step.on_found_action is Primitive.EXTRACT:
-                state.extracted[step.id] = " ".join(
-                    (e.text or e.name or "").strip() for e in row
-                ).strip()
+                # The same narrowing replay does, so the recorded sample is the value the step
+                # will actually produce — and the declared output type is typed off it.
+                state.extracted[step.id] = _row_cell(
+                    row, step.on_found_extract_column, found.observation
+                )
                 return
             box = row[0].bbox
             await self.driver.click(
@@ -772,8 +729,8 @@ class DiscoveryLoop:
         if step.action is not Primitive.EXTRACT:
             url = self.driver.current_url()
             if url:
-                # A click can navigate. Checking after the fact is the only way to
-                # notice when it navigated somewhere the allowlist forbids.
+                # A click can navigate, and checking after is the only way to notice when it
+                # went somewhere the allowlist forbids.
                 self.policy.check_url(url)
 
     def _finish(
@@ -821,18 +778,11 @@ class DiscoveryLoop:
     def _is_stuck(self, state: DiscoveryState) -> str | None:
         """Detect a dead end before the step budget runs out.
 
-        Signals, cheapest first: the frame hash has repeated N times (the actions
-        are having no effect); the same tool-call has been issued twice in a row
-        with the same arguments; resolution has failed on consecutive steps.
-
-        Detecting this early matters because the alternative is an escalation that
-        arrives at max-steps with twenty near-identical screenshots attached — the
-        operator has to work out what went wrong, instead of being told.
+        Two signals: the frame hash repeated N times, or the same tool call issued twice with
+        the same arguments.
         """
-        # Post-action frames only. Counting every observation would flag a model
-        # that is reading the screen before deciding — which is not stuck, it is
-        # working — and the signal we want is specifically "the actions are having
-        # no effect".
+        # Post-action frames only. Counting every observation would flag a model reading the
+        # screen before deciding, which is working, not stuck.
         recent = state.frame_sequence[-STUCK_REPEATS:]
         if len(recent) == STUCK_REPEATS and len(set(recent)) == 1:
             return (
@@ -880,3 +830,21 @@ def _element_for(obs: Observation, mark: Any) -> Element | None:
 def _summary(obs: Observation, limit: int = 400) -> str:
     text = " ".join(t for t in ((e.text or "").strip() for e in obs.elements) if t)
     return text[:limit]
+
+
+def _row_cell(row: list[Element], column: str | None, obs: Observation | None) -> str:
+    """The cell replay would read, or the whole row when no column was named.
+
+    The record-time half of `replay.engine._read_row`: recording and replay have to extract the
+    same thing from the same step, or the declared type describes a value the capability never
+    returns. Degrades to the whole row rather than failing, leaving a missing header for
+    synthesis to notice.
+    """
+    whole = " ".join((e.text or e.name or "").strip() for e in row).strip()
+    if not column or obs is None:
+        return whole
+    span = column_span(obs, column, above=min(e.bbox.y for e in row))
+    if span is None:
+        return whole
+    cell = cell_in_column(row, span)
+    return (cell.text or cell.name or "").strip() if cell is not None else whole

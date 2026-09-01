@@ -1,12 +1,10 @@
 """Diagnosing a run that stopped on a screen nobody had declared.
 
-Undeclared screens arrive as `FAILURE` — the right answer, since guessing in a banking
-application is worse than stopping, and an expensive one. What decides whether that
-scales is not how few unknown screens there are but whether one costs an escalation
-**once** or **every time**; this is the once. The model picks a line by *index* rather
-than phrasing a detector, the choice is falsified against successful runs of the same
-capability, and the output is YAML for a person to apply — a model that could rewrite a
-guardrail is not a guardrail.
+Undeclared screens arrive as `FAILURE`, which is the right answer and an expensive one. This
+is what makes an unknown screen cost an escalation once rather than every time. The model picks
+a line by *index* rather than phrasing a detector, the choice is falsified against successful
+runs of the same capability, and the output is YAML for a person to apply — a model that could
+rewrite a guardrail is not a guardrail.
 """
 
 from __future__ import annotations
@@ -18,8 +16,8 @@ from typing import Any
 
 from .catalog.learn import all_lines, final_lines, normalized_line
 
-# Each maps to a different place the answer goes — the test of whether the taxonomy
-# is real. Two that produced the same patch would be one classification.
+# Each maps to a different place the answer goes; two producing the same patch would be one
+# classification.
 CLASSIFICATIONS = {
     "business_outcome": "a legitimate alternative answer the caller should branch on",
     "recoverable": "an interstitial or transient state the automation could clear itself",
@@ -29,8 +27,7 @@ CLASSIFICATIONS = {
     "our_bug": "nothing is wrong with the application; the failure is in this system",
 }
 
-# `drift` and `our_bug` land nowhere: answers about what to do next, not conditions
-# to declare. A patch for them would be inventing work for a reviewer.
+# `drift` and `our_bug` land nowhere: answers about what to do next, not conditions to declare.
 _TARGET = {
     "business_outcome": "policy",      # detector shared by every flow on the app
     "recoverable": "policy",
@@ -96,8 +93,7 @@ class Diagnosis:
     # None when the classification is an answer about what to do next.
     target: str | None = None
     patch: str = ""
-    # Recorded, not just returned: a rejection is the half of the evidence that
-    # shows the falsification runs.
+    # Recorded, not just returned: a rejection is what shows the falsification ran.
     rejected: str | None = None
     lines_offered: int = 0
     model: str = ""
@@ -158,9 +154,9 @@ def load_run(evidence_dir: Path) -> RunEvidence:
 def reference_lines(evidence_root: Path, capability: str, exclude: str) -> list[str]:
     """Every line any *successful* run of the same capability has ever read.
 
-    The falsification side, broad on purpose: a line must be absent from all of them
-    to count as identifying. An empty set means nothing has succeeded here yet, so
-    the proposal is correspondingly less checked and the reviewer is the only filter.
+    The falsification side, broad on purpose: a line must be absent from all of them to count
+    as identifying. An empty set means nothing has succeeded here yet, so the reviewer is the
+    only filter.
     """
     lines: list[str] = []
     for run in sorted(evidence_root.glob("*/run.json")):
@@ -270,9 +266,8 @@ async def diagnose(
 def _downgrade(classification: str, run: RunEvidence) -> tuple[str, str]:
     """A condition met on a step that mutates is never auto-recoverable.
 
-    No vote for the model. `recoverable` means carrying on unattended, and doing
-    that past a step that may already have moved money is the one thing this system
-    exists not to do. The read/write line that gates retry gates the proposal too.
+    Not the model's call: `recoverable` means carrying on unattended past a step that may
+    already have moved money. The read/write line that gates retry gates the proposal too.
     """
     if classification == "recoverable" and run.step_risk != "safe":
         return "escalation", (
@@ -302,12 +297,12 @@ def _slug(name: str) -> str:
 def _patch(classification: str, name: str, description: str, detector: str) -> str:
     """The proposal, as YAML a reviewer pastes into `policies/<app>.yaml`.
 
-    Text rather than a file rewrite: a policy file carries the argument for every
-    entry it holds, and `yaml.safe_dump` deletes all of it. The unit of review is a
-    diff a person applies, which is what keeps a model from editing a guardrail.
+    Text rather than a file rewrite: a policy file carries the argument for every entry it
+    holds and `yaml.safe_dump` deletes all of it, and the unit of review is a diff a person
+    applies.
 
-    A `recoverable` proposal ships with `actions` empty and a TODO — the detector is
-    copied off a screen, the handler cannot be, and guessing at one is not on.
+    A `recoverable` proposal ships with `actions` empty and a TODO: the detector is copied off
+    a screen, the handler cannot be.
     """
     key = {
         "business_outcome": "business_outcomes",

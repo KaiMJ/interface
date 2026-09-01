@@ -4,13 +4,13 @@
  * One page, three regions: the navigator (what exists), the run (what you are
  * looking at), and the live session (what is happening now).
  *
- * There is deliberately no separate /operator route — a debug view and an operator
- * view of the same run differ only in whether you may touch it, and splitting them
- * means whoever handles an escalation navigates away from the evidence.
+ * No separate /operator route: a debug view and an operator view of the same run
+ * differ only in whether you may touch it, and splitting them would send whoever
+ * handles an escalation away from the evidence.
  *
  * Live updates come from the run's own evidence stream (SSE over `steps.jsonl` and
- * `run.json`), so a CLI-started run is watchable here for free and what this shows
- * cannot disagree with the audit trail — it is reading it.
+ * `run.json`), so a CLI-started run is watchable here and what this shows is the
+ * audit trail rather than a copy of it.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -71,10 +71,9 @@ export default function Console() {
 
   // --- the slow poll: things that change when something else starts a run ----
   //
-  // Each result replaces state only when it actually differs. Re-seating three
-  // arrays every two seconds re-rendered every panel below them on a new object
-  // identity — including re-creating the ~150 absolutely-positioned boxes of the
-  // element overlay, which is what made hovering it stutter.
+  // Each result replaces state only when it actually differs: re-seating three
+  // arrays every two seconds re-renders every panel below them on a new object
+  // identity, including the ~150 absolutely-positioned boxes of the element overlay.
   const poll = useCallback(async () => {
     const [up, listed, queue, catalog] = await Promise.all([
       api.health(),
@@ -95,11 +94,10 @@ export default function Console() {
     return () => clearInterval(t);
   }, [poll]);
 
-  // A run started anywhere becomes the selected one. The operator's attention
-  // should follow the session, not have to chase it.
+  // A run started anywhere becomes the selected one, so attention follows the session.
   const active = health?.active_run ?? null;
-  // Anything holding the display, run or not. Arming a fault claims it the same
-  // way; the difference is that a run is something this console can open.
+  // Anything holding the display, run or not: arming a fault claims it the same way,
+  // but is not something this console can open.
   const busy = health?.session_busy ? (active ?? "the session") : null;
   useEffect(() => {
     if (active) setSelectedRun(active);
@@ -152,9 +150,8 @@ export default function Console() {
       thinking: setThinking,
       run: (fresh) => {
         setRun(fresh);
-        // A new step means a new frame on disk. The manifest maps step ids to
-        // files, so it has to be re-read — but only when the count moved, not on
-        // every heartbeat.
+        // A new step means a new frame on disk, so the manifest is re-read — but only
+        // when the count moved, not on every heartbeat.
         if (fresh.steps.length !== frames) {
           frames = fresh.steps.length;
           void api.evidence(current).then((e) => e && setEvidence(e));
@@ -172,8 +169,7 @@ export default function Console() {
   }, [follow, steps.length]);
 
   // Nothing rewrites the heartbeat when the model answers, so the step it names
-  // arriving is what retires it — which is also the only signal that survives a
-  // reload or a reconnect in the middle of a call.
+  // arriving is what retires it — the only signal that survives a reconnect.
   const pending = useMemo(
     () =>
       thinking && run?.status === "running" && !steps.some((s) => s.step_id === thinking.step_id)
@@ -183,9 +179,9 @@ export default function Console() {
   );
 
   const step = stepIndex !== null ? (steps[stepIndex] ?? null) : null;
-  // Only when the manifest in hand is the selected run's. Switching runs replaces
-  // `current` before the new evidence lands, and pairing the new run id with the
-  // old run's file paths asks the control plane for a frame that does not exist.
+  // Only when the manifest in hand is the selected run's: switching runs replaces
+  // `current` before the new evidence lands, and pairing the new run id with the old
+  // run's file paths asks for a frame that does not exist.
   const frame = useMemo(
     () =>
       (evidence?.run_id === current
@@ -196,8 +192,8 @@ export default function Console() {
 
   // --- the two contracts beside the run --------------------------------------
   useEffect(() => {
-    // The selected run's application, not the deployment default. Showing one
-    // app's allowlist beside another app's run is a confident wrong answer.
+    // The selected run's application, not the deployment default: one app's allowlist
+    // beside another app's run is a confident wrong answer.
     void api.policy(run?.app ?? null).then(setPolicy);
   }, [run?.app]);
 
@@ -415,9 +411,7 @@ function same(a: unknown, b: unknown): boolean {
  * What synthesis proposed, and what was thrown away.
  *
  * The declaration is the one part of an artifact a model wrote freehand, and the
- * rejections are how a reviewer judges whether to trust the rest: on the shipped
- * recording both outcomes the model proposed were phrases visible on the
- * successful run's own frames, and code caught both.
+ * rejections are how a reviewer judges whether to trust the rest.
  */
 function SynthesisCard({ evidence }: { evidence: Evidence | null }) {
   const note = evidence?.synthesis as

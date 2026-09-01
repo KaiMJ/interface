@@ -1,14 +1,13 @@
 "use client";
 
 /**
- * The fault harness, in the console — you arm a fault because you want to watch
- * what the automation does about it, and the watching is here.
+ * The fault harness, beside the run it is meant to be watched against.
  *
- * Three properties make that safe beside a live session: the control plane drives
- * the browser to the fault URL itself, which is outside the app's allowlist by
- * construction (an agent that could arm its own faults could disarm them); arming
- * claims the session, so it cannot interleave with a run; and faults live in app
- * policy, so an application declaring no harness shows no panel.
+ * Three properties make it safe next to a live session: the control plane drives the
+ * browser to the fault URL itself, which is outside the app's allowlist by
+ * construction, so arming is never something the agent can do; arming claims the
+ * session, so it cannot interleave with a run; and faults live in app policy, so an
+ * application declaring no harness shows no panel.
  */
 
 import { useEffect, useState } from "react";

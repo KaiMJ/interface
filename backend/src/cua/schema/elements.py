@@ -1,13 +1,9 @@
-"""What perception produces.
+"""What perception produces: one `Element` type regardless of where it came from.
 
-One `Element` type regardless of where it came from. This is the seam that keeps
-the artifact format independent of the surface: OmniParser on a screenshot, OCR
-text lines, an accessibility node, and a DOM node all normalize into the same
-record, and everything downstream (resolver, set-of-marks overlay, replay) only
-ever sees `Element`.
-
-Adding a desktop surface means adding an `ElementSource`, not changing the
-artifact schema.
+The seam that keeps the artifact format independent of the surface. An OmniParser icon, an OCR
+text line, an accessibility node and a DOM node all normalize into the same record, and
+everything downstream — resolver, set-of-marks overlay, replay — sees only `Element`. Adding a
+desktop surface means adding an `ElementSource`, not changing the schema.
 """
 
 from __future__ import annotations
@@ -29,9 +25,8 @@ class ElementSource(str, Enum):
 class SettledBy(str, Enum):
     """How the surface was judged to have stopped changing.
 
-    Recorded rather than inferred: a run whose every step settles by TEXT is
-    telling you the surface animates, which is a fact about the application worth
-    having before anyone reaches for the thresholds.
+    Recorded rather than inferred: a run settling by TEXT on every step is telling you the
+    surface animates, which is worth knowing before anyone reaches for the thresholds.
     """
 
     PIXELS = "pixels"   # two consecutive frames byte-identical
@@ -42,9 +37,9 @@ class SettledBy(str, Enum):
 class Element(Frozen):
     """A candidate control or piece of text on the surface.
 
-    `role` and `name` are the semantic handles the resolver prefers; `bbox` is the
-    fallback. `source` and `conf` are carried through because a resolution that
-    only succeeded via a low-confidence pixel match is a signal worth logging.
+    `role` and `name` are the semantic handles the resolver prefers, `bbox` the fallback.
+    `source` and `conf` ride along because a resolution that only succeeded on a
+    low-confidence pixel match is worth logging.
     """
 
     id: str                              # stable within one observation, e.g. "e12"
@@ -64,10 +59,9 @@ class Element(Frozen):
 class Observation(Frozen):
     """One perceive() cycle: a frame plus everything found in it.
 
-    The screenshot is of the whole X display, not of the browser viewport. That is
-    deliberate: it is the same image the operator sees over VNC and the same
-    coordinate space the input layer clicks in, so there is exactly one coordinate
-    system and no translation bugs at the handoff.
+    The screenshot is the whole X display, not the browser viewport — the same image the
+    operator sees over VNC and the same space the input layer clicks in, so there is one
+    coordinate system and no translation bugs at the handoff.
     """
 
     screenshot_path: str

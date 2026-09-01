@@ -1,21 +1,25 @@
 """Guardrails.
 
-Checked in the same place on both paths — discovery and replay call the identical
-`check_action()` and `check_url()`. A guardrail that only guards the LLM is not a
-guardrail: a buggy or tampered artifact submits the wrong transfer just as well as a
-confused model does.
+Checked in the same place on both paths: discovery and replay call the identical
+`check_action()` and `check_url()`. A guardrail that only guards the LLM is not a guardrail —
+a buggy or tampered artifact submits the wrong transfer just as well as a confused model does.
 """
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 from ..schema import AppRef, PolicyDecision, Primitive, Relation, Risk, Target
+
+# Every detector in a policy file is matched by `_matches`, which reads text off the frame.
+# Named so `load` can reject a kind it would otherwise accept and silently never match.
+_SUPPORTED_DETECTOR_KINDS = frozenset({"text_present"})
 
 
 class PolicyDenied(Exception):
@@ -25,7 +29,7 @@ class PolicyDenied(Exception):
         self.detail = detail
 
 
-class RiskDisposition(str):
+class RiskDisposition(str, Enum):
     ALLOW = "allow"
     CONFIRM = "confirm"     # escalate to a human before proceeding
     BLOCK = "block"
@@ -35,14 +39,9 @@ class RiskDisposition(str):
 class Recovery:
     """A declared recoverable condition.
 
-    Lives in app policy rather than in a capability, because these are properties
-    of the application, not of any one flow: a session-expiry interstitial can
-    interrupt every capability on the app, and duplicating its handler into each
-    artifact would guarantee they drift apart.
-
-    `max_per_run` is what stops a recovery loop. Dismissing the same modal eleven
-    times means the dismissal is not working, and that is a hard failure, not
-    eleven successful recoveries.
+    In app policy rather than in a capability: an interstitial can interrupt every capability
+    on the app, and copies of its handler in each artifact would drift. `max_per_run` stops a
+    recovery loop — dismissing the same modal eleven times means the dismissal is not working.
     """
 
     name: str
@@ -54,18 +53,13 @@ class Recovery:
 
 @dataclass(frozen=True)
 class Condition:
-    """A declared application state with no handler.
+    """A declared application state with no handler. Two kinds, and the difference is who can
+    clear it:
 
-    Two kinds, and the difference is who can clear it:
-
-      app error    the application itself failed. Nobody can fix it from here, so
-                   the run stops with APP_ERROR rather than reporting a checkpoint
-                   that did not hold — which would send an operator looking for a
-                   layout problem that is not there.
-      escalation   a human can fix it. Session expiry is the archetype, and the
-                   reason it is not a recovery: re-authenticating mid-flow would
-                   mean the automation holds credentials and silently resumes a
-                   run whose context may no longer be valid.
+      app error    the application failed. Nobody can fix it from here, so the run stops with
+                   APP_ERROR rather than reporting a checkpoint that did not hold.
+      escalation   a human can fix it. Session expiry is the archetype: resuming mid-flow
+                   would continue a run whose context may no longer be valid.
     """
 
     name: str
@@ -77,14 +71,9 @@ class Condition:
 class AppOutcome:
     """A business outcome's *detector*, owned by the application.
 
-    The wording of "no member matches the search criteria entered" is a fact about
-    the app, shared by every capability that searches for a member. Declaring it
-    here means it is taught once and inherited, rather than copied into each
-    artifact where the copies would drift.
-
-    What is *not* here is whether any particular flow can return it. That is the
-    capability's declaration, because it is part of the contract its caller
-    branches on — see `schema.BusinessOutcome`.
+    The wording is a fact about the app, shared by every capability that meets that screen, so
+    it is taught once here and inherited by name. Whether a particular flow can return it is
+    the capability's declaration, part of the contract its caller branches on.
     """
 
     name: str
@@ -98,10 +87,8 @@ class AppOutcome:
 class SignOnStep:
     """One step of the sign-on recipe.
 
-    Deliberately the same shape a capability step has — an action, a target
-    described by what is on screen, a value — because it is the same mechanism.
-    What differs is that this one is never serialized into an artifact, because
-    its value is a credential.
+    The same shape a capability step has — an action, a target described by what is on screen,
+    a value — and never serialized into an artifact, because its value is a credential.
     """
 
     action: Primitive
@@ -145,15 +132,15 @@ class Policy:
     ) -> None:
         self.app = app
         self.vendor = vendor
-        # Which installs an artifact recorded here applies to. Defaults to the
-        # allowlist's first pattern — usually the same set.
+        # Which installs an artifact recorded here applies to. Defaults to the allowlist's
+        # first pattern, usually the same set.
         self.base_url_pattern = base_url_pattern or (
             allowed_url_patterns[0] if allowed_url_patterns else ""
         )
         # A per-institution fact, so a second tenant overrides this and nothing else.
         self.entry_url = entry_url
-        # The fault harness, if the app has one. Deliberately *outside* the
-        # allowlist: an agent that could arm its own faults could disarm them.
+        # The fault harness, if the app has one. Deliberately *outside* the allowlist: an
+        # agent that could arm its own faults could disarm them.
         self.fault_url = fault_url
         self.sign_on = sign_on
         # What the discovery model is told it is looking at — a fact about the app.
@@ -166,24 +153,18 @@ class Policy:
         self.recoveries = recoveries
         self.redact_patterns = redact_patterns
         self.risky_intent_patterns = risky_intent_patterns
-        # Two budgets bounding the ways a run can decline to finish. Here rather
-        # than in the engine because both are judgements about an application:
-        #   max_restarts              a session that dies twice in ninety seconds
-        #                             is not transient, and a run that keeps
-        #                             signing back in spends its night doing it.
-        #   max_escalations_per_step  an operator can resume without clearing the
-        #                             condition; unbounded, the run parks forever
-        #                             holding the only session, and a queue that
-        #                             re-issues one request teaches people to
-        #                             ignore the queue.
+        # Two budgets bounding the ways a run can decline to finish. Here rather than in the
+        # engine because both are judgements about an application:
+        #   max_restarts              a session that dies twice is not transient.
+        #   max_escalations_per_step  an operator can resume without clearing the condition;
+        #                             unbounded, the run parks forever holding the only session.
         self.max_restarts = max_restarts
         self.max_escalations_per_step = max_escalations_per_step
         # Detectors a capability on this app may inherit by name.
         self.business_outcomes = business_outcomes
-        # Lines that change while nothing is happening — a countdown, a clock, a
-        # "last refreshed" stamp. Excluded from the settle comparison: a ticking
-        # clock means no two frames agree by pixels *or* text, so every step burns
-        # two timeouts on a screen that was ready throughout.
+        # Lines that change while nothing is happening — a countdown, a clock, a "last
+        # refreshed" stamp. Excluded from the settle comparison, where they would stop any
+        # two frames from ever agreeing.
         self.volatile_text = volatile_text
         self._url_res = tuple(re.compile(p) for p in allowed_url_patterns)
         self._intent_res = tuple(re.compile(p) for p in risky_intent_patterns)
@@ -191,6 +172,7 @@ class Policy:
     @classmethod
     def load(cls, path: Path) -> Policy:
         raw: dict[str, Any] = yaml.safe_load(path.read_text()) or {}
+        _check_detector_kinds(path, raw)
         return cls(
             app=str(raw.get("app", path.stem)),
             vendor=raw.get("vendor"),
@@ -198,12 +180,11 @@ class Policy:
             entry_url=str(raw.get("entry_url", "")),
             fault_url=str(raw.get("fault_url", "")),
             allowed_url_patterns=tuple(raw.get("allowed_url_patterns", ())),
-            # An unlisted primitive is denied, so an empty or missing list denies
-            # everything. Failing closed is the only safe direction here.
+            # An unlisted primitive is denied, so an empty or missing list denies everything.
             allowed_actions=frozenset(
                 Primitive(a) for a in raw.get("allowed_actions", ())
             ),
-            risky_disposition=str(raw.get("risky_disposition", RiskDisposition.CONFIRM)),
+            risky_disposition=str(raw.get("risky_disposition", RiskDisposition.CONFIRM.value)),
             recoveries=tuple(
                 Recovery(
                     name=str(r["name"]),
@@ -236,11 +217,8 @@ class Policy:
         )
 
     def app_ref(self) -> AppRef:
-        """The identity a capability recorded against this app carries.
-
-        Sourced here rather than assembled at the call site so that every artifact
-        naming an app names one that has a policy file — the two cannot drift.
-        """
+        """The identity a capability recorded against this app carries. Sourced here, so every
+        artifact naming an app names one that has a policy file."""
         return AppRef(
             name=self.app,
             vendor=self.vendor,
@@ -248,24 +226,17 @@ class Policy:
         )
 
     def check_url(self, url: str) -> None:
-        """Raise PolicyDenied if the URL is outside the allowlist.
-
-        Evaluated on navigate *and* after every action, because a click can
-        navigate. Checking only on explicit navigation leaves the obvious hole.
-        """
+        """Raise PolicyDenied if the URL is outside the allowlist. Evaluated on navigate *and*
+        after every action, because a click can navigate."""
         if not any(r.match(url) for r in self._url_res):
             raise PolicyDenied("allowlist", f"{url} is not in the permitted URL patterns")
 
     def decide(self, action: Primitive, risk: Risk, intent: str) -> PolicyDecision:
         """The same verdict `check_action` reaches, as a record instead of a raise.
 
-        Both callers used to keep only the exception. That made a denial legible
-        and an *allow* invisible, so a run's evidence could show which actions the
-        agent was permitted in general and never which it was permitted here — and
-        a risk promotion, the backstop against a mislabelled recording, left no
-        trace at all unless it happened to escalate. This returns the whole
-        decision, including the boring ones; `check_action` is the raising wrapper
-        over it so the enforcement path is unchanged.
+        Returns the whole decision, allows included, so evidence shows what the agent was
+        permitted *here* and a risk promotion leaves a trace. `check_action` is the raising
+        wrapper over this.
         """
         declared = risk.value
         if action not in self.allowed_actions:
@@ -287,7 +258,7 @@ class Policy:
                 action=action.value,
                 declared_risk=declared,
                 effective_risk=effective.value,
-                disposition=RiskDisposition.ALLOW,
+                disposition=RiskDisposition.ALLOW.value,
                 rule="allowlist",
                 intent=intent,
             )
@@ -314,12 +285,8 @@ class Policy:
         )
 
     def check_action(self, action: Primitive, risk: Risk, intent: str) -> str:
-        """Return a RiskDisposition, or raise PolicyDenied.
-
-        `intent` is carried through purely so a denial is debuggable: 'denied
-        click' is useless in an audit log, 'denied: submit $500 transfer from
-        29883' is not.
-        """
+        """Return a RiskDisposition, or raise PolicyDenied. `intent` is carried through so a
+        denial names what was refused rather than only the primitive."""
         decision = self.decide(action, risk, intent)
         if decision.disposition == "denied":
             raise PolicyDenied(
@@ -327,23 +294,14 @@ class Policy:
             )
         return decision.disposition
 
-    def classify_risk(self, declared: Risk, intent: str) -> Risk:
-        """The declared risk, escalated when the intent reads as a mutation.
-
-        One-directional on purpose: policy can promote `safe` to `risky`, never
-        the reverse. A recording that mislabels a submit as safe is the expensive
-        failure; a read misclassified as risky costs one confirmation.
-        """
-        if declared is Risk.RISKY:
-            return Risk.RISKY
-        return Risk.RISKY if self.promoting_pattern(declared, intent) else Risk.SAFE
-
     def promoting_pattern(self, declared: Risk, intent: str) -> str | None:
         """Which risky-intent pattern raised this step, if one did.
 
-        The pattern itself, not a boolean: an operator asking why a read was held
-        for confirmation needs to see the regex that decided it, and a promotion
-        reported without its cause reads as the system being arbitrary.
+        The pattern itself, not a boolean, so a promotion is reported with its cause.
+
+        One-directional on purpose — `safe` can become `risky`, never the reverse. A recording
+        that mislabels a submit as safe is the expensive failure; a read misclassified as risky
+        costs one confirmation.
         """
         if declared is Risk.RISKY:
             return None
@@ -367,11 +325,36 @@ class Policy:
 
 
 def _matches(condition: Any, observed_text: str) -> bool:
+    """Does this declared condition hold on what the frame says?
+
+    Text only, and `load` refuses any other kind rather than letting this return False forever:
+    a recovery that never fires is indistinguishable from one that is not needed.
+    """
     return (
         condition.detector_kind == "text_present"
         and bool(condition.detector_value)
         and condition.detector_value.casefold() in observed_text.casefold()
     )
+
+
+def _check_detector_kinds(path: Path, raw: dict[str, Any]) -> None:
+    """Reject a detector this file matches with but cannot evaluate."""
+    found: list[tuple[str, str]] = []
+    for section in ("recoveries", "app_errors", "escalations", "business_outcomes"):
+        for entry in raw.get(section, ()) or ():
+            kind = str((entry.get("detector") or {}).get("kind", ""))
+            found.append((f"{section}.{entry.get('name', '?')}", kind))
+    if raw.get("sign_on"):
+        kind = str((raw["sign_on"].get("detector") or {}).get("kind", ""))
+        found.append(("sign_on", kind))
+
+    bad = [f"{where} declares {kind!r}" for where, kind in found
+           if kind not in _SUPPORTED_DETECTOR_KINDS]
+    if bad:
+        supported = ", ".join(sorted(_SUPPORTED_DETECTOR_KINDS))
+        raise ValueError(
+            f"{path}: unsupported detector kind ({'; '.join(bad)}). Supported: {supported}"
+        )
 
 
 def _sign_on(raw: Any) -> SignOn | None:

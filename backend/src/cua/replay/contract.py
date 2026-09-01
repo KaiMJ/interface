@@ -1,9 +1,8 @@
 """The caller's side of a capability: inputs in, typed outputs out.
 
-The only part of replay that never looks at a screen, answerable from the artifact and
-the caller's arguments alone — which is why it runs *before* anything is touched. A type
-error should be a rejected call, not a run that gets four steps in and types "None" into
-an amount field.
+The only part of replay that never looks at a screen — answerable from the artifact and the
+caller's arguments alone, which is why it runs *before* anything is touched. A type error
+should be a rejected call, not a run that gets four steps in and types "None" into an amount.
 """
 
 from __future__ import annotations
@@ -26,12 +25,8 @@ class ContractError(Exception):
 def _absent(value: Any) -> bool:
     """Nothing supplied — including a string that only looks like it was.
 
-    `None` was the whole test until a replay was called with
-    `account_nickname=""`. Empty is not missing to a dict, so the contract passed
-    it, `{{account_nickname}}` rendered to nothing, the anchor tier skipped itself
-    for want of a needle, and the ladder fell to "any text element" and returned
-    the first row's balance as a success. A blank required input is the caller
-    saying nothing, and the place to say so is here, before a browser is opened.
+    Empty is not missing to a dict, so without this an empty input renders its placeholder to
+    nothing, the anchor tier has no needle, and the ladder falls through to "any text element".
     """
     return value is None or (isinstance(value, str) and not value.strip())
 
@@ -41,9 +36,8 @@ def validate_inputs(
 ) -> dict[str, Any]:
     """Coerce and check the caller's arguments against the declared `InputSpec`s.
 
-    Anything the caller sent that the capability does not declare is dropped
-    rather than passed through: a template can only reference declared inputs, and
-    silently accepting extras invites a caller to believe they are steering
+    Undeclared arguments are dropped rather than passed through: a template can only reference
+    declared inputs, and accepting extras invites a caller to believe they are steering
     something.
     """
     if require_approved and cap.status is not Status.APPROVED:
@@ -65,10 +59,8 @@ def validate_inputs(
                     )
                 )
             continue
-        # Coercion and constraints share one handler on purpose. Both are "the
-        # caller sent something this capability cannot accept", both name the
-        # input and the rule, and splitting them once let a constraint violation
-        # escape as a bare ValueError instead of a structured result.
+        # Coercion and constraints share one handler: both mean "the caller sent something
+        # this capability cannot accept", and both must reach a structured result.
         try:
             params[spec.name] = coerce(inputs[spec.name], spec.type)
             check_constraints(spec, params[spec.name], params)
@@ -88,10 +80,9 @@ def validate_inputs(
 def extract_outputs(cap: Capability, extracted: dict[int, Any]) -> dict[str, Any]:
     """Read declared outputs from what the extract steps recorded.
 
-    `extracted` is keyed by step id, which is why `OutputSpec.from_step` has to
-    name a step that actually extracts — checked when the artifact is constructed
-    (`Capability._referentially_intact`), so by the time we get here the only way
-    to arrive at `None` is that the step ran and read nothing.
+    `extracted` is keyed by step id, which is why `OutputSpec.from_step` has to name a step
+    that extracts — checked at construction, so the only way to reach `None` here is that the
+    step ran and read nothing.
     """
     outputs: dict[str, Any] = {}
     for spec in cap.outputs:
@@ -121,11 +112,9 @@ def extract_outputs(cap: Capability, extracted: dict[int, Any]) -> dict[str, Any
                 )
             ) from e
 
-        # Typed is not the same as plausible. Declared bounds are the only check
-        # standing between a misread digit and a number the caller will act on,
-        # and it is a *different* answer from "could not read it": that one sends
-        # an operator to look at the screen, this one says the screen was read and
-        # what came back cannot be right.
+        # Typed is not the same as plausible: declared bounds are what stands between a misread
+        # digit and a number the caller acts on. Distinct from "could not read it" — this says
+        # the screen was read and what came back cannot be right.
         try:
             values = outputs[spec.name]
             for v in values if isinstance(values, list) else [values]:
@@ -180,6 +169,6 @@ def check_constraints(spec: Any, value: Any, params: dict[str, Any]) -> None:
     if c.choices and str(value) not in c.choices:
         raise ValueError(f"{value!r} is not one of {c.choices}")
     if c.not_equal_to and str(value) == str(params.get(c.not_equal_to)):
-        # "transfer from X to Y" where X == Y. A validation rule the application
-        # would also enforce, caught before we touch it.
+        # "transfer from X to Y" where X == Y — a rule the application would also enforce,
+        # caught before we touch it.
         raise ValueError(f"must differ from {c.not_equal_to}")

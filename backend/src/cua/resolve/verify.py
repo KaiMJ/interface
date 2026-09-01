@@ -1,10 +1,8 @@
 """Verification — the checks that wrap every action.
 
-A stable coordinate is not a right one. An unexpected modal moves nothing; it lands on
-top, so the recorded coordinate still resolves and the click hits the dialog. In a
-banking application that is a correctness failure rather than a robustness one, and no
-amount of better targeting detects it. So each step is: resolve, verify target, execute,
-verify effect.
+A stable coordinate is not a right one: an unexpected modal moves nothing, so the recorded
+coordinate still resolves and the click hits the dialog. Every step is therefore resolve,
+verify target, execute, verify effect.
 """
 
 from __future__ import annotations
@@ -43,9 +41,8 @@ class VerifyResult:
     expected: str | None = None
     observed: str | None = None
     detail: str = ""
-    # "An undeclared element covers the target" is not actionable without knowing
-    # *which*: an operator has to find it, and a policy author has to write a
-    # dismissal handler against it.
+    # "An undeclared element covers the target" is not actionable without knowing which one: a
+    # policy author writes the dismissal handler against it.
     region: Bbox | None = None
 
 
@@ -55,10 +52,8 @@ def verify_target(
     obs: Observation,
     params: dict[str, object] | None = None,
 ) -> VerifyResult:
-    """Pre-action assertion.
-
-    Two distinct checks with two distinct failure kinds, because they call for
-    different operator responses:
+    """Pre-action assertion. Two checks with two failure kinds, because they call for different
+    operator responses:
 
       TARGET_MISMATCH     the region resolved, but its text does not match the
                           recorded label. Either we resolved the wrong thing or the
@@ -71,14 +66,10 @@ def verify_target(
 
     # 1. Does the region say what the recording said it said?
     #
-    # Only the semantic handles are assertable. `target_desc` is prose for a
-    # reviewer and appears nowhere on screen. With neither an anchor nor a name there
-    # is nothing to check, and saying so beats a check that always passes.
-    # Declared-but-unrenderable is not the same as never declared. The first is a
-    # check that has become impossible and must fail; the second is a target with
-    # nothing assertable, which is legitimate. Reading both as "nothing to check"
-    # turned off this assertion for exactly the run that needed it — a blank input,
-    # an anchor that rendered to nothing, and a balance read off the wrong row.
+    # Only the semantic handles are assertable — `target_desc` is prose for a reviewer and
+    # appears nowhere on screen. Declared-but-unrenderable is not the same as never declared:
+    # the first is a check that has become impossible and must fail, the second a target with
+    # nothing assertable, which is legitimate.
     if target.anchor_text and not (render(target.anchor_text, p) or "").strip():
         return VerifyResult(
             ok=False,
@@ -94,11 +85,9 @@ def verify_target(
 
     expected = render(target.anchor_text, p) or target.name
     if expected:
-        # With a relation the resolved box is the *neighbour* — an empty input
-        # beside a label — so the assertion belongs on the anchor we stepped from.
-        # Absent, the target fell through to a recorded box without finding the
-        # label, and "type the username at these coordinates on a screen that does
-        # not say User ID" is exactly what this prevents.
+        # With a relation the resolved box is the *neighbour* — an empty input beside a label
+        # — so the assertion belongs on the anchor we stepped from. Absent it, the target fell
+        # through to a recorded box without finding the label.
         observed = (
             region_text(obs, resolution.bbox)
             if target.relation is Relation.SELF
@@ -120,11 +109,9 @@ def verify_target(
 
     # 2. Is something sitting on top of it?
     #
-    # Only worth asking when the target was *not* confirmed from screen text: if we
-    # just read the recording's words at these coordinates, nothing opaque covers
-    # them. Otherwise a panel enclosing its own button is indistinguishable from a
-    # modal enclosing someone else's — measured, the sign-on panel tripped this on
-    # every login.
+    # Only worth asking when the target was *not* confirmed from screen text: having just read
+    # the recording's words at these coordinates, nothing opaque covers them. Otherwise a panel
+    # enclosing its own button is indistinguishable from a modal enclosing someone else's.
     overlay = (
         _overlay_over(obs, resolution.bbox)
         if resolution.tier is ResolutionTier.RECORDED_BBOX
@@ -171,20 +158,18 @@ def evaluate(
 ) -> bool:
     """Evaluate one checkpoint against one observation. No waiting, no retries.
 
-    Kept separate from `verify_effect` because business-outcome detectors and
-    recoverable-condition detectors are the same shape and are evaluated against
-    the same frame — the difference between them is what the caller does with a
-    True, not how it is computed.
+    Separate from `verify_effect` because business-outcome and recoverable-condition detectors
+    are the same shape against the same frame: what differs is what the caller does with a True,
+    not how it is computed.
     """
     p = params or {}
     kind = checkpoint.kind
     expected = render(checkpoint.value, p)
 
     if kind is CheckKind.REGION_STABLE:
-        # Stability is a property of two frames and this function sees one. The
-        # engine only evaluates checkpoints on a frame `Perceiver.settle()` has
-        # already declared stable, so the condition is satisfied by construction
-        # — and `frame_hash` being absent means nobody established that.
+        # Stability is a property of two frames and this function sees one. Checkpoints are
+        # only evaluated on a frame `Perceiver.settle()` already declared stable; a missing
+        # `frame_hash` means nobody established it.
         return obs.frame_hash is not None
 
     if kind is CheckKind.URL_MATCHES:
@@ -215,9 +200,8 @@ def evaluate(
 # internals
 # ---------------------------------------------------------------------------
 #
-# `region_text` is public: the replay engine reads declared outputs with it, and
-# an extraction that read the screen differently from the way a checkpoint reads
-# it would be a second, silently divergent definition of "what it says there".
+# `region_text` is public: the replay engine reads declared outputs with it, so an extraction
+# and a checkpoint cannot have two definitions of "what it says there".
 
 
 def _match(haystack: str, needle: str, mode: MatchMode) -> bool:
@@ -234,19 +218,15 @@ def _match(haystack: str, needle: str, mode: MatchMode) -> bool:
 def region_text(obs: Observation, region: Bbox) -> str:
     """Everything readable inside a region, in reading order.
 
-    Containment rather than intersection, at `Calibration.region_containment`:
-    OCR line boxes and detector boxes disagree about padding, and a label that
-    half-overlaps the button is still that button's label.
+    Containment rather than intersection, at `Calibration.region_containment`: OCR and detector
+    boxes disagree about padding, and a label half-overlapping a button is still its label.
     """
     index = ElementIndex(obs.elements)
     inside = index.within(region)
     if not inside:
-        # Nothing sits inside the region, so report what the region sits inside.
-        # When a dialog has covered the target this is the difference between
-        # "<nothing readable there>" and "Confirm transfer? Cancel Confirm" in the
-        # failure record, and the second one tells an operator what happened.
-        # min_iou=0: a dialog covering the whole page has a negligible IoU with a
-        # button-sized region and is exactly the element being looked for.
+        # Nothing sits inside the region, so report what the region sits inside — with a
+        # dialog over the target, that is what the failure record needs. min_iou=0 because a
+        # dialog covering the page has a negligible IoU with a button-sized region.
         inside = [
             e
             for e in index.overlapping(region, min_iou=0.0)
@@ -258,10 +238,9 @@ def region_text(obs: Observation, region: Bbox) -> str:
 def _scope_text(checkpoint: Checkpoint, obs: Observation, params: dict[str, Any]) -> str:
     """The text a checkpoint is evaluated against — the whole frame, or one region.
 
-    A scope that cannot be resolved yields the empty string rather than falling
-    back to the whole frame. Silently widening the scope would turn "the error
-    banner does not say 'insufficient funds'" into a claim about the entire page,
-    which is how a checkpoint passes for the wrong reason.
+    An unresolvable scope yields the empty string rather than falling back to the whole frame:
+    widening it would turn "the error banner does not say 'insufficient funds'" into a claim
+    about the entire page, which is how a checkpoint passes for the wrong reason.
     """
     if checkpoint.scope is None:
         return " ".join(
@@ -300,18 +279,14 @@ def _locate(checkpoint: Checkpoint, obs: Observation, params: dict[str, Any]) ->
 
 
 def _closest(obs: Observation, region: Bbox) -> Element | None:
-    # min_iou=0: whatever the R-tree says intersects, ranked by how much. A caller
-    # asking "what is at this region" wants the answer, not a filtered one.
+    # min_iou=0: whatever intersects, ranked by how much.
     overlapping = ElementIndex(obs.elements).overlapping(region, min_iou=0.0)
     return overlapping[0] if overlapping else None
 
 
 def _field_value(checkpoint: Checkpoint, obs: Observation, params: dict[str, Any]) -> str | None:
-    """Read what a field currently contains.
-
-    Two shapes, because forms use both: the value rendered inside the control, and
-    the value rendered in the cell beside its label. Inside wins when it is there.
-    """
+    """Read what a field currently contains. Two shapes because forms use both — the value
+    inside the control, and the value in the cell beside its label. Inside wins when present."""
     if checkpoint.scope is None:
         return None
     scope = _locate_target(checkpoint.scope, obs, params)
@@ -328,12 +303,8 @@ def _field_value(checkpoint: Checkpoint, obs: Observation, params: dict[str, Any
 
 
 def _observed_for(checkpoint: Checkpoint, obs: Observation, params: dict[str, Any] | None) -> str:
-    """What to show a human when a checkpoint fails.
-
-    The whole debugging story for a failed replay is `expected` next to this, so
-    it has to be the text the check actually looked at — not a generic screen
-    dump.
-    """
+    """What to show a human when a checkpoint fails: the text the check actually looked at,
+    shown next to `expected`, rather than a generic screen dump."""
     p = params or {}
     if checkpoint.kind is CheckKind.URL_MATCHES:
         return obs.url or "<no url on this surface>"
@@ -345,17 +316,14 @@ def _observed_for(checkpoint: Checkpoint, obs: Observation, params: dict[str, An
 def _overlay_over(obs: Observation, region: Bbox) -> Element | None:
     """Is an undeclared element covering the target?
 
-    Called only when the target could not be confirmed semantically — see
-    `verify_target`. That restriction is what makes a purely geometric test
-    meaningful without z-order: we already know the recording's words are *not*
-    readable at these coordinates, so a control that covers them, is a large share
-    of the frame, and dwarfs the target is the dialog that hid them.
+    Called only when the target could not be confirmed semantically (see `verify_target`),
+    which is what makes a purely geometric test meaningful without z-order: the recording's
+    words are already known not to be readable at these coordinates, so a control that covers
+    them, is a large share of the frame, and dwarfs the target is the dialog that hid them.
 
-    What this does not catch is a modal that leaves the target uncovered. There the
-    click lands on the dialog's backdrop and nothing happens, and the step's own
-    checkpoint fails one line later. Detected either way; only the error kind
-    differs. Declared interstitials never reach here — `replay.outcomes.classify`
-    matches them as recoverable first.
+    A modal leaving the target uncovered is not caught here; the step's own checkpoint fails
+    instead. Declared interstitials never reach here — `replay.outcomes.classify` matches them
+    as recoverable first.
     """
     target_area = region.w * region.h
     for el in obs.elements:

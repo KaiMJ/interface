@@ -1,14 +1,12 @@
 "use client";
 
 /**
- * Starting work from the console. Two ways in, and the difference is the system in
- * miniature: **Discover** takes a goal in English, costs model calls and may stop to
- * ask a human; **Replay** takes a capability and typed inputs, and constructs no
- * model at all. One panel rather than two, because putting them side by side is the
- * clearest statement of which is the production path.
+ * Starting work from the console. **Discover** takes a goal in English, costs model
+ * calls and may stop to ask a human; **Replay** takes a capability and typed inputs and
+ * constructs no model at all. One panel, so which is the production path is visible.
  *
- * Both start the run in the background and hand back an id — a discovery run outlasts
- * any sensible HTTP timeout, and the operator wants to watch rather than wait.
+ * Both start the run in the background and hand back an id: a discovery run outlasts any
+ * sensible HTTP timeout.
  */
 
 import { useEffect, useState } from "react";
@@ -41,10 +39,9 @@ export function Launch({
   const [goal, setGoal] = useState(
     "open the profile for member 12345 and read the current balance of their Primary Savings account",
   );
-  // Inputs are not just "what to type": they are the parameter declaration. Any
-  // literal in the recording matching one of these becomes a placeholder at
-  // synthesis, which is how "who decided 12345 was a parameter?" gets a
-  // deterministic answer. The hint says so, because it is not obvious.
+  // Inputs are also the parameter declaration: any literal in the recording matching one
+  // of these becomes a placeholder at synthesis. The hint says so, because it is not
+  // obvious.
   const [pairs, setPairs] = useState<[string, string][]>([
     ["member_id", "12345"],
     ["account_nickname", "Primary Savings"],

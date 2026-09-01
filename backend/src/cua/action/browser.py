@@ -1,12 +1,10 @@
 """Browser driver.
 
-Playwright as an input engine and a process manager, never a locator library — there is
-no `page.locator()` here and there should never be one, or the design stops
-generalizing to a surface with no DOM. Chromium runs *headful* on the Xvfb display:
-headless would be faster and would make the handoff a lie, since there would be no
-window for a human to take over. The page/display coordinate offset is measured and
-checked, because a silent off-by-85px produces a plausible wrong click and reports
-success on every step.
+Playwright as an input engine and a process manager, never a locator library: there is no
+`page.locator()` here, or the design stops generalizing to a surface with no DOM. Chromium runs
+*headful* on the Xvfb display, since a headless browser gives a human no window to take over.
+The page/display coordinate offset is measured and checked, because a silent off-by-85px
+produces a plausible wrong click and reports success on every step.
 """
 
 from __future__ import annotations
@@ -22,9 +20,8 @@ _CHROMIUM_ARGS = (
     "--no-default-browser-check",
     "--disable-session-crashed-bubble",
     "--disable-infobars",
-    # The "controlled by automated test software" infobar shifts the page down
-    # ~35px. Harmless to a DOM-based tool; to a coordinate-based one it moves
-    # every element on every page.
+    # The "controlled by automated test software" infobar shifts the page down ~35px, which
+    # moves every element on every page for a coordinate-based driver.
     "--disable-blink-features=AutomationControlled",
 )
 
@@ -39,8 +36,8 @@ class BrowserDriver:
     def __init__(self, display: str, viewport: Viewport, control: Any | None = None) -> None:
         self.display = display
         self.viewport = viewport
-        # Checked here rather than in the runner: an escalation path that forgot to
-        # yield still cannot inject input while an operator holds the mouse.
+        # Checked here rather than in the runner: an escalation path that forgot to yield
+        # still cannot inject input while an operator holds the mouse.
         self.control = control
         self._page: Any | None = None
         self._browser: Any | None = None
@@ -62,10 +59,9 @@ class BrowserDriver:
             ],
             env={**os.environ, "DISPLAY": self.display},
         )
-        # `no_viewport=True`, not `viewport=None`: the latter reads as "unspecified"
-        # and Playwright emulates 1280x720 inside whatever window it opened, so the
-        # page renders at one size while we photograph another and every coordinate
-        # is wrong by a scale factor. What the first version of this file did.
+        # `no_viewport=True`, not `viewport=None`: the latter reads as "unspecified" and
+        # Playwright emulates 1280x720 inside whatever window it opened, so the page renders at
+        # one size while we photograph another and every coordinate is off by a scale factor.
         context = await self._browser.new_context(no_viewport=True)
         self._page = await context.new_page()
         await self._fill_display(context)
@@ -76,12 +72,10 @@ class BrowserDriver:
     async def _fill_display(self, context: Any) -> None:
         """Size the window to the display and drop the browser chrome.
 
-        Chromium ignores `--window-size` and `--kiosk` when Playwright launches it,
-        so this is done over CDP: resize to the display, then go fullscreen, which
-        is what removes the tab strip and the address bar. Two consequences worth
-        the call — the model is not shown browser furniture it must learn to
-        ignore, and an operator who takes over the live session gets the
-        application rather than a browser they could navigate anywhere with.
+        Chromium ignores `--window-size` and `--kiosk` when Playwright launches it, so this is
+        done over CDP: resize to the display, then go fullscreen, which removes the tab strip
+        and the address bar. The model is not shown browser furniture, and an operator taking
+        over the live session gets the application rather than a navigable browser.
         """
         cdp = await context.new_cdp_session(self._require_page())
         try:
@@ -123,17 +117,13 @@ class BrowserDriver:
     async def _measure_origin(self) -> None:
         """Measure display -> page translation once, from the page itself.
 
-        Fullscreen should make this (0, 0). It is measured rather than assumed
-        because a silent off-by-85px produces clicks that land one control above
-        the intended one — plausible, wrong, and invisible in a log that records
-        only coordinates. The first version of this driver had exactly that bug:
-        it typed a password into empty space above the field and reported success
-        on every step.
+        Fullscreen should make this (0, 0). Measured rather than assumed because a silent
+        off-by-85px produces clicks that land one control above the intended one — plausible,
+        wrong, and invisible in a log of coordinates.
 
-        The size check is the part that actually catches it. An offset can be
-        compensated for; a page rendering at a different size than the display we
-        photograph cannot, so it stops the session at start rather than producing
-        a run of confidently wrong clicks.
+        The size check is what actually catches it: an offset can be compensated for, but a
+        page rendering at a different size than the display we photograph cannot, so it stops
+        the session at start.
         """
         g = await self._require_page().evaluate(
             "() => ({ sx: window.screenX, sy: window.screenY,"
@@ -173,12 +163,11 @@ class BrowserDriver:
         await self._require_page().mouse.click(x, y, button=button)
 
     async def type_text(self, text: str, secret: bool = False) -> None:
-        # `secret` is honoured by not being used: typed, never returned or logged.
-        # The flag exists so callers above know which values must not reach evidence.
+        # `secret` is honoured by not being used: typed, never returned or logged. The flag
+        # tells callers above which values must not reach evidence.
         self._assert_control()
-        # A small per-key delay, because back-office forms routinely attach
-        # keyup handlers that filter, mask or re-render as you type, and a
-        # zero-delay burst outruns them.
+        # A small per-key delay: back-office forms attach keyup handlers that filter, mask or
+        # re-render as you type, and a zero-delay burst outruns them.
         await self._require_page().keyboard.type(text, delay=20)
 
     async def key(self, keys: str) -> None:

@@ -5,22 +5,31 @@
     docker compose exec desktop python3 scripts/suite.py --only generalize
     docker compose exec desktop python3 scripts/suite.py --skip discover
 
-The point is not that every case passes. Three of them are *supposed* to come back
-as something other than success, and a suite that hid that would be measuring the
-happy path twice. What it produces is a filled `artifacts/` and `evidence/` and one
-table saying which run demonstrates which claim — the raw material for a write-up,
-generated rather than remembered.
+Three cases are *supposed* to come back as something other than success. What it produces is
+a filled `artifacts/` and `evidence/` and one table saying which run demonstrates which claim.
 
-Four groups, and they answer different questions:
+Four groups, answering different questions:
 
   discover    can the flow be recorded at all, from a live screen
-  generalize  does the recording hold for records it never saw — the only test
-              that would have caught a capability asserting one member's balance
+  generalize  does the recording hold for records it never saw
   outcomes    are legitimate non-answers reported as answers rather than crashes
   faults      do the declared recoveries fire, and does an app error stay an error
 
 Exit code is the number of cases whose result was not the one declared, so CI can
 call this without parsing anything.
+
+The declared results assume a capability that has been *taught* its outcomes. A
+recording cannot confirm a business-outcome detector — it describes a screen the
+successful run never reached — so a freshly recorded artifact declares none that
+fire, and `--fresh` therefore reports the outcome cases as misses until:
+
+    cua learn-outcome cap_get_account_balance --name member_not_found \
+        --description "no member exists with that id" --input member_id=99999
+    cua learn-outcome cap_get_account_balance --name permission_denied \
+        --description "the operator may not view this member" \
+        --input member_id=44100 --input account_nickname="Business Operating"
+
+That is the intended order: record, demonstrate, then measure.
 """
 
 from __future__ import annotations
@@ -36,9 +45,8 @@ from typing import Any
 
 CAP = "cap_get_account_balance"
 
-# Read off targetapp/lib/data.ts. Every member's *own* accounts — an account
-# belonging to a different member is a bad test input, not a finding, and it cost
-# a confusing failure to learn that once.
+# Read off targetapp/lib/data.ts. Every member's *own* accounts: an account belonging to a
+# different member is a bad test input, not a finding.
 MEMBERS: dict[str, list[str]] = {
     "12345": ["Everyday Checking", "Primary Savings", "MM Reserve"],
     "22841": ["Free Checking", "Rainy Day"],
@@ -113,13 +121,10 @@ def cases() -> list[Case]:
                         "--input",
                         f"account_nickname={account}",
                     ],
-                    # 44100 is the restricted-member fixture. The app policy does
-                    # declare `permission_denied`, but a capability inherits an
-                    # outcome only by naming it, and this one names only
-                    # `member_not_found` — so today it is a hard failure. The gap is
-                    # the capability's contract, not the detector, and `cua
-                    # learn-outcome` is how it closes.
-                    expect="failure" if member == "44100" else "success",
+                    # 44100 is the restricted-member fixture: a legitimate answer, but only
+                    # once the capability names `permission_denied`. On a freshly recorded
+                    # artifact it is still a hard failure and the suite says so.
+                    expect="business_outcome" if member == "44100" else "success",
                 )
             )
 
@@ -150,8 +155,7 @@ def cases() -> list[Case]:
                 "--input",
                 "account_nickname=Nonexistent Account",
             ],
-            # No outcome is declared for this yet; it is a hard failure today and
-            # the suite says so rather than pretending otherwise.
+            # No outcome is declared for this yet, so it is a hard failure today.
             expect="failure",
         ),
     ]
@@ -163,11 +167,8 @@ def cases() -> list[Case]:
         ("modal", "an unexpected dialog is cleared by a declared recovery", "success"),
         ("slow", "a 4s delay is waited out by polling a checkpoint, not by sleeping", "success"),
         ("expired", "a session bounce is recovered, or escalated if it cannot be", "success"),
-        (
-            "denied",
-            "a declared outcome the capability has not opted into stays a failure",
-            "failure",
-        ),
+        ("denied", "a declared outcome the capability has opted into is an answer",
+         "business_outcome"),
         ("error500", "an application error is the app's fault and still not an answer", "failure"),
     ):
         out.append(
@@ -194,10 +195,8 @@ def _result_json(stdout: str) -> dict[str, Any] | None:
     """The result object the CLI printed, out of whatever else landed on stdout.
 
     `cli._echo` pretty-prints with `indent=2`, so the object spans many lines and a
-    line-at-a-time parse never sees valid JSON — which is how a suite where
-    seventeen of eighteen cases behaved correctly reported eighteen failures. Torch
-    and the OCR stack also write to stdout, so the object is found rather than
-    assumed to be the whole of it.
+    line-at-a-time parse never sees valid JSON. Torch and the OCR stack also write to stdout,
+    so the object is found rather than assumed to be the whole of it.
     """
     decoder = json.JSONDecoder()
     for i, ch in enumerate(stdout):
@@ -223,10 +222,9 @@ def run(case: Case, evidence: Path) -> Result:
 
     payload = _result_json(proc.stdout)
     if payload is None:
-        # No result object means the CLI did not get far enough to be handed one —
-        # a refused contract, an existing artifact, a crash. The last stderr line is
-        # the closest thing to a reason, and reporting "error" beats reporting a
-        # result that was never produced.
+        # No result object means the CLI did not get far enough to be handed one — a refused
+        # contract, an existing artifact, a crash. The last stderr line is the closest thing
+        # to a reason.
         tail = (proc.stderr or proc.stdout).strip().splitlines()
         return Result(case, proc.returncode, "", "error", tail[-1] if tail else "")
 
@@ -259,9 +257,8 @@ def main() -> int:
     ap.add_argument("--json", default="", help="also write the table here as JSON")
     args = ap.parse_args()
 
-    # The catalog will not replace a capability production may be calling, which is
-    # correct and also means a second suite run cannot re-record. Skipping is the
-    # honest default: the replay cases below are about the artifact that exists.
+    # The catalog will not replace a capability production may be calling, so a second suite
+    # run cannot re-record. The replay cases below are about the artifact that exists.
     existing = sorted(Path(args.artifacts).glob(f"{CAP}.v*.json"))
     if existing and args.fresh:
         for path in existing:

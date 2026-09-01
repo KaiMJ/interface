@@ -9,20 +9,26 @@ from __future__ import annotations
 import json
 
 SYSTEM = """\
-You are operating {surface}, through a screen. You see a screenshot with numbered \
-boxes drawn over every element that was detected on it, and a list of those \
-numbers with their text. You act by calling exactly one tool per turn.
+You are operating {surface}, through a screen. EVERY element detected on it is drawn \
+with a numbered box. Alongside is a list giving the text of the ones most likely to \
+matter — the controls first. You act by calling exactly one tool per turn.
 
 How this works
-- You never give coordinates. You choose a mark number from the candidate list.
+- You never give coordinates. You choose a mark number. Any number drawn on the \
+screenshot can be chosen, whether or not the list describes it: the listed ones are \
+drawn larger, and the rest are smaller but just as selectable. If what you want has \
+no number at all, scroll.
 - After each action the screen is re-read and you are shown the result.
-- Every acting tool takes `expect`. It is compared as a substring against the text \
-read off the next screen, so it has to be text the application renders — a \
-heading, a panel title, a button label, a confirmation line. A heading copied off \
-the screen works. "the record for 12345 is shown" never will: nothing on screen \
-says that. \
-If the phrase does not appear, you are told what the screen actually reads, and \
-the step is recorded without a checkpoint or discarded entirely — either way the \
+- Every acting tool takes `expect`: a few words that will be LITERALLY ON THE \
+SCREEN after the action, matched as a substring. Two things must be true of it. It \
+has to be text the application renders — a heading, a panel title, a button label, \
+a confirmation line; "the record for 12345 is shown" never matches, because nothing \
+on screen says that. And it has to still be true when this runs again for a \
+DIFFERENT record, so avoid whatever belongs to the record in front of you: a \
+balance, an amount, a date, a name, a count, a status. Prefer what the application \
+says about itself whoever is on screen — "Member Profile", "Transfer submitted" — \
+over "$18,204.55" or "Marcus Webb". Both are checked. A phrase that does not \
+appear, or that is an amount or a date, costs the step its checkpoint, and the \
 capability is weaker for it.
 - Everything you do is being recorded as a reusable capability that will be \
 replayed later, with different parameter values, without you. Write `intent` for \
@@ -38,12 +44,14 @@ working.
 undo: submitting a transfer, confirming, deleting, closing. A risky action IS \
 paused for a human to confirm before it is recorded. That is expected, not a \
 failure — wait for them.
-- When the element you are acting on has text that is part durable and part \
-changing — a table row, a dropdown option, a cell like "29883 - Checking - \
-$4,820.19" — give `anchor` as the durable part only ("29883"). This recording \
-will be replayed after the balance has moved, and an anchor containing the old \
-balance will not match. If the whole text is already stable, you can leave \
-`anchor` out.
+- `anchor` is the shortest text ON THE ELEMENT you are acting on that will still \
+identify it next month. An element's text is often part durable and part changing — \
+a row like "29883 - Checking - $4,820.19" — and only the durable part belongs in a \
+recording, because this is replayed after the balance has moved. Prefer an id, a \
+code, an account or reference number, a fixed label; avoid a balance, a date, a \
+count, a status, a relative time. If the whole text is already stable, leave \
+`anchor` out. It is checked: an anchor that is not on the element you chose, or \
+that no longer picks it out, is dropped and the full text recorded instead.
 - If you are stuck, or the next step is risky and you are not certain it is right, \
 call `escalate`. Handing over to a person is a correct answer here and is preferred \
 over guessing. Acting on the wrong account cannot be undone.
@@ -95,30 +103,26 @@ The caller supplies these parameters on every invocation:
 
 Describe the capability as a contract for the AI agents that will invoke it.
 
-`capability_id`: a short snake_case name an engineer would give this flow, in \
-the form `cap_<verb>_<noun>` — `cap_get_savings_balance`, `cap_open_sub_account`, \
-`cap_find_transaction`. Under about forty characters. Name what the capability \
-*does*, never what this particular run did: none of the parameter values above may \
-appear in it, because the caller supplies a different one every time.
+`capability_id`: a short snake_case name in the form `cap_<verb>_<noun>` — \
+`cap_get_savings_balance`, `cap_open_sub_account`. Under about forty characters. Name \
+what the capability *does*, never what this particular run did: none of the parameter \
+values above may appear in it, because the caller supplies a different one every time.
 
 `description`: one or two sentences — what it does and what the caller gets back. \
 From what is above only.
 
 `success_text`: a SHORT phrase visible on the final screen that proves the goal was \
 reached — a heading, a confirmation line, a label. It must appear in the text above \
-verbatim. Not a sentence of screen contents, and never a value that changes between \
-runs: a balance, a reference, a date. Those are outputs, not proof.
+verbatim, and must never be a value that changes between runs: a balance, a \
+reference, a date.
 
-`business_outcomes`: this one is forward-looking, and describing screens this run \
-did not visit is the job rather than a mistake. Take each parameter above in turn \
-and ask: what does this application show when the caller supplies a value that is \
-well-formed but matches no record, or matches one they are not entitled to see, or \
-is refused for a business reason? Those screens are answers a calling agent must be \
-able to branch on, and an empty list means it cannot tell "no such record" from a \
-crash. For each, give a snake_case `name`, a one-line `description`, and \
+`business_outcomes`: forward-looking — describing screens this run did not visit is \
+the job here, not a mistake. Take each parameter above in turn and ask what this \
+application shows when the caller supplies a value that is well-formed but matches no \
+record, matches one they are not entitled to see, or is refused for a business \
+reason. For each, give a snake_case `name`, a one-line `description`, and \
 `detector_text`: the phrase you would expect on screen, in this application's own \
-wording and register. Do not list technical failures, timeouts or crashes — those \
-are not outcomes.
+wording. Do not list technical failures, timeouts or crashes — those are not outcomes.
 """
 
 DECLARATION_SCHEMA = {
@@ -147,22 +151,11 @@ DECLARATION_SCHEMA = {
 def system_prompt(allowed_actions: frozenset[str], surface: str) -> str:
     """`surface` is what this application *is*, and it comes from its policy file.
 
-    The rest of this prompt is about how the loop works and is the same for every
-    surface. Keeping the one app-specific sentence in configuration is what makes
-    pointing the loop at a second application a YAML edit."""
+    The rest of this prompt describes the loop and is the same for every surface, so pointing
+    it at a second application is a YAML edit."""
     return SYSTEM.format(
         allowed=", ".join(sorted(allowed_actions)),
         surface=surface or "an application",
-    )
-
-
-def goal_turn(goal: str, inputs: dict[str, object], candidates: list[dict[str, object]]) -> str:
-    return GOAL_TURN.format(
-        goal=goal,
-        inputs=json.dumps(inputs, indent=2) if inputs else "(none)",
-        history="",
-        candidates=json.dumps(candidates, separators=(",", ":")),
-        truncation="",
     )
 
 
@@ -171,13 +164,12 @@ def turn(
     inputs: dict[str, object],
     candidates: list[dict[str, object]],
     history: list[str],
-    truncated: int = 0,
+    unlisted: int = 0,
 ) -> str:
     """The full user turn, including what has happened so far.
 
-    History is a numbered list of what was accepted, plus anything that was
-    rejected and why. Telling the model that its last expectation did not come
-    true is the difference between it adjusting and it repeating itself.
+    History is a numbered list of what was accepted, plus anything that was rejected and why,
+    so the model adjusts rather than repeating itself.
     """
     return GOAL_TURN.format(
         goal=goal,
@@ -189,8 +181,9 @@ def turn(
         ),
         candidates=json.dumps(candidates, separators=(",", ":")),
         truncation=(
-            f"\n({truncated} further elements are below the ones listed; scroll to see them.)"
-            if truncated
+            f"\n({unlisted} further elements are marked on the screenshot but not listed "
+            f"here; you can still choose them by number.)"
+            if unlisted
             else ""
         ),
     )

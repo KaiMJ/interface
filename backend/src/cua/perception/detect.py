@@ -1,9 +1,8 @@
 """Control detection.
 
-OmniParser v2's `icon_detect` checkpoint — where the interactable regions are, not what
-they say; text comes from `ocr.py` and the two are fused in `merge.py`. The Florence-2
-captioning stage is deliberately not run: expensive, and largely redundant here, since
-OCR already supplies the words.
+OmniParser v2's `icon_detect` checkpoint: where the interactable regions are, not what they
+say. Text comes from `ocr.py` and the two are fused in `merge.py`. The Florence-2 captioning
+stage is deliberately not run — expensive, and redundant when OCR already supplies the words.
 """
 
 from __future__ import annotations
@@ -17,12 +16,9 @@ from .merge import infer_role
 
 
 def _unit(v: float) -> float:
-    """Clamp into 0..1.
-
-    Detector boxes routinely run a pixel or two past the frame edge, and `Bbox`
-    validates its fields as normalized units. Clamping here keeps a legitimate
-    edge-of-screen control from raising instead of being detected.
-    """
+    """Clamp into 0..1. Detector boxes routinely run a pixel or two past the frame edge and
+    `Bbox` validates normalized units, so without this a legitimate edge-of-screen control
+    raises instead of being detected."""
     return 0.0 if v < 0.0 else 1.0 if v > 1.0 else v
 
 
@@ -31,12 +27,10 @@ class OmniParserDetector:
 
     def __init__(
         self,
-        models_dir: Path,
         repo: str,
         weights: str,
         conf_threshold: float = 0.30,
     ) -> None:
-        self.models_dir = models_dir
         self.repo = repo
         self.weights = weights
         self.conf_threshold = conf_threshold
@@ -46,16 +40,13 @@ class OmniParserDetector:
         """Download the checkpoint if absent. Idempotent; safe to call per run."""
         from huggingface_hub import hf_hub_download
 
-        # HF_HOME points inside models_dir (bind-mounted), so this is a no-op
-        # after the first run and never touches the image.
+        # HF_HOME points at a bind mount, so this is a no-op after the first run and never
+        # touches the image.
         return Path(hf_hub_download(self.repo, self.weights))
 
     def _load(self) -> Any:
-        """Lazy-load the YOLO model.
-
-        Lazy because import-time torch costs seconds and the replay path with an
-        `ocr_only` detector must not pay it.
-        """
+        """Lazy-load the YOLO model: import-time torch costs seconds, and the replay path with
+        an `ocr_only` detector must not pay it."""
         if self._model is None:
             from ultralytics import YOLO  # type: ignore[attr-defined]
 
@@ -63,11 +54,8 @@ class OmniParserDetector:
         return self._model
 
     def detect(self, image_path: Path, viewport: Viewport) -> list[Element]:
-        """Run detection, emit normalized elements.
-
-        Returns boxes with `source=OMNIPARSER`, a coarse `role` inferred from
-        aspect ratio and size, and no text — text is joined in later.
-        """
+        """Run detection, emit normalized elements: boxes with `source=OMNIPARSER`, a coarse
+        geometric `role`, and no text — text is joined in by `merge`."""
         result = self._load().predict(
             str(image_path), conf=self.conf_threshold, verbose=False
         )[0]
@@ -95,8 +83,8 @@ class OmniParserDetector:
                 source=ElementSource.OMNIPARSER,
                 conf=_unit(float(conf)),
             )
-            # Geometry-only guess; `merge` re-infers once OCR text has been joined
-            # in, at which point "a small wide box saying Transfer" is knowable.
+            # Geometry-only guess. `merge` re-infers once text has been joined in, at which
+            # point "a small wide box saying Transfer" is knowable.
             out.append(el.model_copy(update={"role": infer_role(el)}))
         return out
 
@@ -104,18 +92,17 @@ class OmniParserDetector:
 class NullDetector:
     """Detects nothing; OCR text lines become the only candidates.
 
-    Not a toy. It is the configuration used by tests and by the no-API-key demo
-    path, and it is an honest floor for what the system can do on a surface where
-    control detection fails entirely.
+    Not a toy: it is what tests and the no-API-key demo path run, and an honest floor for what
+    the system can do on a surface where control detection fails entirely.
     """
 
     def detect(self, image_path: Path, viewport: Viewport) -> list[Element]:
         return []
 
 
-def build_detector(name: str, models_dir: Path, repo: str, weights: str, conf: float) -> Detector:
+def build_detector(name: str, repo: str, weights: str, conf: float) -> Detector:
     if name == "omniparser":
-        return OmniParserDetector(models_dir, repo, weights, conf)
+        return OmniParserDetector(repo, weights, conf)
     if name == "ocr_only":
         return NullDetector()
     raise ValueError(f"unknown detector: {name!r}")

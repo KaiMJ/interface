@@ -1,8 +1,7 @@
-"""`{{param}}` substitution.
+"""`{{param}}` substitution: the one place a caller's inputs enter a recorded string, and what
+makes "the row for member 12345" replayable as "the row for member 90001" with no model.
 
-The one place a caller's inputs enter a recorded string, which is what makes "the row for
-member 12345" replayable as "the row for member 90001" with no model. An unknown
-placeholder raises: rendering it to the empty string turns "find the row containing
+An unknown placeholder raises. Rendering it to the empty string turns "find the row containing
 12345" into "find the row containing nothing".
 """
 
@@ -44,16 +43,13 @@ def render(template: str | None, params: dict[str, Any] | None = None) -> str | 
 def unrender(text: str | None, params: dict[str, Any] | None = None) -> str | None:
     """The inverse of `render`: replace known values with their placeholders.
 
-    This is how a recording becomes reusable — "No member record found for ID 99999" is a fact
-    about one run, and "... for ID {{member_id}}" is a fact about the capability. Two rules
-    keep it from parameterizing what the caller never meant: **longest value first**, so an
-    input of `123` does not eat the leading digits of a recorded `12345`; and **only at token
-    boundaries**, since a bare `str.replace` turns the account number `9912345` into
-    `99{{member_id}}` and the artifact then navigates somewhere that exists for nobody.
+    How a recording becomes reusable. Two rules keep it from parameterizing what the caller
+    never meant: **longest value first**, so an input of `123` does not eat the leading digits
+    of a recorded `12345`; and **only at token boundaries**, since a bare `str.replace` turns
+    the account number `9912345` into `99{{member_id}}`.
 
-    What it does not attempt is deciding whether a correctly bounded match was *meant*: if a
-    member id and a branch code are both `12345` on the recording run, only a second run with
-    different inputs could tell them apart.
+    It does not decide whether a correctly bounded match was *meant*: if a member id and a
+    branch code are both `12345` on the recording run, only a second run could tell them apart.
     """
     if text is None:
         return None
@@ -71,6 +67,6 @@ def unrender(text: str | None, params: dict[str, Any] | None = None) -> str | No
 
 
 def placeholders(template: str | None) -> set[str]:
-    """Which parameters a template needs. Used to validate an invocation before
-    it starts touching the application, rather than failing at step 7."""
+    """Which parameters a template needs. Validates an invocation before it starts touching the
+    application, rather than failing at step 7."""
     return set() if template is None else {m.group(1) for m in _PLACEHOLDER.finditer(template)}

@@ -1,17 +1,12 @@
 #!/usr/bin/env python3
-"""Print the evidence index as a Markdown table, read from the runs themselves.
+"""Write the evidence index into `evidence/README.md`, read from the runs themselves.
 
-`evidence/README.md` used to carry a hand-written table of run ids and what each
-one showed. It drifted the moment runs were regenerated, and a stale index is
-worse than no index: a reviewer following it finds nothing and stops believing the
-rest of the document.
+What each *kind* of run demonstrates is prose a person writes once; which runs exist and how
+they ended is read off `run.json`, the same file the caller received. A hand-written table
+goes stale the first time the runs are regenerated.
 
-So the table is generated. What each *kind* of run demonstrates is prose a person
-writes once; which runs exist and how they ended is read off `run.json`, which is
-the same file the caller received.
-
-    python3 scripts/index_evidence.py            # the table
-    python3 scripts/index_evidence.py --check    # exit 1 if README names a run that is gone
+    python3 scripts/index_evidence.py            # rewrite the table in evidence/README.md
+    python3 scripts/index_evidence.py --check    # exit 1 if that table and evidence/ disagree
 """
 
 from __future__ import annotations
@@ -23,7 +18,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2] / "evidence"
-_RUN_REF = re.compile(r"`((?:discover|replay|recover|learn)-[a-z0-9-]+)`")
+# Every prefix a run id can carry; a missing one silently exempts those runs from the check.
+_RUN_REF = re.compile(r"`((?:discover|replay|recover|learn|escalate|scan|offline)-[a-z0-9-]+)`")
 
 
 def summarize(run: Path) -> dict[str, str]:
@@ -69,20 +65,45 @@ def table(entries: list[dict[str, str]]) -> str:
     return "\n".join([head, rule, *body])
 
 
+_BEGIN = "<!-- BEGIN INDEX -->"
+_END = "<!-- END INDEX -->"
+
+
+def write() -> int:
+    """Replace whatever is between the markers with the current table. Written rather than
+    printed, so the file cannot be left claiming there are no runs."""
+    readme = ROOT / "README.md"
+    text = readme.read_text()
+    if _BEGIN not in text or _END not in text:
+        print(f"evidence/README.md has no {_BEGIN} / {_END} markers", file=sys.stderr)
+        return 1
+    head, _, rest = text.partition(_BEGIN)
+    _, _, tail = rest.partition(_END)
+    readme.write_text(f"{head}{_BEGIN}\n{table(rows())}\n{_END}{tail}")
+    print(f"wrote {len(rows())} runs into evidence/README.md")
+    return 0
+
+
 def check() -> int:
-    """Every run id the README names must exist. The failure this catches is the
-    one that actually happened: runs cleaned up, the index left behind."""
+    """The index and the directory must agree, in both directions: naming a run that is gone,
+    and naming nothing while the runs are all there, are both misleading."""
     readme = ROOT / "README.md"
     named = set(_RUN_REF.findall(readme.read_text())) if readme.exists() else set()
     present = {p.parent.name for p in ROOT.glob("*/run.json")}
-    missing = sorted(named - present)
-    for run in missing:
+    problems = 0
+    for run in sorted(named - present):
         print(f"evidence/README.md names {run}, which is not in evidence/", file=sys.stderr)
-    return 1 if missing else 0
+        problems += 1
+    for run in sorted(present - named):
+        print(f"evidence/{run} exists but the index does not name it", file=sys.stderr)
+        problems += 1
+    if problems:
+        print("run: python3 backend/scripts/index_evidence.py", file=sys.stderr)
+    return 1 if problems else 0
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
-    sys.exit(check() if args.check else (print(table(rows())) or 0))
+    sys.exit(check() if args.check else write())
