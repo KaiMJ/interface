@@ -20,8 +20,11 @@ out/
 next-env.d.ts
 *.tsbuildinfo
 
-# Model weights — pulled into a docker volume on first run, never committed.
-models/
+# Model weights — fetched on first run, never committed. The directory itself is
+# tracked: compose bind-mounts it, and a path Docker has to create first is
+# created root-owned, which the container (running as you) then cannot write.
+models/*
+!models/.gitkeep
 
 # Evidence and artifacts are deliverables, so they are NOT ignored wholesale.
 # Only scratch runs are.
