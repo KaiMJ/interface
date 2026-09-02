@@ -93,6 +93,26 @@ cua replay cap_get_account_balance \
 python3 scripts/smoke_escalate.py
 ```
 
+### When a capability meets a screen it never recorded
+
+A recording only ever sees the happy path, so a capability starts out unable to name the
+alternative results a caller branches on. Two commands teach it one, after the fact:
+
+```bash
+# You know the case and can reach it with inputs. Replays twice — recorded inputs, then
+# yours — and takes the detector from the difference. No model. Emits a new draft version.
+cua learn-outcome cap_get_account_balance \
+  --name no_matching_account --input member_id=30992 --input account_nickname="Primary Savings"
+
+# A run stopped on a screen you cannot reproduce. Reads its evidence and proposes a
+# declaration — the model picks a line by index, never a phrase, and the pick is falsified
+# against successful runs. Writes diagnosis.json and prints YAML for policies/<app>.yaml.
+cua diagnose replay-unknown-account
+```
+
+Neither applies anything: one emits a draft for review, the other a patch for a person to
+paste. A model that could rewrite a guardrail is not a guardrail.
+
 See [evidence/README.md](evidence/README.md) for the saved discovery, replay, failure, recovery,
 and intervention runs.
 

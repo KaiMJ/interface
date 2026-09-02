@@ -1,5 +1,5 @@
 {
-  "screenshot_path": "/tmp/cua-frames-tks47irc/frame-0003.png",
+  "screenshot_path": "/tmp/cua-frames-q7ev_mkd/frame-0003.png",
   "viewport": {
     "width": 1440,
     "height": 900
@@ -219,5 +219,5 @@
   "url": "http://targetapp:8080/members",
   "frame_hash": "c147dbb4e9bc2c76",
   "settled_by": "pixels",
-  "taken_at": "2026-09-01T23:30:15.588340+00:00"
+  "taken_at": "2026-09-02T18:03:35.355802+00:00"
 }

@@ -38,7 +38,7 @@ python3 backend/scripts/index_evidence.py --check    # fail if this file names a
 | `recover-expired-7f3870` | `cap_get_account_balance@v1` | **success** | 6 | `balance` = 18204.55 |  |
 | `recover-modal-3f93e1` | `cap_get_account_balance@v1` | **success** | 5 | `balance` = 18204.55 |  |
 | `recover-slow-8977f3` | `cap_get_account_balance@v1` | **success** | 5 | `balance` = 18204.55 |  |
-| `replay-baseline` | `cap_get_account_balance@v1` | **success** | 5 | `balance` = 18204.55 |  |
+| `replay-baseline` | `cap_get_account_balance@v2` | **success** | 5 | `balance` = 18204.55 |  |
 | `replay-basic-checking` | `cap_get_account_balance@v1` | **success** | 5 | `balance` = 95.12 |  |
 | `replay-everyday-checking` | `cap_get_account_balance@v1` | **success** | 5 | `balance` = 4820.19 |  |
 | `replay-fault-banner` | `cap_get_account_balance@v1` | **success** | 5 | `balance` = 18204.55 |  |
@@ -47,7 +47,7 @@ python3 backend/scripts/index_evidence.py --check    # fail if this file names a
 | `replay-free-checking` | `cap_get_account_balance@v1` | **success** | 5 | `balance` = 712.04 |  |
 | `replay-joint-checking` | `cap_get_account_balance@v1` | **success** | 5 | `balance` = 3311.87 |  |
 | `replay-member-not-found` | `cap_get_account_balance@v1` | **business_outcome** | 3 | outcome `member_not_found` |  |
-| `replay-no-savings-account` | `cap_get_account_balance@v1` | **failure** | 5 | `resolution_exhausted` at step 5 |  |
+| `replay-no-savings-account` | `cap_get_account_balance@v2` | **business_outcome** | 5 | outcome `no_matching_account` |  |
 | `replay-permission-denied` | `cap_get_account_balance@v1` | **business_outcome** | 4 | outcome `permission_denied` |  |
 | `replay-rainy-day` | `cap_get_account_balance@v1` | **success** | 5 | `balance` = 2050.0 |  |
 | `replay-unknown-account` | `cap_get_account_balance@v1` | **failure** | 5 | `resolution_exhausted` at step 5 |  |
@@ -71,7 +71,13 @@ is present.
 | **replay, hard failure** | `… --fault error500` | `app_error`, with the step, the expectation, and what was on screen instead. |
 | **replay, recovered** | `… --fault modal` / `--fault slow` | An interstitial cleared before the step acted; a slow screen waited for rather than reported as drift. |
 | **replay, escalated** | `… --fault expired`, or a risky capability | The session handed to a human on the same browser, and handed back. `intervention/` holds the request, the handoff and handback frames, what the operator did, and how they resolved it. |
-| **learn / diagnose** | `cua learn-outcome`, `cua diagnose <run>` | An unexplained hard failure turned into a typed result the caller can branch on. |
+| **replay, business outcome from an absence** | `… --input member_id=30992` | `no_matching_account` on `@v2`. The scan exhausts the account list without a match, which the step declares as an outcome rather than a failure. |
+| **diagnose** | `cua diagnose replay-unknown-account` | A run that stopped on an undeclared screen, read back as `diagnosis.json`. Here it declines: no line on that screen names the condition, so no detector is proposed. |
+
+`replay-unknown-account` (`@v1`) and `replay-no-savings-account` (`@v2`) are the same
+condition either side of a version bump — the scan finding no matching row. v1 never declared
+it, so it could only be a hard failure; v2 declares it on the step, so the caller gets an
+answer. The version column is the diff.
 
 ## Producing the whole set
 

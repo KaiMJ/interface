@@ -18,6 +18,7 @@ from cua.escalation import RunControl
 from cua.evidence import EvidenceWriter
 from cua.policy import Policy, Recovery, Redactor
 from cua.replay.engine import ReplayEngine
+from cua.replay.outcomes import UndeclaredOutcome, effective_outcomes
 from cua.resolve import Resolver
 from cua.schema import (
     ActStep,
@@ -31,6 +32,7 @@ from cua.schema import (
     Element,
     ElementSource,
     FailureKind,
+    FindAndActStep,
     InputSpec,
     InterventionResolution,
     Normalizer,
@@ -38,10 +40,13 @@ from cua.schema import (
     OnError,
     OutputSpec,
     Point,
+    Predicate,
     Primitive,
     Relation,
     Risk,
     RunStatus,
+    Scan,
+    ScanAdvance,
     Target,
     ValueType,
     Viewport,
@@ -1668,3 +1673,64 @@ async def test_a_resolution_failure_reports_the_value_not_the_placeholder(
     assert result.failure.kind is FailureKind.RESOLUTION_EXHAUSTED
     assert result.failure.expected == "the value to the right of 'Primary Savings'"
     assert "{{" not in (result.failure.expected or "")
+
+
+# ---------------------------------------------------------------------------
+# outcomes a step raises rather than reads
+# ---------------------------------------------------------------------------
+
+
+def scan_capability(outcome_name: str | None) -> Capability:
+    """A capability whose one step finds a row, declaring `no_matching_account` without a
+    detector. `outcome_name` is what the step raises on an exhausted scan, or nothing."""
+    return Capability(
+        id="cap_scan",
+        goal="read the balance of a named account",
+        app=AppRef(name="targetapp", base_url_pattern="^http://targetapp:8080(/.*)?$"),
+        inputs=[InputSpec(name="account_nickname", type=ValueType.STRING, required=True)],
+        outputs=[],
+        business_outcomes=[
+            BusinessOutcome(
+                name="no_matching_account",
+                description="the member has no account with that nickname",
+            )
+        ],
+        success=Checkpoint(kind=CheckKind.TEXT_PRESENT, value="Current Balance"),
+        steps=[
+            FindAndActStep(
+                id=1,
+                scope=Target(
+                    intent="the region below 'Accounts'",
+                    target_desc="the account rows",
+                    anchor_text="Accounts",
+                ),
+                predicate=Predicate(
+                    match="row_contains_all", terms=("{{account_nickname}}",)
+                ),
+                scan=Scan(advance=ScanAdvance.SCROLL, overlap=0.15, max_advances=3),
+                on_found_action=Primitive.EXTRACT,
+                on_found_extract_as="balance",
+                on_not_found_outcome=outcome_name,
+            )
+        ],
+    )
+
+
+def test_structural_outcome_needs_no_detector() -> None:
+    """An outcome a step raises on an exhausted scan is declarable without one.
+
+    The screen that produces it may say nothing about the condition — a member without the
+    account simply has no row — so there is no wording for a detector to carry, and requiring
+    one would make `on_not_found_outcome` name something undeclarable.
+    """
+    outcomes = effective_outcomes(scan_capability("no_matching_account"), POLICY)
+
+    declared = {o.name: o for o in outcomes}
+    assert declared["no_matching_account"].detector is None
+
+
+def test_detectorless_outcome_no_step_raises_is_still_undeclared() -> None:
+    """The exemption is narrow: without a step naming it, a detector-less outcome is still an
+    inheritance from policy, and the app not declaring it is caught at run start."""
+    with pytest.raises(UndeclaredOutcome, match="no_matching_account"):
+        effective_outcomes(scan_capability(None), POLICY)

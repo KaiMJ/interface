@@ -1,0 +1,14 @@
+{
+  "run_id": "replay-unknown-account",
+  "classification": "drift",
+  "rationale": "No line on this ordinary accounts screen signals a distinct error or outcome; the failure is that the scan found nothing matching, which matches the 'did not find what it was looking for' case for drift.",
+  "name": "",
+  "description": "",
+  "detector": "",
+  "target": null,
+  "patch": "",
+  "rejected": null,
+  "lines_offered": 152,
+  "model": "xai/grok-4.3",
+  "actionable": false
+}

@@ -13,7 +13,14 @@ from enum import Enum
 from typing import Any
 
 from ..resolve import evaluate, verify_effect
-from ..schema import BusinessOutcome, Capability, CheckKind, Checkpoint, Observation
+from ..schema import (
+    BusinessOutcome,
+    Capability,
+    CheckKind,
+    Checkpoint,
+    FindAndActStep,
+    Observation,
+)
 
 
 class Classification(str, Enum):
@@ -94,12 +101,26 @@ def effective_outcomes(cap: Capability, policy: Any) -> list[BusinessOutcome]:
     recorded; one without names an app-level detector, resolved here rather than at load time
     so a policy edit takes effect on the next run of every capability.
     """
+    # An outcome a step raises structurally needs no text: `on_not_found_outcome` fires on an
+    # exhausted scan, which is an absence rather than an announcement. The screen that produces
+    # it may say nothing at all about the condition — a member without the account simply does
+    # not have the row — so requiring a detector here would make the step's own field
+    # undeclarable.
+    structural = {
+        step.on_not_found_outcome
+        for step in cap.steps
+        if isinstance(step, FindAndActStep) and step.on_not_found_outcome
+    }
+
     resolved: list[BusinessOutcome] = []
     for outcome in cap.business_outcomes:
         if outcome.detector is not None:
             resolved.append(outcome)
             continue
         inherited = policy.outcome(outcome.name)
+        if inherited is None and outcome.name in structural:
+            resolved.append(outcome)
+            continue
         if inherited is None:
             raise UndeclaredOutcome(
                 f"{cap.ref} inherits business outcome {outcome.name!r}, which "

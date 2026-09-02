@@ -1,22 +1,22 @@
 {
   "run_id": "replay-no-savings-account",
-  "capability": "cap_get_account_balance@v1",
+  "capability": "cap_get_account_balance@v2",
   "app": "targetapp",
-  "status": "failure",
+  "status": "business_outcome",
   "inputs": {
     "member_id": "30992",
     "account_nickname": "Primary Savings"
   },
   "outputs": {},
-  "outcome": null,
-  "failure": {
-    "kind": "resolution_exhausted",
+  "outcome": {
+    "name": "no_matching_account",
     "step_id": 5,
-    "message": "scanned the whole list and found no matching record",
-    "expected": "Primary Savings",
-    "observed": null,
-    "region": null
+    "fields": {
+      "member_id": "30992",
+      "account_nickname": "Primary Savings"
+    }
   },
+  "failure": null,
   "intervention_id": null,
   "steps": [
     {
@@ -25,7 +25,7 @@
       "status": "ok",
       "resolution": "none",
       "settled_by": "pixels",
-      "duration_ms": 3444,
+      "duration_ms": 3542,
       "attempts": 1,
       "expected": null,
       "observed": null,
@@ -43,10 +43,10 @@
       },
       "resolution_trace": null,
       "phases": {
-        "observe_ms": 3387,
+        "observe_ms": 3491,
         "observations": 2,
         "resolve_ms": 0,
-        "act_ms": 50,
+        "act_ms": 46,
         "verify_ms": 4
       },
       "model_turn": null,
@@ -63,7 +63,7 @@
       "status": "ok",
       "resolution": "anchor_text",
       "settled_by": "pixels",
-      "duration_ms": 1956,
+      "duration_ms": 2160,
       "attempts": 1,
       "expected": "text_present 'Member ID or Name'",
       "observed": null,
@@ -107,10 +107,10 @@
         ]
       },
       "phases": {
-        "observe_ms": 1837,
+        "observe_ms": 2034,
         "observations": 1,
         "resolve_ms": 1,
-        "act_ms": 115,
+        "act_ms": 119,
         "verify_ms": 1
       },
       "model_turn": null,
@@ -127,7 +127,7 @@
       "status": "ok",
       "resolution": "anchor_text",
       "settled_by": "pixels",
-      "duration_ms": 2290,
+      "duration_ms": 2156,
       "attempts": 1,
       "expected": null,
       "observed": null,
@@ -171,10 +171,10 @@
         ]
       },
       "phases": {
-        "observe_ms": 2283,
+        "observe_ms": 2147,
         "observations": 1,
         "resolve_ms": 1,
-        "act_ms": 4,
+        "act_ms": 5,
         "verify_ms": 1
       },
       "model_turn": null,
@@ -191,7 +191,7 @@
       "status": "ok",
       "resolution": "anchor_text",
       "settled_by": "pixels",
-      "duration_ms": 3380,
+      "duration_ms": 3624,
       "attempts": 1,
       "expected": "text_present 'Member Profile'",
       "observed": null,
@@ -235,11 +235,11 @@
         ]
       },
       "phases": {
-        "observe_ms": 3366,
+        "observe_ms": 3604,
         "observations": 1,
-        "resolve_ms": 1,
-        "act_ms": 9,
-        "verify_ms": 2
+        "resolve_ms": 0,
+        "act_ms": 8,
+        "verify_ms": 9
       },
       "model_turn": null,
       "evidence": {
@@ -252,13 +252,13 @@
     {
       "step_id": 5,
       "intent": "the region below 'Accounts'",
-      "status": "failed",
+      "status": "skipped",
       "resolution": "none",
       "settled_by": "unset",
-      "duration_ms": 10223,
+      "duration_ms": 10441,
       "attempts": 1,
-      "expected": "Primary Savings",
-      "observed": null,
+      "expected": null,
+      "observed": "no_matching_account",
       "recovery_applied": null,
       "note": null,
       "policy": {
@@ -273,7 +273,7 @@
       },
       "resolution_trace": null,
       "phases": {
-        "observe_ms": 10180,
+        "observe_ms": 10379,
         "observations": 3,
         "resolve_ms": 0,
         "act_ms": 0,
@@ -288,8 +288,8 @@
       }
     }
   ],
-  "started_at": "2026-09-01T23:30:10.185341+00:00",
-  "finished_at": "2026-09-01T23:30:31.487022+00:00",
-  "duration_ms": 21301,
+  "started_at": "2026-09-02T18:03:29.648584+00:00",
+  "finished_at": "2026-09-02T18:03:51.579197+00:00",
+  "duration_ms": 21935,
   "evidence_dir": "/data/evidence/replay-no-savings-account"
 }

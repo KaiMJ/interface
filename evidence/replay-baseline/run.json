@@ -1,6 +1,6 @@
 {
   "run_id": "replay-baseline",
-  "capability": "cap_get_account_balance@v1",
+  "capability": "cap_get_account_balance@v2",
   "app": "targetapp",
   "status": "success",
   "inputs": {
@@ -20,7 +20,7 @@
       "status": "ok",
       "resolution": "none",
       "settled_by": "pixels",
-      "duration_ms": 3532,
+      "duration_ms": 3509,
       "attempts": 1,
       "expected": null,
       "observed": null,
@@ -38,10 +38,10 @@
       },
       "resolution_trace": null,
       "phases": {
-        "observe_ms": 3468,
+        "observe_ms": 3429,
         "observations": 2,
         "resolve_ms": 0,
-        "act_ms": 58,
+        "act_ms": 77,
         "verify_ms": 1
       },
       "model_turn": null,
@@ -58,7 +58,7 @@
       "status": "ok",
       "resolution": "anchor_text",
       "settled_by": "pixels",
-      "duration_ms": 2178,
+      "duration_ms": 2005,
       "attempts": 1,
       "expected": "text_present 'Member ID or Name'",
       "observed": null,
@@ -102,10 +102,10 @@
         ]
       },
       "phases": {
-        "observe_ms": 2055,
+        "observe_ms": 1887,
         "observations": 1,
-        "resolve_ms": 1,
-        "act_ms": 120,
+        "resolve_ms": 0,
+        "act_ms": 115,
         "verify_ms": 1
       },
       "model_turn": null,
@@ -122,7 +122,7 @@
       "status": "ok",
       "resolution": "anchor_text",
       "settled_by": "pixels",
-      "duration_ms": 2087,
+      "duration_ms": 2097,
       "attempts": 1,
       "expected": null,
       "observed": null,
@@ -166,10 +166,10 @@
         ]
       },
       "phases": {
-        "observe_ms": 2078,
+        "observe_ms": 2088,
         "observations": 1,
         "resolve_ms": 1,
-        "act_ms": 5,
+        "act_ms": 4,
         "verify_ms": 1
       },
       "model_turn": null,
@@ -186,7 +186,7 @@
       "status": "ok",
       "resolution": "anchor_text",
       "settled_by": "pixels",
-      "duration_ms": 3450,
+      "duration_ms": 3300,
       "attempts": 1,
       "expected": "text_present 'Member Profile'",
       "observed": null,
@@ -230,11 +230,11 @@
         ]
       },
       "phases": {
-        "observe_ms": 3429,
+        "observe_ms": 3284,
         "observations": 1,
         "resolve_ms": 1,
-        "act_ms": 6,
-        "verify_ms": 12
+        "act_ms": 7,
+        "verify_ms": 7
       },
       "model_turn": null,
       "evidence": {
@@ -250,7 +250,7 @@
       "status": "ok",
       "resolution": "none",
       "settled_by": "pixels",
-      "duration_ms": 6350,
+      "duration_ms": 6659,
       "attempts": 1,
       "expected": null,
       "observed": "$18,204.55",
@@ -268,7 +268,7 @@
       },
       "resolution_trace": null,
       "phases": {
-        "observe_ms": 6333,
+        "observe_ms": 6646,
         "observations": 2,
         "resolve_ms": 0,
         "act_ms": 0,
@@ -283,8 +283,8 @@
       }
     }
   ],
-  "started_at": "2026-09-01T23:23:32.472506+00:00",
-  "finished_at": "2026-09-01T23:23:50.089356+00:00",
-  "duration_ms": 17610,
+  "started_at": "2026-09-02T18:09:43.220497+00:00",
+  "finished_at": "2026-09-02T18:10:00.788558+00:00",
+  "duration_ms": 17581,
   "evidence_dir": "/data/evidence/replay-baseline"
 }

@@ -1,177 +1,121 @@
 # Design write-up
 
-This project records a successful computer-use run as a typed capability, then replays that
-capability without an LLM. It is implemented against a deliberately non-semantic mock
-credit-union back office. The [README](README.md) runs the demo; [evidence](evidence/README.md)
-indexes the recorded runs.
+This project records a computer-use run as a typed capability, then replays it without an LLM. The target is a mock credit-union back office built to be hostile to easy automation — no test hooks, generic labels, framesets. The [README](README.md) runs the demo; [evidence](evidence/README.md) indexes the recorded runs.
 
 ## 1. Architecture
 
-The system has two paths. Discovery is an observe → decide → act loop: it captures the X display,
-uses OCR and UI detection to produce a surface-neutral `Element` list, asks an LLM to choose a
-numbered mark, and records the resulting action. Synthesis turns that trace into a draft
-capability. Replay uses the same perception and action layers but has no LLM client.
+*Code: [`cua/`](backend/src/cua/README.md) — the layer map
 
-The model is shown a set-of-marks screenshot and returns exactly one tool call per turn. It never
-emits a coordinate, only a mark number, so a misread pixel cannot become a click. Which model
-answers is a one-line config change routed through LiteLLM: nothing in the loop depends on the
-answer coming from a particular provider.
+**Two paths, shared perception.**
 
-Playwright supplies browser input only; it is not used for DOM locators. A `Perceiver` produces
-elements and a `Driver` executes input, so the artifact, resolver, policy, and replay engine do
-not depend on a web DOM. The browser runs in a persistent X session, which is also what noVNC
-shows an operator during an escalation.
+| Path | What it does |
+|---|---|
+| **Discovery** | Observe → decide → act loop. Captures the X display, runs OCR/UI detection into a surface-neutral `Element` list, asks an LLM to pick a numbered mark, records the action. Synthesis turns the trace into a draft capability. |
+| **Replay** | Same perception and action layers, no LLM. |
 
-The trade-off is latency, and it is not marginal: text recognition is roughly 95% of a replay's
-wall clock, 2.7s per observation on a CPU against 0.8s on a GPU for identical output. It is
-intentional because the target environment includes framesets, inaccessible legacy web apps, and
-desktop software, where there is no cheaper surface to read.
+**Why marks, not coordinates.** The model sees a set-of-marks screenshot and returns one tool call per turn — a mark number, never a pixel. A misread coordinate can't become a click. Model choice is a one-line LiteLLM config change; nothing in the loop depends on a specific provider.
 
-The target application is built rather than borrowed, for two reasons the brief makes unavoidable.
-It is hostile in the ways back-office systems are — no `data-testid` anywhere, generic anchor
-labels, table-shaped detail screens — so perception is doing real work instead of being handed a
-clean DOM it would never meet in production. And the exceptional states have to be reachable on
-demand: no public sandbox can be made to return "session expired", a permission denial, and a 500
-on command, and a replay that only demonstrates the happy path demonstrates nothing. Faults are
-injected by cookie, so a reviewer's own tab and the automation's session do not fight over them.
-Two are chosen to separate failure modes that look alike: the banner shifts every coordinate below
-it, which better targeting survives, and the modal moves nothing and lands on top, which no
-targeting detects and only post-action verification catches.
+**Why Playwright without DOM locators.** Playwright handles browser input only. A `Perceiver` produces elements; a `Driver` executes input. The artifact, resolver, policy, and replay engine never touch a web DOM. The browser runs in a persistent X session — the same surface noVNC shows during escalation.
+
+**The latency trade-off.** Text recognition is ~95% of replay wall clock: 2.7s/observation on CPU vs 0.8s on GPU for identical output. The target environment includes framesets, inaccessible legacy web apps, and desktop software — there is no cheaper surface to read.
+
+**Why we built the app.** Two reasons:
+
+1. **Realistic hostility.** No `data-testid`, generic anchor labels, table-shaped detail screens. Perception does real work instead of reading a clean DOM that won't exist in production.
+2. **Reachable fault states.** No public sandbox returns "session expired", a permission denial, and a 500 on command. A replay that only shows the happy path proves little. Faults are injected by cookie so a reviewer's tab and the automation session don't fight over them. Two faults separate failure modes that look alike: a banner shifts every coordinate below it (better targeting survives), a modal moves nothing and lands on top (only post-action verification catches it).
 
 ## 2. Artifact schema
 
-`Capability` is a versioned Pydantic schema with:
+*Code: [`schema/`](backend/src/cua/schema/README.md) — every type in the contract · [`discovery/`](backend/src/cua/discovery/README.md) — how one is synthesised*
 
-- app identity and a permitted base-URL pattern;
-- typed inputs and outputs;
-- ordered actions, risk, retry/error behavior, and checkpoints;
-- semantic targets (`anchor_text`, relation, role/name, then recorded bounds);
-- declared business outcomes and a final success condition; and
-- provenance for the recording run and viewport.
+`Capability` is a versioned Pydantic schema:
 
-Storage is one file per version, `<id>.v<n>.json`. No database: the version is in the filename,
-so old versions are retained by construction rather than by a retention policy, and a reviewer
-diffs two capabilities with `diff`.
+- app identity and permitted base-URL pattern
+- typed inputs and outputs
+- ordered actions with risk, retry/error behavior, and checkpoints
+- semantic targets: `anchor_text`, relation, role/name, then recorded bounds
+- declared business outcomes and a final success condition
+- provenance for the recording run and viewport
 
-The schema serves three readers: a caller sees a typed contract, a reviewer can inspect what will
-be executed, and the replay engine receives enough information to operate without the model.
-Targets resolve as a ladder: text and spatial relationship first, role/name second, recorded bounds
-last. Falling to a lower tier is logged as a drift signal; failing to resolve stops the run.
+**Storage.** One file per version: `<id>.v<n>.json`. No database — the version is in the filename, old versions are kept by construction, and a reviewer diffs two capabilities with `diff`.
 
-Every action carries an `expect` the model wrote, and the prompt constrains what it may be: text
-the application renders about itself, never text belonging to the record on screen. A checkpoint of
-`$18,204.55` passes the recording run and fails every other member, so the record-once/replay-many
-constraint is pushed into the prompt, where the proposal can still be checked — an expectation that
-never appeared on the run's own frames is dropped and the step is kept without its assertion.
+**Three readers.** Callers get a typed contract. Reviewers can inspect what will execute. The replay engine gets enough to run without the model.
 
-Discovery proposes prose, intent, and expectations, but coordinates, roles, types, and input
-substitutions are measured or derived from the recording. New artifacts are drafts; an explicit
-approval step is required before the agent-facing invocation API exposes one.
+**Target resolution ladder.** Text and spatial relationship first, role/name second, recorded bounds last. Falling to a lower tier is logged as drift; failing to resolve stops the run. A target anchored on a caller's input doesn't fall through at all: a recorded box would click the member the *recording* saw, so a missed `{{member_id}}` stops the step rather than degrading to a confident wrong answer.
 
-One judgement of the model's cannot be checked against the recording: a business-outcome detector
-names wording on a screen the successful run never reached, so falsification can only reject one
-that fires on the *successful* run. A plausible invention survives — a run here proposed
-`"No matching members found"` where the application says `"No member matches the search criteria
-entered."`, a detector that reads as declared and never matches. Survivors are therefore recorded
-as `verified: false` and withheld from the agent-facing manifest. Outcomes the *application*
-declares in `policies/<app>.yaml` are inherited by name instead, with the detector resolved from
-policy on each run, which is how a freshly recorded capability returns `member_not_found` and
-`permission_denied` without any promotion step.
+**Expectations.** Every action carries an `expect` the model wrote. The prompt restricts these to text the application renders about itself — never text from the record on screen. A checkpoint of `$18,204.55` passes the recording run and fails every other member. That pushes the record-once/replay-many constraint into the prompt, where proposals can still be checked: an expectation that never appeared on the run's frames is dropped and the step is kept without its assertion.
+
+**What the model proposes vs. what is measured.** Discovery proposes prose, intent, and expectations. Coordinates, roles, types, and input substitutions come from the recording. New artifacts are drafts; an explicit approval step is required before the agent-facing API exposes one.
+
+**Business outcomes the model can't verify.** A business-outcome detector may name wording on a screen the successful run never reached. Falsification can only reject detectors that fire on the *successful* run — a plausible invention survives. Example: a run proposed `"No matching members found"` where the app says `"No member matches the search criteria entered."` — reads as declared, never matches. Survivors are recorded as `verified: false` and withheld from the agent-facing manifest. Outcomes the *application* declares in `policies/<app>.yaml` are inherited by name instead, with the detector resolved from policy on each run. That's how a freshly recorded capability returns `member_not_found` and `permission_denied` without promotion.
 
 ## 3. Determinism & error handling
 
-Replay constructs no model client and disables the resolver’s VLM tier. Before an action it checks
-the URL, policy, control token, target resolution, and relevant runtime conditions; afterward it
-waits for the declared checkpoint. There are no fixed sleeps: settling and checkpoints poll to
-bounded timeouts.
+*Code: [`replay/`](backend/src/cua/replay/README.md) — step execution and classification · [`resolve/`](backend/src/cua/resolve/README.md) — the ladder, templates, verification*
 
-Results distinguish four caller-visible states:
+Replay constructs no model client and disables the resolver's VLM tier. Before each action: URL, policy, control token, target resolution, relevant runtime conditions. Afterward: wait for the declared checkpoint. No fixed sleeps — settling and checkpoints poll to bounded timeouts.
+
+**Four caller-visible states:**
 
 | Result | Meaning |
 |---|---|
-| `success` | The checkpoint held and declared outputs were extracted. |
-| `business_outcome` | An expected answer such as member-not-found or permission-denied. |
-| `escalated` | Automation paused and transferred the live session to a person. |
-| `failure` | An unexpected, unrecoverable condition with step and evidence. |
+| `success` | Checkpoint held; declared outputs extracted. |
+| `business_outcome` | Expected answer — member-not-found, permission-denied, etc. |
+| `escalated` | Automation paused; live session transferred to a person. |
+| `failure` | Unexpected, unrecoverable condition with step and evidence. |
 
-The brief names three classes and the contract exposes four states, because recoverable
-conditions are deliberately not one of them. A recovery either clears and the run continues —
-visible to the caller only as a `note` on the step and an `attempts` count above one — or it does
-not, and the result is a failure. A caller branching on "recovered" would be doing the engine's job.
+The brief names three classes; the contract exposes four because recoverable conditions are not one of them. That is a claim about the *run* status, not about visibility: a recovered step is typed `recovered`, names its handler in `recovery_applied`, and carries an `attempts` count above one — a step-level drift signal, since a surface that needs a handler it used not to need is changing. What a recovery never becomes is a terminal state the caller branches on. It either clears and the run continues, or it doesn't and the result is failure.
 
-The application policy declares recoveries such as dismissing a maintenance notice, waiting for a
-slow load, and restarting a read-only flow after session expiry. It also declares conditions that
-must stop (`app_error`) or escalate. A safe action may retry; a risky action is never replayed
-automatically.
+**Business outcomes are classified first.** A frame is tested for declared outcomes *before* the step's checkpoint. Evaluated the other way round, "no member matches" arrives as a failed assertion — a layout problem an operator goes looking for and never finds — instead of the answer the caller asked for.
+
+**Where the declarations come from.** A detector needs the words the screen actually uses, and a capability recorded from one successful run has never seen the screens it has to detect. Synthesis can only guess at them, and falsification catches the wrong half: it rejects a detector that fires on the successful run, not one that never fires at all. Two offline tools read them off the real screen instead. `cua learn-outcome` replays a capability twice — with the recorded inputs, and with inputs that reach the other result — and takes the detector from the difference between the two final screens, so the wording is copied rather than invented. `cua diagnose <run>` works backwards from a run that stopped on an undeclared screen: it shows the model the lines that were on it and asks which kind of condition it is and which line identifies it — an index, never a phrase, so a detector the model made up is not expressible. Both emit a proposal for a person to apply: a new draft version for one capability, or a YAML patch for the whole application's policy. Not every outcome has wording to find: a scan that exhausts an account list without a match is an *absence*, and the screen it ends on says nothing about the condition — the member simply has no such row. Those are declared structurally instead, by naming the outcome on the step that raises it, and carry no detector at all.
+
+**The trade-off.** A VLM could classify the frame mid-run instead and return the business outcome on the spot. Rejected, for the caller's sake rather than for determinism: an agent branches on the closed set of outcome names the manifest advertises, so a name minted during the run buys nothing on the run that pays for it — and a business answer the automation invented is worse than an honest failure, because nobody goes looking for it. The cost is real and it is paid once per condition: the first caller to hit an undeclared case still gets a failure, and a person has to approve the detector before the second one doesn't.
+
+**Application policy** declares recoveries (dismiss maintenance notice, wait for slow load, restart after session expiry) and stop/escalate conditions (`app_error`). Safe actions may retry; risky actions are never replayed automatically.
 
 ## 4. Heterogeneity & multi-tenant
 
-The seam for another surface is `Screen`/detector plus `Driver`: a desktop driver or an
-accessibility-tree perceiver can produce the same `Element` abstraction, leaving the artifact and
-replay engine unchanged. Offline replay against recorded PNGs exercises that separation.
+*Code: [`perception/`](backend/src/cua/perception/README.md) — the surface seam*
 
-Policies are per application, not per tenant. They hold allowlists, sign-on behavior, risk rules,
-and runtime conditions. A capability records an application identity and URL pattern; a deployment
-supplies its own entry URL. Recorded navigations are rebased onto that entry URL so a flow recorded
-at one institution cannot silently run against another.
+**The extension seam:** `Screen`/detector plus `Driver`. A desktop driver or accessibility-tree perceiver can produce the same `Element` abstraction, leaving the artifact and replay engine unchanged. Offline replay against recorded PNGs exercises this separation.
 
-Drift is detected by the resolver ladder rather than by a separate monitor. Every step records
-which tier produced its coordinate, so a target that used to resolve on `anchor_text` and now
-resolves on `recorded_bbox` is a tenant whose labels have moved — reported before anything fails.
-Run the same artifact across many tenants and that column is the signal: degradation is per-tenant
-and legible in aggregate, and the tenant whose steps have fallen to recorded bounds is the one to
-re-record.
+**Policies are per application, not per tenant.** They hold allowlists, sign-on behavior, risk rules, and runtime conditions. A capability records application identity and URL pattern; a deployment supplies its own entry URL. Recorded navigations are rebased onto that entry URL so a flow recorded at one institution can't silently run against another.
 
-This is deliberate detection rather than automatic adaptation: a tenant-specific label change fails
-an anchored target and produces evidence rather than a guess. Acting on the signal is the next
-step — per-tenant screen overrides and calibration are designed for, not implemented.
+**Drift detection via the resolver ladder.** Every step records which tier produced its coordinate. A target that used to resolve on `anchor_text` and now resolves on `recorded_bbox` means labels moved — reported before anything fails. Run the same artifact across tenants and that column is the signal: degradation is per-tenant and legible in aggregate.
+
+This is detection, not automatic adaptation. A tenant-specific label change fails an anchored target and produces evidence rather than a guess. Acting on the signal — per-tenant screen overrides, calibration — is designed for but not implemented.
 
 ## 5. Escalation & handoff
 
-Escalation occurs for a declared escalation condition, an ambiguous/stuck run, a step configured
-to escalate, or a risky action whose policy requires confirmation. A control token has exactly one
-holder: automation yields before publishing the intervention, a human claims it over the control
-plane and operates the same X session through noVNC, then releases it for automation to resume.
+*Code: [`escalation/`](backend/src/cua/escalation/README.md) — control transfer and human-action capture*
 
-The driver checks that token before every input event. The run waits on an in-process event rather
-than destroying the session, so browser state, cookies, and a partial form remain intact. Evidence
-captures the request, handoff and handback frames, resolution, and human actions; typed manual
-text is stored only as a count.
+Escalation triggers: declared escalation condition, ambiguous/stuck run, step configured to escalate, or risky action whose policy requires confirmation.
 
-The queue and control plane are intentionally single-process and unauthenticated. They demonstrate
-the control-transfer seam, not a multi-operator production service.
+**Control token.** Exactly one holder at a time. Automation yields before publishing the intervention. A human claims it over the control plane and operates the same X session through noVNC, then releases it for automation to resume.
+
+The driver checks the token before every input event. The run waits on an in-process event rather than destroying the session — browser state, cookies, and partial forms stay intact. Evidence captures the request, handoff/handback frames, resolution, and human actions; typed manual text is stored only as a count.
+
+The queue and control plane are single-process and unauthenticated. They demonstrate the control-transfer seam, not a multi-operator production service.
 
 ## 6. Safety
 
-Both discovery and replay use the same policy enforcement. It fails closed on URLs and action
-types, rechecks the URL after navigation, and keeps the target application separate from the
-control plane. Each recorded step has a declared risk; intent patterns can only promote risk, and
-the policy can allow, block, or require human confirmation.
+*Code: [`policy/`](backend/src/cua/policy/README.md) — what a policy file declares and where each field is read*
 
-Credentials are sign-on configuration rather than artifact values. Declared sensitive inputs are
-masked from serialized results. Screenshot/OCR pattern masking is deliberately not complete in
-this take-home and is the primary safety limitation before a real-data deployment.
+Discovery and replay share the same policy enforcement: fail closed on URLs and action types, recheck URL after navigation, keep the target application separate from the control plane. Each step has declared risk; intent patterns can only promote risk; policy can allow, block, or require human confirmation. Nothing the model produces edits a guardrail directly: `learn-outcome` and `diagnose` emit a draft version or a policy patch, and a person applies it.
+
+Credentials live in sign-on config, not artifact values. Declared sensitive inputs are masked from serialized results. Screenshot/OCR pattern masking is deliberately incomplete in this take-home — the primary safety limitation before a real-data deployment.
 
 ## 7. Cuts
 
-The implemented vertical slice is a read capability discovered by an LLM, deterministic replay,
-runtime-condition handling, and a live escalation path. Two stretch goals are in, both cheap
-because the schema already had to carry a typed contract and a status: the catalog is exposed as an
-agent-facing tool manifest over HTTP, and unattended replay is gated on draft → approved.
+**In scope:** read capability discovered by LLM, deterministic replay, runtime-condition handling, live escalation. Two stretch goals shipped because the schema already carried a typed contract and status: agent-facing tool manifest over HTTP, and draft → approved gating for unattended replay.
 
-The transfer fixture exercises risky handoff, but it is hand-authored rather than discovered.
-Desktop input and non-visual perceivers are interfaces rather than end-to-end implementations.
-There is no capability router, durable control service, automated tenant specialization, or LLM
-recovery inside replay.
+**Partially in:**
+- Transfer fixture exercises risky handoff, but is hand-authored rather than discovered
+- Desktop input and non-visual perceivers are interfaces, not end-to-end implementations
 
-`cua learn-outcome` teaches the remaining case by demonstration — replay with the recorded inputs,
-replay with yours, take the detector from the difference — but it cannot tell a message from data.
-Where the application states the condition, the difference is the app's own wording; where it does
-not, the difference is that member's row. Asked to learn "this member has no account with that
-nickname", it returned `"Transaction History — Account 41220"`, an account number that would only
-ever match the one member it was shown. The falsification step rejects a detector that fires on the
-successful run; it does not ask whether the survivor is a sentence or a row.
+**Not in:** capability router, durable control service, automated tenant specialization, LLM recovery inside replay.
 
-With more time, I would first complete evidence redaction, then record a write capability and add
-cross-input/tenant checks that detect unstable extractions and candidate outcome detectors — the
-same check that would refuse the account number above.
+**Outcomes with no wording.** `cua learn-outcome` takes the longest line on the outcome screen the successful run never showed, which holds when the application announces the condition in a sentence and fails when it doesn't. Asked to learn "this member has no account with that nickname" it returned `"Debits shown in parentheses. Showing most recent 22 items."` — screen chrome carrying a per-member count. It could not have done better: that screen states nothing about the condition, so every line it could return is wrong. `cua diagnose` reached the same conclusion on the same case and correctly declined to propose a detector, which is what its index-only answer format is for. The case is declared structurally instead. What is missing is the step before: nothing proposes that declaration — synthesis never generated it, and `diagnose` has no classification for "a business outcome with no text to detect", so it answered `drift`.
+
+**With more time:** complete evidence redaction, record a write capability, add cross-input/tenant checks that detect unstable extractions and candidate outcome detectors — the same check that would refuse the account number above.
