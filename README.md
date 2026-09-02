@@ -4,7 +4,7 @@ An LLM discovers a goal on a real UI, records a typed capability, and that capab
 deterministically without an LLM. The implementation uses visual perception and input events rather
 than DOM locators, so the core model also applies to legacy web and desktop surfaces.
 
-[Design write-up](REPORT.md) · [Evidence](evidence/README.md) · [Assignment](ASSIGNMENT.md)
+[Design write-up](REPORT.md) · [Evidence](evidence/README.md)
 
 ## Quickstart
 
@@ -12,12 +12,18 @@ Prerequisites: Docker with Compose. For local development, install uv, Node 20+,
 
 ```bash
 cp .env.example .env
-docker compose up --build -d
+make up
 docker compose exec desktop python3 scripts/fetch_models.py  # one-time model download
 
 docker compose exec desktop cua replay cap_get_account_balance \
   --input member_id=12345 --input account_nickname="Primary Savings"
 ```
+
+`make up` builds and starts all three services detached; `make logs` follows them.
+
+Without an NVIDIA GPU and container toolkit, Compose fails on the `deploy:` block in
+`docker-compose.yml`. Delete that block and set `CUA_OCR_ENGINE=onnxruntime` in `.env`: text
+recognition runs on the CPU, ~3x slower per observation for identical output.
 
 The replayed capability is included in the repository and does not require a model key. The
 target app is at http://localhost:8080, the operator console at http://localhost:3000, the API
@@ -177,7 +183,12 @@ docs/          architecture sketch and console screenshot
 policies/      per-application guardrails
 artifacts/     versioned capabilities
 evidence/      saved demonstrations
+scripts/       dev.sh, the no-docker inner loop
+tools/         show_step.py — read one step of a finished run
 ```
+
+`backend/scripts/` holds the smoke runs, the evidence indexer, and the model fetch; inside the
+container they are `scripts/`.
 
 Useful operational commands:
 

@@ -1,10 +1,15 @@
-.PHONY: help dev up down build logs shell targetapp console api test lint fmt install clean diagram
+.PHONY: help dev up down build logs shell targetapp console api test lint fmt install clean
+
+# Compose runs the container as the invoking user so bind-mounted evidence/ and
+# artifacts/ are yours. Bash does not export either of these on its own.
+export UID := $(shell id -u)
+export GID := $(shell id -g)
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
-up:            ## Bring up all three services
-	docker compose up --build
+up:            ## Build and start all three services in the background
+	docker compose up --build -d
 
 down:          ## Stop everything
 	docker compose down
