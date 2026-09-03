@@ -659,12 +659,25 @@ class ReplayEngine:
             )
 
         if not found.matches:
-            if step.on_not_found_outcome:
+            if step.on_not_found_outcome and found.scope_tier is ResolutionTier.ANCHOR_TEXT:
                 raise _Business(
                     OutcomeDetail(
                         name=step.on_not_found_outcome,
                         step_id=step.id,
                         fields=dict(ctx.params),
+                    )
+                )
+            if step.on_not_found_outcome:
+                raise _Failed(
+                    FailureDetail(
+                        kind=FailureKind.RESOLUTION_EXHAUSTED,
+                        step_id=step.id,
+                        message=(
+                            f"found no matching record, but the scan region resolved on "
+                            f"{found.scope_tier.value} rather than its anchor, so absence "
+                            f"is not evidence"
+                        ),
+                        expected=", ".join(_terms(step, ctx.params)),
                     )
                 )
             raise _Failed(

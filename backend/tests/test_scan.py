@@ -19,12 +19,14 @@ from cua.perception import cell_in_column, column_span, find_header
 from cua.replay.scan import Scanner, Untestable
 from cua.resolve import Resolver
 from cua.schema import (
+    Bbox,
     FindAndActStep,
     MatchMode,
     Normalizer,
     Observation,
     Predicate,
     Primitive,
+    ResolutionTier,
     Scan,
     ScanAdvance,
     Target,
@@ -265,3 +267,39 @@ def test_a_header_whose_box_overlaps_the_row_is_still_its_header() -> None:
     cell = cell_in_column(row, span)
     assert cell is not None
     assert cell.text == "$712.04"
+
+
+# ---------------------------------------------------------------------------
+# how the region was found decides what an absence means
+# ---------------------------------------------------------------------------
+
+
+async def test_scope_found_by_anchor_reports_the_tier_that_found_it() -> None:
+    """An exhausted scan over a region located by its anchor is evidence about the data."""
+    screens = Screens([screen(HEADERS, [("08/14", 0.02, 0.05), ("NORTHGATE", 0.29, 0.09)])])
+    found = await scanner(screens).scan(step(), {}, screens.observe)
+
+    assert found.exhausted
+    assert not found.matches
+    assert found.scope_tier is ResolutionTier.ANCHOR_TEXT
+
+
+async def test_scope_that_fell_to_a_recorded_box_is_reported_as_such() -> None:
+    """With the anchor gone, the scope still resolves — off the recorded box — and the tier
+    says so. The engine refuses to call that absence a business outcome: the loop may have
+    been reading a different table entirely."""
+    bare = [("08/14", 0.02, 0.05), ("NORTHGATE", 0.29, 0.09)]
+    screens = Screens([screen([], bare)])          # no "Description" header to anchor on
+    scoped = step(
+        scope=Target(
+            intent="the transaction table",
+            target_desc="rows below the headers",
+            anchor_text="Description",
+            anchor_match=MatchMode.EXACT,
+            bbox=Bbox(x=0.0, y=0.03, w=1.0, h=0.9),
+        )
+    )
+    found = await scanner(screens).scan(scoped, {}, screens.observe)
+
+    assert not found.matches
+    assert found.scope_tier is not ResolutionTier.ANCHOR_TEXT

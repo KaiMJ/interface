@@ -1,0 +1,23 @@
+{
+  "id": "int_02147724",
+  "run_id": "scan-escalating-c80daa",
+  "mode": "replay",
+  "capability": "fix_find_transaction@v1",
+  "goal": "find a transaction by merchant in a member's history and read its amount",
+  "reason": "ambiguous_match",
+  "failure_kind": null,
+  "step_id": 2,
+  "step_intent": "the transaction table",
+  "message": "4 records match HARBORVIEW PROPERTY MGMT",
+  "expected": null,
+  "observed": null,
+  "state": "pending",
+  "evidence": {
+    "screenshot": "/data/evidence/scan-escalating-c80daa/frames/step-02.png",
+    "after": null,
+    "annotated_screenshot": null,
+    "observation": "/data/evidence/scan-escalating-c80daa/observations/step-02.json"
+  },
+  "vnc_url": "http://localhost:6080/vnc.html?autoconnect=1&resize=scale",
+  "raised_at": "2026-09-03T05:54:26.004331+00:00"
+}

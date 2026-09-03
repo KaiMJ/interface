@@ -26,13 +26,8 @@ from .catalog.learn import (
 )
 from .config import settings
 from .discovery import synthesize
-from .schema import Capability, DiscoveryResult, ReplayResult, RunStatus, Status
+from .schema import Capability, DiscoveryResult, ReplayResult, Risk, RunStatus, Status
 
-# `step-04.png` is what the step acted on and `step-04.after.png` what the application showed
-# once it had — byte-identical to `step-05.png`, being the same screen. `ImageFileScreen`
-# advances only when the driver acts, so the feed it needs is one frame per *transition*: each
-# step's own frame, then the last after-frame for the final checkpoint. Feeding both spellings
-# feeds every screen twice and the run ends up a frame behind.
 _FRAME_FILE = re.compile(r"step-(\d+)(\.after)?\.png$")
 
 
@@ -42,7 +37,8 @@ def _observation_sequence(frames: Iterable[Path]) -> list[Path]:
     primary = sorted(
         (p for m, p in numbered if not m.group(2)), key=lambda p: int(_step_of(p))
     )
-    afters = sorted((p for m, p in numbered if m.group(2)), key=lambda p: int(_step_of(p)))
+    afters = sorted((p for m, p in numbered if m.group(2)),
+                    key=lambda p: int(_step_of(p)))
     return [*primary, *afters[-1:]] if primary else afters
 
 
@@ -69,9 +65,11 @@ def _run_id(given: str, prefix: str) -> str:
         return f"{prefix}-{uuid4().hex[:8]}"
     name = given if given.startswith(f"{prefix}-") else f"{prefix}-{given}"
     if not _SAFE_RUN_ID.match(name):
-        raise typer.BadParameter(f"{given!r} is not a usable directory name ([a-z0-9-])")
+        raise typer.BadParameter(
+            f"{given!r} is not a usable directory name ([a-z0-9-])")
     if (Path(settings().evidence_dir) / name).exists():
-        raise typer.BadParameter(f"evidence/{name} already exists; pick another --run-id")
+        raise typer.BadParameter(
+            f"evidence/{name} already exists; pick another --run-id")
     return name
 
 
@@ -107,11 +105,9 @@ async def _session(cfg: Any, app: str | None = None) -> Any:
     try:
         await session.authenticate(cfg.target_username, cfg.target_password)
     except AuthenticationFailed as e:
-        # Sign-on happens before `replay()`, outside the block that turns every other error
-        # into a typed result. Stop with the same shape any other refusal has, and leave
-        # nothing holding the browser.
         await session.stop()
-        typer.echo(f"could not sign in to {app or cfg.default_app}: {e}", err=True)
+        typer.echo(
+            f"could not sign in to {app or cfg.default_app}: {e}", err=True)
         typer.echo(
             "if another run is already on the display, wait for it to finish", err=True
         )
@@ -134,8 +130,6 @@ async def _arm_faults(session: Any, base_url: str, names: list[str]) -> None:
     await session.observe()
 
 
-# The flag is named explicitly: typer would otherwise derive `--app-name` from
-# the parameter, and `app` is taken by the Typer instance itself.
 APP_OPT = typer.Option(
     "--app", help="Application to run against; selects policies/<app>.yaml"
 )
@@ -146,10 +140,13 @@ def discover(
     goal: Annotated[str, typer.Option(help="Natural-language goal")],
     app_name: Annotated[str, APP_OPT] = "",
     start_url: Annotated[str, typer.Option(help="Entry point")] = "",
-    input: Annotated[list[str] | None, typer.Option(help="key=value, repeatable")] = None,
-    capability_id: Annotated[str, typer.Option(help="Id for the emitted artifact")] = "",
+    input: Annotated[list[str] | None, typer.Option(
+        help="key=value, repeatable")] = None,
+    capability_id: Annotated[str, typer.Option(
+        help="Id for the emitted artifact")] = "",
     run_id: Annotated[
-        str, typer.Option(help="Name this run's evidence directory instead of taking a random one.")
+        str, typer.Option(
+            help="Name this run's evidence directory instead of taking a random one.")
     ] = "",
 ) -> None:
     """LLM-driven run against the live surface; emits a draft capability."""
@@ -161,7 +158,8 @@ def discover(
 
         policy = build_policy(cfg, app_name or None)
         session = await _session(cfg, app_name or None)
-        loop = build_discovery(cfg, session, _run_id(run_id, "discover"), app_name or None)
+        loop = build_discovery(cfg, session, _run_id(
+            run_id, "discover"), app_name or None)
         try:
             result = await loop.run(goal, start_url or entry_url(cfg, policy), inputs)
             state = loop.state
@@ -172,8 +170,6 @@ def discover(
                 inputs,
                 loop.llm,
                 capability_id=capability_id,
-                # From the policy, so the artifact names an application that has guardrails
-                # rather than whichever URL this deployment sits behind.
                 app=policy.app_ref(),
                 viewport=cfg.viewport,
                 policy=policy,
@@ -208,7 +204,8 @@ def discover(
 @app.command()
 def replay(
     capability_id: Annotated[str, typer.Argument()],
-    input: Annotated[list[str] | None, typer.Option(help="key=value, repeatable")] = None,
+    input: Annotated[list[str] | None, typer.Option(
+        help="key=value, repeatable")] = None,
     version: Annotated[int, typer.Option()] = 0,
     app_name: Annotated[str, APP_OPT] = "",
     frames: Annotated[
@@ -260,15 +257,10 @@ def replay(
         )
 
         cap = build_catalog(cfg).load(capability_id, version or None)
-        # The capability names its own application; `--app` overrides that for a tenant
-        # running the same product under a different policy.
         target_app = app_name or cap.app.name or None
         policy = build_policy(cfg, target_app)
 
         if frames:
-            # The decision path, re-derived from previously recorded pixels: the same frames
-            # produce the same resolutions, checkpoints and result contract. Says nothing
-            # about how the application responds, since nothing is clicked.
             recorded = _observation_sequence(Path(frames).glob("*.png"))
             if not recorded:
                 raise typer.BadParameter(f"no frames in {frames}")
@@ -284,7 +276,8 @@ def replay(
         session = await _session(cfg, target_app)
         if fault:
             await _arm_faults(session, entry_url(cfg, policy), fault)
-        engine = build_replay(cfg, session, _run_id(run_id, "replay"), target_app)
+        engine = build_replay(cfg, session, _run_id(
+            run_id, "replay"), target_app)
         try:
             return await engine.replay(cap, inputs)
         finally:
@@ -334,7 +327,8 @@ def learn_outcome(
     description: Annotated[str, typer.Option()] = "",
     input: Annotated[
         list[str] | None,
-        typer.Option(help="key=value overrides that reach the outcome, repeatable"),
+        typer.Option(
+            help="key=value overrides that reach the outcome, repeatable"),
     ] = None,
     version: Annotated[int, typer.Option()] = 0,
     app_name: Annotated[str, APP_OPT] = "",
@@ -350,7 +344,8 @@ def learn_outcome(
     cfg = settings()
     overrides = _parse_inputs(input or [])
     if not overrides:
-        raise typer.BadParameter("give at least one --input that reaches the other result")
+        raise typer.BadParameter(
+            "give at least one --input that reaches the other result")
 
     async def run() -> tuple[Capability, str, ReplayResult, ReplayResult]:
         from .runtime import build_catalog, build_policy, build_replay
@@ -363,6 +358,14 @@ def learn_outcome(
             raise typer.BadParameter(
                 f"{cap.ref} has no recorded example for {', '.join(missing)}, so there is "
                 f"no reference run to compare against"
+            )
+
+        risky = [s.id for s in cap.steps if s.risk is Risk.RISKY]
+        if risky:
+            raise typer.BadParameter(
+                f"{cap.ref} has risky step(s) {risky}; learning replays the capability twice "
+                f"and will not repeat an irreversible action. Declare the outcome by review "
+                f"instead."
             )
 
         target_app = app_name or cap.app.name or None
@@ -384,8 +387,6 @@ def learn_outcome(
                     "the run with your inputs also succeeded, so it did not reach a "
                     "different result"
                 )
-            # Already working. Learning it again would compare two screens that now differ
-            # only by this record's own data, producing a worse detector than the one in place.
             if (
                 other.status is RunStatus.BUSINESS_OUTCOME
                 and other.outcome is not None
@@ -399,7 +400,8 @@ def learn_outcome(
             await session.stop()
 
         detector = distinguishing_text(
-            all_lines(Path(happy.evidence_dir)), final_lines(Path(other.evidence_dir))
+            all_lines(Path(happy.evidence_dir)), final_lines(
+                Path(other.evidence_dir))
         )
         learned = with_outcome(
             cap,
@@ -408,8 +410,6 @@ def learn_outcome(
             detector_text=detector,
             inputs={**reference, **overrides},
             version=max(store.versions(cap.id)) + 1,
-            # So a rediscovered app-level detector is inherited by name rather than frozen
-            # into a copy that cannot follow a policy edit.
             policy=build_policy(cfg, target_app),
         )
         store.save(learned)
@@ -430,9 +430,6 @@ def learn_outcome(
             "capability": cap.ref,
             "status": cap.status.value,
             "learned": outcome.name,
-            # Null when the wording turned out to be the app's own, so the detector resolves
-            # from policy at run time. `observed_as` holds what was read off the screen either
-            # way, so a null here reads as "inherited", not "nothing found".
             "detector": outcome.detector.value if outcome.detector else None,
             "inherited_from_policy": outcome.detector is None,
             "observed_as": detector,
@@ -447,13 +444,15 @@ def learn_outcome(
 def catalog(
     status: Annotated[str, typer.Option()] = "",
     app_name: Annotated[
-        str, typer.Option("--app", help="Show only this application's capabilities")
+        str, typer.Option(
+            "--app", help="Show only this application's capabilities")
     ] = "",
 ) -> None:
     """List saved capabilities with their inputs, outputs and outcomes."""
     from .runtime import build_catalog
 
-    caps = build_catalog(settings()).list(Status(status) if status else None, app=app_name or None)
+    caps = build_catalog(settings()).list(
+        Status(status) if status else None, app=app_name or None)
     _echo(
         [
             {
@@ -463,8 +462,6 @@ def catalog(
                 "goal": c.goal,
                 "inputs": {i.name: i.type.value for i in c.inputs},
                 "outputs": {o.name: o.type.value for o in c.outputs},
-                # Suffixed rather than dropped: a reviewer needs to see which outcomes are
-                # only guesses before approving.
                 "outcomes": [
                     o.name if o.verified else f"{o.name} (unverified)"
                     for o in c.business_outcomes
@@ -513,7 +510,6 @@ def diagnose(
 
     run = load_run(evidence_dir)
     if run.status in ("success", "business_outcome"):
-        # Nothing stopped, so there is nothing undeclared to name, and no model call to make.
         raise typer.BadParameter(
             f"{run_id} ended as {run.status}; there is nothing undeclared to diagnose"
         )
@@ -529,8 +525,6 @@ def diagnose(
     reference = reference_lines(root, run.capability, exclude=run_id)
     result = asyncio.run(run_diagnosis(run, policy, llm, reference))
 
-    # Written beside the run it diagnoses, rejections included: those are what shows the
-    # falsification ran.
     (evidence_dir / "diagnosis.json").write_text(
         json.dumps(result.to_json(), indent=2) + "\n"
     )

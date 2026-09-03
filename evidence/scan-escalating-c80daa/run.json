@@ -1,0 +1,96 @@
+{
+  "run_id": "scan-escalating-c80daa",
+  "capability": "fix_find_transaction@v1",
+  "app": "targetapp",
+  "status": "escalated",
+  "inputs": {
+    "member_id": "12345",
+    "merchant": "HARBORVIEW PROPERTY MGMT"
+  },
+  "outputs": {},
+  "outcome": null,
+  "failure": null,
+  "intervention_id": "int_02147724",
+  "steps": [
+    {
+      "step_id": 1,
+      "intent": "navigate http://targetapp:8080/members/12345",
+      "status": "ok",
+      "resolution": "none",
+      "settled_by": "pixels",
+      "duration_ms": 7744,
+      "attempts": 1,
+      "expected": "text_present 'Transaction History'",
+      "observed": null,
+      "recovery_applied": null,
+      "note": null,
+      "policy": {
+        "action": "navigate",
+        "declared_risk": "safe",
+        "effective_risk": "safe",
+        "disposition": "allow",
+        "rule": "allowlist",
+        "detail": null,
+        "promoted_from": null,
+        "intent": ""
+      },
+      "resolution_trace": null,
+      "phases": {
+        "observe_ms": 7678,
+        "observations": 2,
+        "resolve_ms": 0,
+        "act_ms": 61,
+        "verify_ms": 2
+      },
+      "model_turn": null,
+      "evidence": {
+        "screenshot": "/data/evidence/scan-escalating-c80daa/frames/step-01.png",
+        "after": "/data/evidence/scan-escalating-c80daa/frames/step-01.after.png",
+        "annotated_screenshot": null,
+        "observation": "/data/evidence/scan-escalating-c80daa/observations/step-01.json"
+      }
+    },
+    {
+      "step_id": 2,
+      "intent": "the transaction table",
+      "status": "skipped",
+      "resolution": "none",
+      "settled_by": "unset",
+      "duration_ms": 3539,
+      "attempts": 1,
+      "expected": null,
+      "observed": "int_02147724",
+      "recovery_applied": null,
+      "note": null,
+      "policy": {
+        "action": "extract",
+        "declared_risk": "safe",
+        "effective_risk": "safe",
+        "disposition": "allow",
+        "rule": "allowlist",
+        "detail": null,
+        "promoted_from": null,
+        "intent": "the transaction table"
+      },
+      "resolution_trace": null,
+      "phases": {
+        "observe_ms": 3518,
+        "observations": 1,
+        "resolve_ms": 0,
+        "act_ms": 0,
+        "verify_ms": 0
+      },
+      "model_turn": null,
+      "evidence": {
+        "screenshot": "/data/evidence/scan-escalating-c80daa/frames/step-02.png",
+        "after": null,
+        "annotated_screenshot": null,
+        "observation": "/data/evidence/scan-escalating-c80daa/observations/step-02.json"
+      }
+    }
+  ],
+  "started_at": "2026-09-03T05:54:14.728625+00:00",
+  "finished_at": "2026-09-03T05:54:26.015945+00:00",
+  "duration_ms": 11287,
+  "evidence_dir": "/data/evidence/scan-escalating-c80daa"
+}

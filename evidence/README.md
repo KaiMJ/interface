@@ -52,10 +52,10 @@ python3 backend/scripts/index_evidence.py --check    # fail if this file names a
 | `replay-rainy-day` | `cap_get_account_balance@v1` | **success** | 5 | `balance` = 2050.0 |  |
 | `replay-unknown-account` | `cap_get_account_balance@v1` | **failure** | 5 | `resolution_exhausted` at step 5 |  |
 | `replay-vacation-fund` | `cap_get_account_balance@v1` | **success** | 5 | `balance` = 15.0 |  |
-| `scan-ambiguous-3da38b` | `fix_find_transaction@v1` | **success** | 2 | `amount` = -108.22 |  |
-| `scan-escalating-7eb33a` | `fix_find_transaction@v1` | **escalated** | 2 |  | yes |
-| `scan-missing-c2673f` | `fix_find_transaction@v1` | **business_outcome** | 2 | outcome `transaction_not_found` |  |
-| `scan-unique-bbf336` | `fix_find_transaction@v1` | **success** | 2 | `amount` = -441.56 |  |
+| `scan-ambiguous-22a0f7` | `fix_find_transaction@v1` | **success** | 2 | `amount` = -108.22 |  |
+| `scan-escalating-c80daa` | `fix_find_transaction@v1` | **escalated** | 2 |  | yes |
+| `scan-missing-5e4825` | `fix_find_transaction@v1` | **business_outcome** | 2 | outcome `transaction_not_found` |  |
+| `scan-unique-7d749c` | `fix_find_transaction@v1` | **success** | 2 | `amount` = -441.56 |  |
 <!-- END INDEX -->
 
 ## What each kind of run shows

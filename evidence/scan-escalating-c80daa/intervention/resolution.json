@@ -1,0 +1,11 @@
+{
+  "id": "int_02147724",
+  "outcome": "abort",
+  "operator": "smoke-operator",
+  "note": "four rows match; a person picks",
+  "human_actions": [],
+  "duration_ms": 0,
+  "resolved_at": "2026-09-03T05:54:26.014935+00:00",
+  "resumed_at_step": null,
+  "extra": {}
+}

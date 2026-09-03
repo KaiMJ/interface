@@ -26,6 +26,7 @@ from ..schema import (
     Observation,
     Point,
     PredicateMatch,
+    ResolutionTier,
     ScanAdvance,
     ScopeExtent,
     Target,
@@ -42,10 +43,15 @@ class Untestable(Exception):
 
 @dataclass(frozen=True)
 class ScanResult:
-    matches: list[list[Element]]         # each match is a row (list of elements)
+    # each match is a row (list of elements)
+    matches: list[list[Element]]
     advances: int
     exhausted: bool                      # region stopped changing -> we saw everything
     inconclusive: bool                   # hit max_advances with content still moving
+    # The weakest tier any scope resolution used. An absence is only evidence about the data
+    # if the region was found semantically: fallen through to a recorded box, the loop may
+    # have been reading a different table, and "not there" would be about the wrong list.
+    scope_tier: ResolutionTier = ResolutionTier.NONE
     # The frame the matches were found on: a row alone does not say which column is which.
     observation: Observation | None = None
 
@@ -56,18 +62,22 @@ class Scanner:
         self.driver = driver
         self.resolver = resolver
 
-    def locate_scope(self, step: FindAndActStep, obs: Observation, params: dict[str, Any]) -> Bbox:
+    def locate_scope(
+        self, step: FindAndActStep, obs: Observation, params: dict[str, Any]
+    ) -> tuple[Bbox, ResolutionTier]:
         """Resolve the scope anchor and derive the region from `scope_extent`. Anchor-based
         rather than a recorded box, so a banner above the table does not shift the scan window
-        off the data."""
+        off the data. The tier is returned with it, because how the region was found decides
+        whether an empty scan means anything."""
         anchor = self.resolver.resolve(step.scope, obs, params)
+        tier: ResolutionTier = anchor.tier
         box: Bbox = anchor.bbox
         if step.scope_extent is ScopeExtent.WITHIN:
-            return box
+            return box, tier
         if step.scope_extent is ScopeExtent.ABOVE:
-            return Bbox(x=0.0, y=0.0, w=1.0, h=max(0.0, box.y))
+            return Bbox(x=0.0, y=0.0, w=1.0, h=max(0.0, box.y)), tier
         top = min(1.0, box.y + box.h)
-        return Bbox(x=0.0, y=top, w=1.0, h=max(0.0, 1.0 - top))
+        return Bbox(x=0.0, y=top, w=1.0, h=max(0.0, 1.0 - top)), tier
 
     async def scan(
         self,
@@ -85,10 +95,12 @@ class Scanner:
         collected: set[str] = set()
         found_on: Observation | None = None
         advances = 0
+        weakest = ResolutionTier.ANCHOR_TEXT
 
         while True:
             obs = await observe()
-            scope = self.locate_scope(step, obs, params)
+            scope, tier = self.locate_scope(step, obs, params)
+            weakest = _weaker(weakest, tier)
             rows = ElementIndex(obs.elements).rows(scope)
 
             for row in rows:
@@ -99,25 +111,40 @@ class Scanner:
                 matches.append(row)
                 found_on = obs
             if matches and not step.collect_all:
-                return ScanResult(matches, advances, False, False, found_on)
+                return ScanResult(
+                    matches, advances, False, False,
+                    observation=found_on,
+                    scope_tier=weakest,
+                )
             if step.limit is not None and len(matches) >= step.limit:
-                return ScanResult(matches, advances, False, False, found_on)
+                return ScanResult(
+                    matches, advances, False, False,
+                    observation=found_on,
+                    scope_tier=weakest,
+                )
 
-            # Nothing new on screen means the whole list has been seen — the signal separating
-            # "the record is not there" from "we stopped looking". Compared against every
-            # previous frame, or a list that bounces back to the top scrolls forever.
             signature = _signature(rows)
             if signature in seen:
-                return ScanResult(matches, advances, True, False, found_on or obs)
+                return ScanResult(
+                    matches, advances, True, False,
+                    observation=found_on or obs,
+                    scope_tier=weakest,
+                )
             seen.add(signature)
 
             if advances >= step.scan.max_advances:
-                # Content was still changing when the budget ran out. Whether the record is
-                # absent is unknown, and "not found" here is a confidently wrong answer.
-                return ScanResult(matches, advances, False, True, found_on or obs)
+                return ScanResult(
+                    matches, advances, False, True,
+                    observation=found_on or obs,
+                    scope_tier=weakest,
+                )
 
             if not await self._advance(step, obs, scope, params):
-                return ScanResult(matches, advances, True, False, found_on or obs)
+                return ScanResult(
+                    matches, advances, True, False,
+                    observation=found_on or obs,
+                    scope_tier=weakest,
+                )
             advances += 1
 
     async def _advance(
@@ -202,3 +229,17 @@ def _signature(rows: Sequence[Sequence[Element]]) -> str:
     """What is currently in the scope region, independent of where it sits. Text rather than
     pixels: scrolling moves every box, so a geometric hash would never repeat."""
     return hashlib.sha256("\n".join(_row_key(r) for r in rows).encode()).hexdigest()[:16]
+
+
+# Weakest-wins ordering for scope resolution across a multi-frame scan.
+_TIER_RANK = {
+    ResolutionTier.ANCHOR_TEXT: 3,
+    ResolutionTier.ROLE_NAME: 2,
+    ResolutionTier.VLM_GATED: 2,
+    ResolutionTier.RECORDED_BBOX: 1,
+    ResolutionTier.NONE: 0,
+}
+
+
+def _weaker(a: ResolutionTier, b: ResolutionTier) -> ResolutionTier:
+    return a if _TIER_RANK.get(a, 0) <= _TIER_RANK.get(b, 0) else b

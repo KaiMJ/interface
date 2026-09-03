@@ -25,7 +25,7 @@
       "status": "ok",
       "resolution": "none",
       "settled_by": "pixels",
-      "duration_ms": 3542,
+      "duration_ms": 3984,
       "attempts": 1,
       "expected": null,
       "observed": null,
@@ -43,11 +43,11 @@
       },
       "resolution_trace": null,
       "phases": {
-        "observe_ms": 3491,
+        "observe_ms": 3926,
         "observations": 2,
         "resolve_ms": 0,
-        "act_ms": 46,
-        "verify_ms": 4
+        "act_ms": 55,
+        "verify_ms": 1
       },
       "model_turn": null,
       "evidence": {
@@ -63,7 +63,7 @@
       "status": "ok",
       "resolution": "anchor_text",
       "settled_by": "pixels",
-      "duration_ms": 2160,
+      "duration_ms": 2352,
       "attempts": 1,
       "expected": "text_present 'Member ID or Name'",
       "observed": null,
@@ -107,10 +107,10 @@
         ]
       },
       "phases": {
-        "observe_ms": 2034,
+        "observe_ms": 2227,
         "observations": 1,
-        "resolve_ms": 1,
-        "act_ms": 119,
+        "resolve_ms": 0,
+        "act_ms": 122,
         "verify_ms": 1
       },
       "model_turn": null,
@@ -127,7 +127,7 @@
       "status": "ok",
       "resolution": "anchor_text",
       "settled_by": "pixels",
-      "duration_ms": 2156,
+      "duration_ms": 2533,
       "attempts": 1,
       "expected": null,
       "observed": null,
@@ -171,10 +171,10 @@
         ]
       },
       "phases": {
-        "observe_ms": 2147,
+        "observe_ms": 2524,
         "observations": 1,
         "resolve_ms": 1,
-        "act_ms": 5,
+        "act_ms": 4,
         "verify_ms": 1
       },
       "model_turn": null,
@@ -191,7 +191,7 @@
       "status": "ok",
       "resolution": "anchor_text",
       "settled_by": "pixels",
-      "duration_ms": 3624,
+      "duration_ms": 3609,
       "attempts": 1,
       "expected": "text_present 'Member Profile'",
       "observed": null,
@@ -235,11 +235,11 @@
         ]
       },
       "phases": {
-        "observe_ms": 3604,
+        "observe_ms": 3592,
         "observations": 1,
-        "resolve_ms": 0,
-        "act_ms": 8,
-        "verify_ms": 9
+        "resolve_ms": 1,
+        "act_ms": 11,
+        "verify_ms": 2
       },
       "model_turn": null,
       "evidence": {
@@ -255,7 +255,7 @@
       "status": "skipped",
       "resolution": "none",
       "settled_by": "unset",
-      "duration_ms": 10441,
+      "duration_ms": 11915,
       "attempts": 1,
       "expected": null,
       "observed": "no_matching_account",
@@ -273,7 +273,7 @@
       },
       "resolution_trace": null,
       "phases": {
-        "observe_ms": 10379,
+        "observe_ms": 11855,
         "observations": 3,
         "resolve_ms": 0,
         "act_ms": 0,
@@ -288,8 +288,8 @@
       }
     }
   ],
-  "started_at": "2026-09-02T18:03:29.648584+00:00",
-  "finished_at": "2026-09-02T18:03:51.579197+00:00",
-  "duration_ms": 21935,
+  "started_at": "2026-09-03T05:52:10.716826+00:00",
+  "finished_at": "2026-09-03T05:52:35.125524+00:00",
+  "duration_ms": 24402,
   "evidence_dir": "/data/evidence/replay-no-savings-account"
 }
